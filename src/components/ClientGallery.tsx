@@ -13,15 +13,13 @@ export const ClientGallery: React.FC<ClientGalleryProps> = ({ campaigns, onBackT
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
   const [isFullscreenMode, setIsFullscreenMode] = useState(false);
 
-  // Filter campaigns
   const filtered = campaigns.filter((camp) => {
     const matchesSearch =
       camp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (camp.brand && camp.brand.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesChannel = selectedChannel === 'All' || camp.channel === selectedChannel;
-    // We only show active or completed campaigns for marketing presentation
     const isMarketingReady = camp.status === 'Activa' || camp.status === 'Completada';
-    
+
     return matchesSearch && matchesChannel && isMarketingReady;
   });
 
@@ -43,7 +41,6 @@ export const ClientGallery: React.FC<ClientGalleryProps> = ({ campaigns, onBackT
 
   return (
     <div className={`space-y-6 ${isFullscreenMode ? 'p-8 bg-slate-900 min-h-screen text-white fixed inset-0 z-50 overflow-y-auto' : ''}`}>
-      {/* Top Banner / Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-100 pb-5">
         <div>
           <h2 className={`text-xl font-extrabold tracking-tight ${isFullscreenMode ? 'text-white' : 'text-slate-900'}`}>
@@ -66,7 +63,7 @@ export const ClientGallery: React.FC<ClientGalleryProps> = ({ campaigns, onBackT
             <ArrowLeftRight className="w-3.5 h-3.5" />
             <span>{isFullscreenMode ? 'Salir Pantalla Completa' : 'Modo Presentación'}</span>
           </button>
-          
+
           {onBackToDashboard && !isFullscreenMode && (
             <button
               onClick={onBackToDashboard}
@@ -78,11 +75,9 @@ export const ClientGallery: React.FC<ClientGalleryProps> = ({ campaigns, onBackT
         </div>
       </div>
 
-      {/* Filters & Search Bar */}
       <div className={`p-4 rounded-2xl border flex flex-col md:flex-row gap-4 justify-between items-center ${
-        isFullscreenMode ? 'bg-slate-800/50 border-slate-800' : 'bg-white border-slate-100 shadow-sm'
+        isFullscreenMode ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100 shadow-sm'
       }`}>
-        {/* Search */}
         <div className="relative w-full md:w-80">
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
@@ -91,14 +86,13 @@ export const ClientGallery: React.FC<ClientGalleryProps> = ({ campaigns, onBackT
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className={`w-full pl-10 pr-4 py-2.5 text-xs font-semibold rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all duration-200 ${
-              isFullscreenMode 
-                ? 'bg-slate-850 border-slate-700 text-white placeholder-slate-500' 
+              isFullscreenMode
+                ? 'bg-slate-900 border-slate-700 text-white placeholder-slate-500'
                 : 'bg-slate-50 border border-slate-200 text-slate-700'
             }`}
           />
         </div>
 
-        {/* Channel Selection Chips */}
         <div className="flex gap-1.5 overflow-x-auto w-full md:w-auto">
           {['All', 'Email', 'Social', 'Display', 'Multi'].map((chan) => (
             <button
@@ -108,8 +102,8 @@ export const ClientGallery: React.FC<ClientGalleryProps> = ({ campaigns, onBackT
                 selectedChannel === chan
                   ? 'bg-violet-600 border-violet-600 text-white shadow-sm'
                   : isFullscreenMode
-                    ? 'bg-slate-800 border-slate-700 text-slate-350 hover:bg-slate-700'
-                    : 'bg-white border-slate-200 text-slate-650 hover:bg-slate-50'
+                    ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
               }`}
             >
               {chan === 'All' ? 'Todos' : chan}
@@ -118,7 +112,6 @@ export const ClientGallery: React.FC<ClientGalleryProps> = ({ campaigns, onBackT
         </div>
       </div>
 
-      {/* Grid of Tobacco Products / Campaigns */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {filtered.length === 0 ? (
           <div className="col-span-full py-16 text-center">
@@ -133,12 +126,11 @@ export const ClientGallery: React.FC<ClientGalleryProps> = ({ campaigns, onBackT
             <div
               key={camp.id}
               className={`group rounded-2xl border overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-1 flex flex-col h-full ${
-                isFullscreenMode 
-                  ? 'bg-slate-800/40 border-slate-800 text-white' 
+                isFullscreenMode
+                  ? 'bg-slate-800/80 border-slate-700 text-white'
                   : 'bg-white border-slate-100 shadow-sm'
               }`}
             >
-              {/* Image Container */}
               <div className="aspect-video relative overflow-hidden bg-slate-900/10 flex items-center justify-center">
                 {camp.image_url ? (
                   <img
@@ -151,13 +143,11 @@ export const ClientGallery: React.FC<ClientGalleryProps> = ({ campaigns, onBackT
                     Anuncio Gráfico
                   </div>
                 )}
-                
-                {/* Channel tag */}
+
                 <span className="absolute top-3 left-3 px-2 py-0.5 bg-slate-900/60 backdrop-blur-sm text-[10px] font-bold text-white rounded-md tracking-wider uppercase">
                   {camp.channel}
                 </span>
 
-                {/* Hover overlay actions */}
                 <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center gap-2">
                   <button
                     onClick={() => setSelectedCampaign(camp)}
@@ -178,7 +168,6 @@ export const ClientGallery: React.FC<ClientGalleryProps> = ({ campaigns, onBackT
                 </div>
               </div>
 
-              {/* Card Body */}
               <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
                 <div>
                   <span className={`text-[10px] font-extrabold uppercase tracking-widest block mb-1 ${
@@ -189,9 +178,8 @@ export const ClientGallery: React.FC<ClientGalleryProps> = ({ campaigns, onBackT
                   <h4 className="font-bold text-sm line-clamp-1">{camp.name}</h4>
                 </div>
 
-                {/* Stats indicators */}
                 <div className={`grid grid-cols-3 gap-2 p-3 rounded-xl text-center text-xs font-semibold ${
-                  isFullscreenMode ? 'bg-slate-850/50' : 'bg-slate-50'
+                  isFullscreenMode ? 'bg-slate-900/50' : 'bg-slate-50'
                 }`}>
                   <div>
                     <span className="text-[10px] text-slate-400 block font-bold">LEADS</span>
@@ -230,19 +218,16 @@ export const ClientGallery: React.FC<ClientGalleryProps> = ({ campaigns, onBackT
         )}
       </div>
 
-      {/* Lightbox / Detail Modal */}
       {selectedCampaign && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-[100] p-4 animate-fade-in">
           <div className="bg-slate-900 border border-slate-800 text-white rounded-2xl w-full max-w-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row relative">
-            {/* Close Button */}
             <button
               onClick={() => setSelectedCampaign(null)}
-              className="absolute top-4 right-4 z-10 p-1.5 bg-slate-850 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white transition-colors"
+              className="absolute top-4 right-4 z-10 p-1.5 bg-slate-900 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
 
-            {/* Visual Area */}
             <div className="flex-1 bg-black flex items-center justify-center p-4 min-h-[300px]">
               {selectedCampaign.image_url ? (
                 <img
@@ -255,7 +240,6 @@ export const ClientGallery: React.FC<ClientGalleryProps> = ({ campaigns, onBackT
               )}
             </div>
 
-            {/* Campaign info details */}
             <div className="w-full md:w-80 p-6 border-t md:border-t-0 md:border-l border-slate-800 flex flex-col justify-between bg-slate-900">
               <div className="space-y-4">
                 <div>
@@ -268,7 +252,7 @@ export const ClientGallery: React.FC<ClientGalleryProps> = ({ campaigns, onBackT
                 <div className="space-y-2.5">
                   <div className="flex justify-between items-center text-xs">
                     <span className="text-slate-400 font-semibold">Canal Publicitario</span>
-                    <span className="font-bold px-2 py-0.5 bg-slate-800 rounded text-violet-350 uppercase">
+                    <span className="font-bold px-2 py-0.5 bg-slate-800 rounded text-violet-50 uppercase">
                       {selectedCampaign.channel}
                     </span>
                   </div>
@@ -289,17 +273,17 @@ export const ClientGallery: React.FC<ClientGalleryProps> = ({ campaigns, onBackT
                     Métricas de Impacto
                   </span>
                   <div className="grid grid-cols-3 gap-2 text-center">
-                    <div className="bg-slate-850 p-2 rounded-xl">
+                    <div className="bg-slate-900 p-2 rounded-xl">
                       <span className="text-[9px] text-slate-400 font-bold block">LEADS</span>
                       <span className="text-xs font-extrabold text-white">
                         {selectedCampaign.leads.toLocaleString()}
                       </span>
                     </div>
-                    <div className="bg-slate-850 p-2 rounded-xl">
+                    <div className="bg-slate-900 p-2 rounded-xl">
                       <span className="text-[9px] text-slate-400 font-bold block">CTR</span>
                       <span className="text-xs font-extrabold text-emerald-400">{selectedCampaign.ctr}%</span>
                     </div>
-                    <div className="bg-slate-850 p-2 rounded-xl">
+                    <div className="bg-slate-900 p-2 rounded-xl">
                       <span className="text-[9px] text-slate-400 font-bold block">ALCANCE</span>
                       <span className="text-xs font-extrabold text-white">{selectedCampaign.reach}</span>
                     </div>
@@ -307,12 +291,11 @@ export const ClientGallery: React.FC<ClientGalleryProps> = ({ campaigns, onBackT
                 </div>
               </div>
 
-              {/* Actions */}
               <div className="flex gap-2 pt-6 border-t border-slate-800 mt-6 md:mt-0">
                 {selectedCampaign.image_url && (
                   <button
                     onClick={() => handleDownload(selectedCampaign.image_url!, `${selectedCampaign.name}.jpg`)}
-                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-bold text-white bg-violet-600 hover:bg-violet-750 rounded-xl transition-colors shadow-md"
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-bold text-white bg-violet-600 hover:bg-violet-700 rounded-xl transition-colors shadow-md"
                   >
                     <Download className="w-3.5 h-3.5" />
                     <span>Descargar Arte</span>
@@ -320,7 +303,7 @@ export const ClientGallery: React.FC<ClientGalleryProps> = ({ campaigns, onBackT
                 )}
                 <button
                   onClick={() => handleShare(selectedCampaign)}
-                  className="p-2.5 border border-slate-850 hover:bg-slate-800 rounded-xl text-slate-400 hover:text-white transition-colors"
+                  className="p-2.5 border border-slate-900 hover:bg-slate-800 rounded-xl text-slate-400 hover:text-white transition-colors"
                   title="Copiar datos"
                 >
                   <Share2 className="w-4 h-4" />

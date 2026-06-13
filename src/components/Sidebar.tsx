@@ -23,7 +23,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
         <div className="w-9 h-9 bg-violet-600 rounded-xl flex items-center justify-center text-white shadow-md shadow-violet-200">
           <Zap className="w-5 h-5 fill-current" />
         </div>
-        <span className="font-bold text-slate-800 text-lg tracking-tight">Marketflow</span>
+        <span className="font-bold text-slate-800 text-lg tracking-tight">Marketdev</span>
       </div>
 
       {/* Navigation */}
@@ -65,7 +65,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
             JD
           </div>
           <div>
-            <p className="text-xs font-semibold text-slate-700">Josué Daniel</p>
+            <p className="text-xs font-semibold text-slate-700">Administrador</p>
             <p className="text-[10px] text-slate-400">Administrador</p>
           </div>
         </div>

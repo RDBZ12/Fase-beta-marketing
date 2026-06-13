@@ -67,6 +67,7 @@ const DEFAULT_CAMPAIGNS: Campaign[] = [
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
@@ -258,7 +259,7 @@ function App() {
 
   return (
     <div className="flex min-h-screen bg-slate-50">
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+      {isSidebarOpen && <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />}
       
       <main className="flex-1 p-6 lg:p-8 space-y-6 overflow-y-auto">
         {activeTab !== 'portal-cliente' && (
@@ -272,9 +273,9 @@ function App() {
               const el = document.querySelector('input[placeholder="Buscar campaña..."]');
               if (el instanceof HTMLInputElement) el.focus();
             }}
-            onPrintClick={() => window.print()}
             onSaveClick={() => alert('¡Datos guardados con éxito!')}
             onPublishClick={() => alert('¡Dashboard publicado correctamente!')}
+            onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
           />
         )}
 
