@@ -60,15 +60,18 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
 
       {/* Footer info */}
       <div className="p-4 border-t border-slate-50">
-        <div className="bg-slate-50 rounded-xl p-3.5 flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-violet-100 text-violet-700 flex items-center justify-center font-bold text-sm">
+        <button 
+          onClick={() => setActiveTab('perfil')}
+          className="w-full bg-slate-50 rounded-xl p-3.5 flex items-center gap-3 hover:bg-slate-100 transition-colors text-left"
+        >
+          <div className="w-8 h-8 rounded-full bg-violet-100 text-violet-700 flex items-center justify-center font-bold text-sm shrink-0">
             JD
           </div>
           <div>
             <p className="text-xs font-semibold text-slate-700">Administrador</p>
             <p className="text-[10px] text-slate-400">Administrador</p>
           </div>
-        </div>
+        </button>
       </div>
     </aside>
   );

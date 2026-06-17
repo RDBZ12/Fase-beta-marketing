@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
+import AuthButton from './components/AuthButton';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { MetricCards } from './components/MetricCards';
@@ -76,6 +77,21 @@ function App() {
   const [isCampaignModalOpen, setIsCampaignModalOpen] = useState(false);
   const [isAIModalOpen, setIsAIModalOpen] = useState(false);
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
+
+  // Auth state
+  const [session, setSession] = useState<any>(null);
+  const [loadingAuth, setLoadingAuth] = useState(true);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setLoadingAuth(false);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
 
   // Fetch campaigns from Supabase
   const fetchCampaigns = async () => {
@@ -257,12 +273,24 @@ function App() {
     camp.status.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  if (loadingAuth) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-slate-50">
+        <div className="w-8 h-8 border-4 border-violet-600 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <AuthButton />;
+  }
+
   return (
     <div className="flex min-h-screen bg-slate-50">
       {isSidebarOpen && <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />}
       
       <main className="flex-1 p-6 lg:p-8 space-y-6 overflow-y-auto">
-        {activeTab !== 'portal-cliente' && (
+        {activeTab !== 'portal-cliente' && activeTab !== 'perfil' && (
           <Header 
             onNewCampaign={() => {
               setEditingCampaign(null);
@@ -326,6 +354,8 @@ function App() {
             campaigns={campaigns} 
             onBackToDashboard={() => setActiveTab('dashboard')} 
           />
+        ) : activeTab === 'perfil' ? (
+          <AuthButton />
         ) : (
           <div className="bg-white border border-slate-100 rounded-2xl p-12 shadow-sm text-center">
             <h2 className="text-lg font-bold text-slate-800">Sección: {activeTab.toUpperCase()}</h2>
