@@ -2,16 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { useUser } from '../context/UserContext';
 import type { Publicacion, RedSocial, TipoContenido, Campaign } from '../types';
+import { getPostAnalytics, getAnalyticsByContent, hasAyrshareKey } from '../lib/ayrshare';
 import {
   Globe, Plus, Pencil, Trash2, X, Save, Search,
-  Loader2, Calendar, Image, AlignLeft, Send
+  Loader2, Calendar, Image, AlignLeft, Send, TrendingUp, RefreshCw
 } from 'lucide-react';
 
 const ESTADO_COLORS: Record<string, string> = {
   Programada: 'bg-blue-100 text-blue-700',
-  Publicada:  'bg-emerald-100 text-emerald-700',
-  Borrador:   'bg-slate-100 text-slate-600',
-  Cancelada:  'bg-rose-100 text-rose-500',
+  Publicada: 'bg-emerald-100 text-emerald-700',
+  Borrador: 'bg-slate-100 text-slate-600',
+  Cancelada: 'bg-rose-100 text-rose-500',
 };
 
 // ─── Modal ────────────────────────────────────────────────────────────────────
@@ -19,19 +20,20 @@ interface ModalProps {
   isOpen: boolean; onClose: () => void; onSaved: () => void;
   pub?: Publicacion | null;
   redes: RedSocial[]; tipos: TipoContenido[]; campaigns: Campaign[];
+  onPublishNow: (pub: Publicacion, bypassConfirm?: boolean) => Promise<void>;
 }
 
-const PubModal: React.FC<ModalProps> = ({ isOpen, onClose, onSaved, pub, redes, tipos, campaigns }) => {
-  const [titulo, setTitulo]             = useState('');
-  const [contenido, setContenido]       = useState('');
-  const [fechaPub, setFechaPub]         = useState('');
-  const [estado, setEstado]             = useState<Publicacion['estado']>('Borrador');
-  const [idRed, setIdRed]               = useState<number | ''>('');
-  const [idTipo, setIdTipo]             = useState<number | ''>('');
-  const [idCampana, setIdCampana]       = useState<string | ''>('');
-  const [imagenUrl, setImagenUrl]       = useState('');
-  const [saving, setSaving]             = useState(false);
-  const [error, setError]               = useState('');
+const PubModal: React.FC<ModalProps> = ({ isOpen, onClose, onSaved, pub, redes, tipos, campaigns, onPublishNow }) => {
+  const [titulo, setTitulo] = useState('');
+  const [contenido, setContenido] = useState('');
+  const [fechaPub, setFechaPub] = useState('');
+  const [estado, setEstado] = useState<Publicacion['estado']>('Borrador');
+  const [idRed, setIdRed] = useState<number | ''>('');
+  const [idTipo, setIdTipo] = useState<number | ''>('');
+  const [idCampana, setIdCampana] = useState<string | ''>('');
+  const [imagenUrl, setImagenUrl] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     if (pub) {
@@ -63,10 +65,10 @@ const PubModal: React.FC<ModalProps> = ({ isOpen, onClose, onSaved, pub, redes, 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!titulo.trim())    return setError('El título es obligatorio.');
+    if (!titulo.trim()) return setError('El título es obligatorio.');
     if (!contenido.trim()) return setError('El contenido es obligatorio.');
-    if (!idRed)            return setError('La red social es obligatoria.');
-    if (!fechaPub)         return setError('La fecha de publicación es obligatoria.');
+    if (!idRed) return setError('La red social es obligatoria.');
+    if (!fechaPub) return setError('La fecha de publicación es obligatoria.');
     setSaving(true);
     try {
       const payload = {
@@ -75,14 +77,41 @@ const PubModal: React.FC<ModalProps> = ({ isOpen, onClose, onSaved, pub, redes, 
         estado, id_red: idRed || null, id_tipo_contenido: idTipo || null,
         id_campana: idCampana || null, imagen_url: imagenUrl || null,
       };
+      let savedPub: Publicacion | null = null;
       if (pub) {
-        const { error: e } = await supabase.from('publicaciones').update(payload).eq('id_publicacion', pub.id_publicacion);
+        const { data, error: e } = await supabase.from('publicaciones')
+          .update(payload)
+          .eq('id_publicacion', pub.id_publicacion)
+          .select('*, redes_sociales(nombre_red), tipos_contenido(nombre_tipo), campaigns(nombre_campana)')
+          .single();
         if (e) throw e;
+        if (data) {
+          savedPub = {
+            ...data,
+            nombre_red: data.redes_sociales?.nombre_red,
+            nombre_tipo: data.tipos_contenido?.nombre_tipo,
+            nombre_campana: data.campaigns?.nombre_campana,
+          };
+        }
       } else {
-        const { error: e } = await supabase.from('publicaciones').insert([payload]);
+        const { data, error: e } = await supabase.from('publicaciones')
+          .insert([payload])
+          .select('*, redes_sociales(nombre_red), tipos_contenido(nombre_tipo), campaigns(nombre_campana)')
+          .single();
         if (e) throw e;
+        if (data) {
+          savedPub = {
+            ...data,
+            nombre_red: data.redes_sociales?.nombre_red,
+            nombre_tipo: data.tipos_contenido?.nombre_tipo,
+            nombre_campana: data.campaigns?.nombre_campana,
+          };
+        }
       }
       onSaved(); onClose();
+      if (estado === 'Publicada' && savedPub) {
+        onPublishNow(savedPub, true);
+      }
     } catch (err: any) { setError(err.message || 'Error al guardar.'); }
     finally { setSaving(false); }
   };
@@ -141,7 +170,7 @@ const PubModal: React.FC<ModalProps> = ({ isOpen, onClose, onSaved, pub, redes, 
             <div>
               <label className={lbl}>Estado</label>
               <select value={estado} onChange={e => setEstado(e.target.value as Publicacion['estado'])} className={cls}>
-                {['Borrador','Programada','Publicada','Cancelada'].map(s => <option key={s} value={s}>{s}</option>)}
+                {['Borrador', 'Programada', 'Publicada', 'Cancelada'].map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
           </div>
@@ -195,39 +224,175 @@ const PubModal: React.FC<ModalProps> = ({ isOpen, onClose, onSaved, pub, redes, 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export const PublicacionesModule: React.FC = () => {
   const { isCommunityOrAbove, isMarketingOrAbove } = useUser();
-  const [pubs, setPubs]         = useState<Publicacion[]>([]);
-  const [redes, setRedes]       = useState<RedSocial[]>([]);
-  const [tipos, setTipos]       = useState<TipoContenido[]>([]);
+  const [pubs, setPubs] = useState<Publicacion[]>([]);
+  const [redes, setRedes] = useState<RedSocial[]>([]);
+  const [tipos, setTipos] = useState<TipoContenido[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [loading, setLoading]   = useState(true);
-  const [search, setSearch]     = useState('');
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
   const [filterEstado, setFilterEstado] = useState('todos');
-  const [filterRed, setFilterRed]       = useState('todos');
-  const [isModalOpen, setIsModalOpen]   = useState(false);
-  const [editing, setEditing]           = useState<Publicacion | null>(null);
+  const [filterRed, setFilterRed] = useState('todos');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editing, setEditing] = useState<Publicacion | null>(null);
   const [publishingId, setPublishingId] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [fetchingAnalyticsId, setFetchingAnalyticsId] = useState<string | null>(null);
 
   const fetchAll = async () => {
     setLoading(true);
-    const [{ data: ps }, { data: rs }, { data: ts }, { data: cs }] = await Promise.all([
+    const [{ data: ps }, { data: rs }, { data: ts }, { data: cs }, { data: ints }] = await Promise.all([
       supabase.from('publicaciones').select('*, redes_sociales(nombre_red), tipos_contenido(nombre_tipo), campaigns(nombre_campana)').order('fecha_publicacion', { ascending: false }),
       supabase.from('redes_sociales').select('*').eq('estado', 'activo'),
       supabase.from('tipos_contenido').select('*'),
       supabase.from('campaigns').select('id, nombre_campana, estado'),
+      supabase.from('interacciones').select('*'),
     ]);
-    if (ps) setPubs(ps.map((p: any) => ({
-      ...p,
-      nombre_red:   p.redes_sociales?.nombre_red,
-      nombre_tipo:  p.tipos_contenido?.nombre_tipo,
-      nombre_campana: p.campaigns?.nombre_campana,
-    })));
+
+    const interactions = ints || [];
+
+    if (ps) setPubs(ps.map((p: any) => {
+      const pubInts = interactions.filter((i: any) => i.id_publicacion === p.id_publicacion);
+      const likes = pubInts.filter((i: any) => i.tipo_interaccion === 'like').reduce((acc: number, cur: any) => acc + cur.cantidad, 0);
+      const comentarios = pubInts.filter((i: any) => i.tipo_interaccion === 'comentario').reduce((acc: number, cur: any) => acc + cur.cantidad, 0);
+      const compartidos = pubInts.filter((i: any) => i.tipo_interaccion === 'compartido').reduce((acc: number, cur: any) => acc + cur.cantidad, 0);
+      const alcance = pubInts.filter((i: any) => i.tipo_interaccion === 'alcance' || i.tipo_interaccion === 'impresion').reduce((acc: number, cur: any) => acc + cur.cantidad, 0);
+
+      return {
+        ...p,
+        nombre_red: p.redes_sociales?.nombre_red,
+        nombre_tipo: p.tipos_contenido?.nombre_tipo,
+        nombre_campana: p.campaigns?.nombre_campana,
+        likes,
+        comentarios,
+        compartidos,
+        alcance,
+      };
+    }));
     if (rs) setRedes(rs as RedSocial[]);
     if (ts) setTipos(ts as TipoContenido[]);
     if (cs) setCampaigns(cs.map((c: any) => ({ id: c.id, name: c.nombre_campana, channel: 'Multi', status: c.estado, leads: 0, ctr: 0, reach: '0', startDate: '' })));
     setLoading(false);
   };
 
-  useEffect(() => { fetchAll(); }, []);
+  useEffect(() => {
+    fetchAll();
+
+    const channelInts = supabase
+      .channel('realtime-interacciones')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'interacciones' },
+        () => { fetchAll(); }
+      )
+      .subscribe();
+
+    const channelPubs = supabase
+      .channel('realtime-publicaciones')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'publicaciones' },
+        () => { fetchAll(); }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channelInts);
+      supabase.removeChannel(channelPubs);
+    };
+  }, []);
+
+  const handleSyncMetrics = async () => {
+    const publicadas = pubs.filter(p => p.estado === 'Publicada');
+    if (publicadas.length === 0) {
+      alert('No hay publicaciones con estado "Publicada" para sincronizar.');
+      return;
+    }
+
+    setSyncing(true);
+    let updatedCount = 0;
+    let realCount = 0;
+    let notFoundCount = 0;
+
+    try {
+      // Obtener historial completo de Ayrshare una sola vez
+      let history: any[] = [];
+      if (hasAyrshareKey()) {
+        try {
+          const { getPostHistory: fetchHistory } = await import('../lib/ayrshare');
+          history = await fetchHistory();
+        } catch (_e) { /* sin historial */ }
+      }
+
+      for (const pub of publicadas) {
+        try {
+          let instagramUrl: string | null = null;
+
+          // Buscar en historial de Ayrshare por similitud de texto
+          if (history.length > 0) {
+            const pText = pub.contenido.toLowerCase().trim();
+            const searchStr = pText.substring(0, Math.min(30, pText.length));
+
+            const match = history.find((h: any) => {
+              const hText = (h.post || '').toLowerCase().replace('[sent with free plan] ', '');
+              return hText.includes(searchStr) || searchStr.includes(hText.substring(0, Math.min(30, hText.length)));
+            });
+
+            if (match) {
+              // Guardar Ayrshare post ID y URL del post
+              const instaPostId = match.postIds?.find((p: any) => p.platform === 'instagram');
+              instagramUrl = instaPostId?.postUrl ?? null;
+
+              const updateData: any = {};
+              if (match.id && !pub.ayrshare_post_id) updateData.ayrshare_post_id = match.id;
+              if (instagramUrl) updateData.instagram_post_url = instagramUrl;
+              if (Object.keys(updateData).length > 0) {
+                await supabase.from('publicaciones').update(updateData).eq('id_publicacion', pub.id_publicacion);
+              }
+
+              // Intentar analíticas reales (requiere Premium — devuelve null si no)
+              const analytics = await getPostAnalytics(match.id);
+
+              if (analytics && analytics.source === 'ayrshare_real') {
+                // Solo guardar si son datos reales de la API
+                const newInts = [
+                  { tipo_interaccion: 'like',       cantidad: analytics.likes       ?? 0, id_publicacion: pub.id_publicacion },
+                  { tipo_interaccion: 'comentario', cantidad: analytics.comentarios ?? 0, id_publicacion: pub.id_publicacion },
+                  { tipo_interaccion: 'compartido', cantidad: analytics.compartidos ?? 0, id_publicacion: pub.id_publicacion },
+                  { tipo_interaccion: 'alcance',    cantidad: analytics.alcance     ?? 0, id_publicacion: pub.id_publicacion },
+                ];
+                await supabase.from('interacciones').delete().eq('id_publicacion', pub.id_publicacion);
+                await supabase.from('interacciones').insert(newInts);
+                realCount++;
+              }
+              updatedCount++;
+            } else {
+              notFoundCount++;
+            }
+          }
+        } catch (_pubErr) {
+          // Error en un post — continuar con el siguiente sin datos falsos
+          notFoundCount++;
+        }
+      }
+
+      await fetchAll();
+
+      const lines = [
+        `✅ Sincronización completada`,
+        `🔗 ${history.length} posts encontrados en Ayrshare`,
+        realCount > 0
+          ? `🟢 ${realCount} publicaciones con métricas reales`
+          : `⚠️ Analytics no disponibles en el plan actual (se requiere Premium)`,
+        notFoundCount > 0 ? `ℹ️ ${notFoundCount} publicaciones sin coincidencia en Ayrshare` : '',
+      ].filter(Boolean);
+      alert(lines.join('\n'));
+    } catch (err: any) {
+      alert('Error en sincronización: ' + err.message);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
 
   const handleDelete = async (id: string) => {
     if (!confirm('¿Eliminar esta publicación?')) return;
@@ -235,9 +400,56 @@ export const PublicacionesModule: React.FC = () => {
     fetchAll();
   };
 
-  const handlePublishNow = async (pub: Publicacion) => {
-    if (!confirm('¿Estás seguro de que quieres lanzar esta publicación a las redes reales ahora mismo?')) return;
-    
+  // Obtener analíticas REALES — sin inventar datos
+  const handleFetchAnalytics = async (pub: Publicacion) => {
+    setFetchingAnalyticsId(pub.id_publicacion);
+    try {
+      let analytics: import('../lib/ayrshare').RealAnalytics | null = null;
+      let instagramUrl: string | null = null;
+
+      if (pub.ayrshare_post_id) {
+        analytics = await getPostAnalytics(pub.ayrshare_post_id);
+      } else {
+        const result = await getAnalyticsByContent(pub.contenido);
+        if (result) {
+          analytics = result;
+          instagramUrl = result.postUrl ?? null;
+        }
+      }
+
+      // Solo guardar si obtuvimos datos reales de la API
+      if (analytics && analytics.source === 'ayrshare_real') {
+        const newInts = [
+          { tipo_interaccion: 'like',       cantidad: analytics.likes       ?? 0, id_publicacion: pub.id_publicacion },
+          { tipo_interaccion: 'comentario', cantidad: analytics.comentarios ?? 0, id_publicacion: pub.id_publicacion },
+          { tipo_interaccion: 'compartido', cantidad: analytics.compartidos ?? 0, id_publicacion: pub.id_publicacion },
+          { tipo_interaccion: 'alcance',    cantidad: analytics.alcance     ?? 0, id_publicacion: pub.id_publicacion },
+        ];
+        await supabase.from('interacciones').delete().eq('id_publicacion', pub.id_publicacion);
+        await supabase.from('interacciones').insert(newInts);
+      }
+
+      if (instagramUrl) {
+        await supabase.from('publicaciones')
+          .update({ instagram_post_url: instagramUrl })
+          .eq('id_publicacion', pub.id_publicacion);
+      }
+
+      if (!analytics) {
+        alert('⚠️ No se encontraron métricas reales para esta publicación.\nVerifica que el post fue publicado a través de Ayrshare y que tienes plan Premium para analytics.');
+      }
+
+      fetchAll();
+    } catch (err: any) {
+      alert('Error obteniendo analíticas: ' + err.message);
+    } finally {
+      setFetchingAnalyticsId(null);
+    }
+  };
+
+  const handlePublishNow = async (pub: Publicacion, bypassConfirm = false) => {
+    if (!bypassConfirm && !confirm('¿Estás seguro de que quieres lanzar esta publicación a las redes reales ahora mismo?')) return;
+
     setPublishingId(pub.id_publicacion);
     try {
       let finalMediaUrl = pub.imagen_url;
@@ -248,7 +460,7 @@ export const PublicacionesModule: React.FC = () => {
         if (match) {
           const contentType = match[1];
           const b64Data = match[2];
-          
+
           // Convertir base64 a Blob
           const byteCharacters = atob(b64Data);
           const byteArrays = [];
@@ -264,11 +476,11 @@ export const PublicacionesModule: React.FC = () => {
           const blob = new Blob(byteArrays, { type: contentType });
           const extension = contentType.split('/')[1] || 'png';
           const fileName = `pub_${Date.now()}_${Math.random().toString(36).substring(7)}.${extension}`;
-          
+
           // Subir al bucket
           const { error: uploadError } = await supabase.storage.from('img').upload(fileName, blob, { contentType });
           if (uploadError) throw new Error('Error al subir imagen al bucket: ' + uploadError.message);
-          
+
           // 2. Obtener la URL pública absoluta
           const { data: publicUrlData } = supabase.storage.from('img').getPublicUrl(fileName);
           finalMediaUrl = publicUrlData.publicUrl;
@@ -298,10 +510,12 @@ export const PublicacionesModule: React.FC = () => {
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
 
-      alert(data.mock ? 'Simulación Exitosa: Para que sea real, configura tu AYRSHARE_API_KEY en Supabase.' : '¡Publicado con éxito en redes sociales!');
-      
-      // Actualizar estado a 'Publicada' en nuestra base de datos
-      await supabase.from('publicaciones').update({ estado: 'Publicada' }).eq('id_publicacion', pub.id_publicacion);
+      // Guardar postId de Ayrshare + cambiar estado a Publicada
+      const updatePayload: any = { estado: 'Publicada' };
+      if (data.postId) updatePayload.ayrshare_post_id = data.postId;
+      await supabase.from('publicaciones').update(updatePayload).eq('id_publicacion', pub.id_publicacion);
+
+      alert(data.mock ? 'Simulación Exitosa: Para publicación real, configura AYRSHARE_API_KEY en Supabase.' : '¡Publicado con éxito en redes sociales!');
       fetchAll();
     } catch (err: any) {
       alert('Error publicando: ' + err.message);
@@ -317,7 +531,7 @@ export const PublicacionesModule: React.FC = () => {
     return ms && me && mr;
   });
 
-  const statsCounts = ['Programada','Publicada','Borrador','Cancelada'].map(e => ({ label: e, count: pubs.filter(p => p.estado === e).length }));
+  const statsCounts = ['Programada', 'Publicada', 'Borrador', 'Cancelada'].map(e => ({ label: e, count: pubs.filter(p => p.estado === e).length }));
   const cls = 'px-3 py-2 text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent';
 
   return (
@@ -329,12 +543,21 @@ export const PublicacionesModule: React.FC = () => {
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">Gestión de publicaciones en redes sociales</p>
         </div>
-        {isCommunityOrAbove && (
-          <button onClick={() => { setEditing(null); setIsModalOpen(true); }}
-            className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-md shadow-blue-200 transition-all">
-            <Plus className="w-3.5 h-3.5" /> Nueva Publicación
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {isCommunityOrAbove && (
+            <button onClick={handleSyncMetrics} disabled={syncing}
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors disabled:opacity-60">
+              <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
+              <span>{syncing ? 'Sincronizando...' : 'Sincronizar Métricas'}</span>
+            </button>
+          )}
+          {isCommunityOrAbove && (
+            <button onClick={() => { setEditing(null); setIsModalOpen(true); }}
+              className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-md shadow-blue-200 transition-all">
+              <Plus className="w-3.5 h-3.5" /> Nueva Publicación
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Stats */}
@@ -360,7 +583,7 @@ export const PublicacionesModule: React.FC = () => {
         </select>
         <select value={filterEstado} onChange={e => setFilterEstado(e.target.value)} className={cls}>
           <option value="todos">Todos los estados</option>
-          {['Borrador','Programada','Publicada','Cancelada'].map(s => <option key={s} value={s}>{s}</option>)}
+          {['Borrador', 'Programada', 'Publicada', 'Cancelada'].map(s => <option key={s} value={s}>{s}</option>)}
         </select>
       </div>
 
@@ -387,6 +610,61 @@ export const PublicacionesModule: React.FC = () => {
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${ESTADO_COLORS[p.estado] ?? 'bg-slate-100 text-slate-600'}`}>{p.estado}</span>
                 </div>
                 <p className="text-[11px] text-slate-500 line-clamp-2">{p.contenido}</p>
+
+                {/* Panel de Analytics con link a Instagram */}
+                {p.estado === 'Publicada' && (
+                  <div className="rounded-xl border border-slate-100 overflow-hidden">
+                    <div className="flex items-center justify-between px-2.5 py-1 bg-gradient-to-r from-violet-50 to-blue-50 border-b border-slate-100">
+                      <span className="text-[9px] font-black text-violet-600 uppercase tracking-wider">📊 Analytics</span>
+                      <div className="flex items-center gap-1.5">
+                        {(p as any).instagram_post_url && (
+                          <a
+                            href={(p as any).instagram_post_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[8px] font-bold text-pink-500 bg-pink-50 px-1.5 py-0.5 rounded-full hover:bg-pink-100 transition-colors"
+                          >
+                            📸 Ver en Instagram
+                          </a>
+                        )}
+                        <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full ${
+                          p.ayrshare_post_id
+                            ? 'text-emerald-600 bg-emerald-50'
+                            : 'text-slate-400 bg-slate-100'
+                        }`}>
+                          {p.ayrshare_post_id ? '🔗 Ayrshare' : 'Sin datos reales'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-4 gap-0 text-center">
+                      <div className="py-2 px-1 border-r border-slate-100">
+                        <p className={`text-[14px] font-black ${ p.likes != null ? 'text-rose-500' : 'text-slate-300' }`}>
+                          {p.likes != null ? p.likes.toLocaleString() : '—'}
+                        </p>
+                        <p className="text-[8px] font-bold text-slate-400 mt-0.5">❤️ Likes</p>
+                      </div>
+                      <div className="py-2 px-1 border-r border-slate-100">
+                        <p className={`text-[14px] font-black ${ p.comentarios != null ? 'text-blue-500' : 'text-slate-300' }`}>
+                          {p.comentarios != null ? p.comentarios.toLocaleString() : '—'}
+                        </p>
+                        <p className="text-[8px] font-bold text-slate-400 mt-0.5">💬 Coment.</p>
+                      </div>
+                      <div className="py-2 px-1 border-r border-slate-100">
+                        <p className={`text-[14px] font-black ${ p.compartidos != null ? 'text-emerald-500' : 'text-slate-300' }`}>
+                          {p.compartidos != null ? p.compartidos.toLocaleString() : '—'}
+                        </p>
+                        <p className="text-[8px] font-bold text-slate-400 mt-0.5">🔗 Compart.</p>
+                      </div>
+                      <div className="py-2 px-1">
+                        <p className={`text-[14px] font-black ${ p.alcance != null ? 'text-amber-500' : 'text-slate-300' }`}>
+                          {p.alcance != null ? p.alcance.toLocaleString() : '—'}
+                        </p>
+                        <p className="text-[8px] font-bold text-slate-400 mt-0.5">👁️ Alcance</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between pt-1">
                   <div className="space-y-0.5">
                     {p.nombre_red && <p className="text-[10px] font-bold text-blue-600">{p.nombre_red}</p>}
@@ -399,6 +677,17 @@ export const PublicacionesModule: React.FC = () => {
                           title="Lanzar a Redes (API Real)"
                           className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 transition-colors disabled:opacity-50">
                           {publishingId === p.id_publicacion ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                        </button>
+                      )}
+                      {p.estado === 'Publicada' && (
+                        <button
+                          onClick={() => handleFetchAnalytics(p)}
+                          disabled={fetchingAnalyticsId === p.id_publicacion}
+                          title={p.ayrshare_post_id ? 'Actualizar métricas reales de Ayrshare' : 'Actualizar métricas'}
+                          className="p-1.5 rounded-lg text-amber-500 hover:text-amber-600 hover:bg-amber-50 transition-colors disabled:opacity-50">
+                          {fetchingAnalyticsId === p.id_publicacion
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            : <TrendingUp className="w-3.5 h-3.5" />}
                         </button>
                       )}
                       <button onClick={() => { setEditing(p); setIsModalOpen(true); }}
@@ -417,7 +706,8 @@ export const PublicacionesModule: React.FC = () => {
       )}
 
       <PubModal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setEditing(null); }}
-        onSaved={fetchAll} pub={editing} redes={redes} tipos={tipos} campaigns={campaigns} />
+        onSaved={fetchAll} pub={editing} redes={redes} tipos={tipos} campaigns={campaigns}
+        onPublishNow={handlePublishNow} />
     </div>
   );
 };

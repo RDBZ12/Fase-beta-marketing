@@ -92,10 +92,16 @@ export interface Publicacion {
   id_red?: number;
   id_tipo_contenido?: number;
   imagen_url?: string;
+  ayrshare_post_id?: string;
+  instagram_post_url?: string;
   nombre_red?: string;
   nombre_tipo?: string;
   nombre_campana?: string;
   created_at?: string;
+  likes?: number;
+  comentarios?: number;
+  compartidos?: number;
+  alcance?: number;
 }
 
 // ─── Segments & Leads ────────────────────────────────────────────────────────

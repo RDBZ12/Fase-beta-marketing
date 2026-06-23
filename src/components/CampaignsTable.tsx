@@ -8,6 +8,7 @@ interface CampaignsTableProps {
   setSearchTerm: (term: string) => void;
   onModifyCampaign: (campaign: Campaign) => void;
   onDeleteCampaign: (id: string) => void;
+  onPagarCampaign: (campaign: Campaign) => void;
 }
 
 export const CampaignsTable: React.FC<CampaignsTableProps> = ({
@@ -16,6 +17,7 @@ export const CampaignsTable: React.FC<CampaignsTableProps> = ({
   setSearchTerm,
   onModifyCampaign,
   onDeleteCampaign,
+  onPagarCampaign,
 }) => {
   const getChannelStyle = (channel: string) => {
     switch (channel) {
@@ -143,6 +145,12 @@ export const CampaignsTable: React.FC<CampaignsTableProps> = ({
                       >
                         <Edit2 className="w-2.5 h-2.5" />
                         <span>Modificar</span>
+                      </button>
+                      <button
+                        onClick={() => onPagarCampaign(camp)}
+                        className="px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors"
+                      >
+                        Pagar
                       </button>
                       <button
                         onClick={() => {

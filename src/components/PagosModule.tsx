@@ -26,53 +26,216 @@ const ESTADO_ICONS: Record<string, React.ReactNode> = {
   Rechazado: <XCircle className="w-3.5 h-3.5" />,
 };
 
-// ─── PDF Receipt generator ────────────────────────────────────────────────────
-function generateReceiptHTML(pago: Partial<Pago>, ncf: string): string {
-  const now = new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+// ─── PDF Receipt generator (con Logo + QR) ────────────────────────────────────
+async function generateReceiptHTML(pago: Partial<Pago>, ncf: string): Promise<string> {
+  const now   = new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const monto = Number(pago.monto ?? 0);
   const itbis = +(monto * 0.18).toFixed(2);
   const total = +(monto * 1.18).toFixed(2);
+
+  // ── Logo La Élite como base64 ────────────────────────────────────────────
+  let logoHtml = '';
+  try {
+    const resp = await fetch('/logo-laelite.jpg');
+    const blob = await resp.blob();
+    const b64  = await new Promise<string>((res) => {
+      const r = new FileReader();
+      r.onloadend = () => res(r.result as string);
+      r.readAsDataURL(blob);
+    });
+    // Logo mucho más grande (160x160)
+    logoHtml = `<img src="${b64}" style="width:160px;height:160px;object-fit:contain;position:absolute;top:20px;right:32px;filter: drop-shadow(0 4px 6px rgba(0,0,0,0.1));" alt="La Élite" />`;
+  } catch (_) { /* sin logo */ }
+
+  // ── QR Code con datos del comprobante ─────────────────────────────────────
+  let qrHtml = '';
+  try {
+    const QRCode  = (await import('qrcode')).default;
+    const qrData  = `NCF:${ncf}|CAMPANA:${pago.nombre_campana ?? ''}|TOTAL:RD$${total.toFixed(2)}|FECHA:${now}`;
+    const qrDataUrl = await QRCode.toDataURL(qrData, { 
+      width: 120, 
+      margin: 1,
+      color: { dark: '#2c3e2e', light: '#ffffff' } // Tono verde oscuro
+    });
+    qrHtml = `
+      <div style="margin-top:40px;display:flex;align-items:flex-end;gap:16px;">
+        <div style="background:#fff;padding:4px;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 2px 4px rgba(0,0,0,0.05);">
+          <img src="${qrDataUrl}" style="width:100px;height:100px;display:block;" alt="QR Comprobante" />
+          <p style="font-size:9px;color:#64748b;margin:6px 0 2px;text-align:center;font-weight:600;letter-spacing:0.5px;">VERIFICAR</p>
+        </div>
+        <div style="flex:1;padding-bottom:8px;">
+          <p style="font-size:10px;color:#475569;line-height:1.6;margin:0;">
+            Estado DGII: <strong style="color:#10b981;">Aceptado</strong><br/>
+            Este comprobante ha sido generado y firmado electrónicamente por <strong>Marketdev S.A.S.</strong><br/>
+            Autorizado por la Dirección General de Impuestos Internos (DGII).
+          </p>
+        </div>
+      </div>`;
+  } catch (_) {
+    qrHtml = `<p style="text-align:center;color:#64748b;font-size:10px;margin-top:30px;">Estado DGII: Aceptado · Comprobante generado electrónicamente por Marketdev</p>`;
+  }
+
   return `
 <!DOCTYPE html><html><head><title>Comprobante ${ncf}</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  body{font-family:Arial,sans-serif;font-size:11px;color:#111;padding:24px;max-width:600px;margin:auto}
-  h1{font-size:14px;text-align:center;margin-bottom:4px}
-  .center{text-align:center} .bold{font-weight:bold}
-  table{width:100%;border-collapse:collapse;margin-top:12px}
-  th{background:#f3f4f6;padding:6px;border:1px solid #e5e7eb;text-align:left;font-size:10px}
-  td{padding:6px;border:1px solid #e5e7eb;font-size:10px}
-  .totals td{font-weight:bold}
-  .ncf{font-size:13px;font-weight:bold;color:#5b21b6;text-align:center;margin:8px 0}
-  hr{border:none;border-top:1px solid #e5e7eb;margin:10px 0}
+  body {
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    color: #1e293b;
+    padding: 40px;
+    max-width: 800px;
+    margin: auto;
+    position: relative;
+    background: #ffffff;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .header-brand { margin-bottom: 30px; }
+  h1 { font-size: 24px; margin: 0 0 4px; color: #0f172a; font-weight: 700; letter-spacing: -0.5px; }
+  .brand-info { color: #64748b; font-size: 11px; line-height: 1.5; }
+  
+  .invoice-title {
+    background: linear-gradient(135deg, #2c3e2e 0%, #1a251b 100%);
+    color: white;
+    padding: 12px 20px;
+    border-radius: 8px;
+    margin: 24px 0;
+    display: inline-block;
+  }
+  .invoice-title h2 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: 1px; }
+  
+  .ncf-box {
+    margin-bottom: 30px;
+  }
+  .ncf-label { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; margin-bottom: 4px; }
+  .ncf-value { font-size: 18px; font-weight: 700; color: #b8975a; letter-spacing: 1px; } /* Color dorado/gold */
+  
+  .info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-bottom: 40px;
+  }
+  .info-card {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 16px;
+  }
+  .info-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 11px; }
+  .info-row:last-child { margin-bottom: 0; }
+  .info-label { color: #64748b; font-weight: 500; }
+  .info-value { color: #0f172a; font-weight: 600; text-align: right; }
+  
+  table { width: 100%; border-collapse: separate; border-spacing: 0; margin-top: 10px; }
+  th { background: #f1f5f9; padding: 12px; text-align: left; font-size: 11px; color: #475569; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #e2e8f0; }
+  th:first-child { border-top-left-radius: 8px; border-bottom-left-radius: 8px; }
+  th:last-child { border-top-right-radius: 8px; border-bottom-right-radius: 8px; text-align: right; }
+  td { padding: 14px 12px; font-size: 12px; border-bottom: 1px solid #e2e8f0; color: #334155; }
+  td:last-child { text-align: right; font-weight: 500; }
+  
+  .totals-wrapper { display: flex; justify-content: flex-end; margin-top: 24px; }
+  .totals-table { width: 320px; }
+  .totals-table td { border: none; padding: 8px 12px; font-size: 12px; }
+  .totals-table .totals-label { color: #64748b; font-weight: 500; text-align: left; }
+  .totals-table .totals-value { color: #0f172a; font-weight: 600; text-align: right; }
+  .totals-table .grand-total td { 
+    background: #2c3e2e; 
+    color: white; 
+    font-size: 15px; 
+    font-weight: 700; 
+    padding: 14px 12px; 
+    margin-top: 8px;
+  }
+  .totals-table .grand-total .totals-label { color: #e2e8f0; border-top-left-radius: 8px; border-bottom-left-radius: 8px; }
+  .totals-table .grand-total .totals-value { border-top-right-radius: 8px; border-bottom-right-radius: 8px; color: white; }
+  
+  .footer-line { border-top: 2px dashed #cbd5e1; margin-top: 40px; }
+  
+  @media print { 
+    body { padding: 20px; } 
+    .invoice-title { background: #2c3e2e !important; color: white !important; }
+    .totals-table .grand-total td { background: #2c3e2e !important; color: white !important; }
+  }
 </style></head><body>
-  <div class="center">
+  ${logoHtml}
+  
+  <div class="header-brand">
     <h1>MARKETDEV S.A.S.</h1>
-    <p>RNC: 1-31-00000-0 · Santo Domingo, RD · Tel: 809-000-0000</p>
-    <h2 style="font-size:12px">FACTURA DE CONSUMO ELECTRÓNICA</h2>
-    <p class="ncf">e-NCF: ${ncf}</p>
+    <div class="brand-info">
+      RNC: 1-31-00000-0<br/>
+      Av. Winston Churchill, Torre Empresarial, Piso 10<br/>
+      Santo Domingo, República Dominicana<br/>
+      Tel: (809) 555-0199 | info@marketdev.do
+    </div>
   </div>
-  <hr/>
+
+  <div class="invoice-title">
+    <h2>FACTURA DE CONSUMO ELECTRÓNICA</h2>
+  </div>
+
+  <div class="ncf-box">
+    <div class="ncf-label">Comprobante Fiscal (e-NCF)</div>
+    <div class="ncf-value">${ncf}</div>
+  </div>
+  
+  <div class="info-grid">
+    <div class="info-card">
+      <div class="info-row"><span class="info-label">Receptor:</span><span class="info-value">${pago.razon_social ?? 'Consumidor Final'}</span></div>
+      <div class="info-row"><span class="info-label">RNC / Cédula:</span><span class="info-value">${pago.rnc_cedula ?? '—'}</span></div>
+      <div class="info-row"><span class="info-label">Tipo Ingreso:</span><span class="info-value">01 - Ingresos Operaciones</span></div>
+    </div>
+    <div class="info-card">
+      <div class="info-row"><span class="info-label">Fecha Emisión:</span><span class="info-value">${now}</span></div>
+      <div class="info-row"><span class="info-label">Forma de Pago:</span><span class="info-value">${pago.metodo_pago ?? 'PayPal'}</span></div>
+      <div class="info-row"><span class="info-label">Ambiente:</span><span class="info-value">Certificación DGII</span></div>
+    </div>
+  </div>
+
   <table>
-    <tr><td class="bold">Receptor:</td><td>${pago.razon_social ?? 'Consumidor Final'}</td></tr>
-    <tr><td class="bold">RNC/Cédula:</td><td>${pago.rnc_cedula ?? '—'}</td></tr>
-    <tr><td class="bold">Campaña:</td><td>${pago.nombre_campana ?? '—'}</td></tr>
-    <tr><td class="bold">Fecha emisión:</td><td>${now}</td></tr>
-    <tr><td class="bold">Forma de pago:</td><td>${pago.metodo_pago ?? 'PayPal'}</td></tr>
-    <tr><td class="bold">Ambiente:</td><td>TesteCF / Pruebas</td></tr>
-  </table>
-  <table style="margin-top:12px">
-    <thead><tr><th>#</th><th>Descripción</th><th>Cantidad</th><th>Precio Unit.</th><th>Monto Neto</th></tr></thead>
+    <thead>
+      <tr>
+        <th style="width:5%">Línea</th>
+        <th style="width:55%">Descripción del Servicio</th>
+        <th style="width:10%">Cant.</th>
+        <th style="width:15%">Precio Unit.</th>
+        <th style="width:15%">Monto Neto</th>
+      </tr>
+    </thead>
     <tbody>
-      <tr><td>1</td><td>Servicio de Marketing Digital — ${pago.nombre_campana ?? 'Campaña'}</td><td>1</td><td>RD$ ${monto.toFixed(2)}</td><td>RD$ ${monto.toFixed(2)}</td></tr>
+      <tr>
+        <td style="color:#64748b;font-weight:600;">01</td>
+        <td>
+          <div style="font-weight:600;color:#0f172a;margin-bottom:4px;">Servicio de Marketing Digital</div>
+          <div style="font-size:11px;color:#64748b;">Campaña publicitaria: ${pago.nombre_campana ?? 'General'}</div>
+        </td>
+        <td style="text-align:center;">1</td>
+        <td>RD$ ${monto.toFixed(2)}</td>
+        <td>RD$ ${monto.toFixed(2)}</td>
+      </tr>
     </tbody>
   </table>
-  <table style="margin-top:8px">
-    <tr class="totals"><td>Monto Gravado:</td><td style="text-align:right">RD$ ${monto.toFixed(2)}</td></tr>
-    <tr class="totals"><td>ITBIS (18%):</td><td style="text-align:right">RD$ ${itbis.toFixed(2)}</td></tr>
-    <tr class="totals" style="background:#ede9fe"><td class="bold">TOTAL FACTURA:</td><td style="text-align:right;font-size:13px">RD$ ${total.toFixed(2)}</td></tr>
-  </table>
-  <hr/>
-  <p class="center" style="color:#6b7280;font-size:9px">Estado DGII: Pendiente · Este comprobante fue generado electrónicamente por Marketdev</p>
+
+  <div class="totals-wrapper">
+    <table class="totals-table">
+      <tr>
+        <td class="totals-label">Monto Gravado:</td>
+        <td class="totals-value">RD$ ${monto.toFixed(2)}</td>
+      </tr>
+      <tr>
+        <td class="totals-label">ITBIS (18%):</td>
+        <td class="totals-value">RD$ ${itbis.toFixed(2)}</td>
+      </tr>
+      <tr class="grand-total">
+        <td class="totals-label">TOTAL FACTURA</td>
+        <td class="totals-value">RD$ ${total.toFixed(2)}</td>
+      </tr>
+    </table>
+  </div>
+  
+  <div class="footer-line"></div>
+  ${qrHtml}
 </body></html>`;
 }
 
@@ -122,7 +285,7 @@ const PagoModal: React.FC<ModalProps> = ({ isOpen, onClose, onSaved, campaigns }
       if (insertErr) throw insertErr;
 
       // Generate and open receipt PDF
-      const html = generateReceiptHTML({
+      const html = await generateReceiptHTML({
         id_campana:   payload.id_campana   ?? undefined,
         monto:        payload.monto,
         ncf,
