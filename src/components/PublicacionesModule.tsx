@@ -355,10 +355,10 @@ export const PublicacionesModule: React.FC = () => {
               if (analytics && analytics.source === 'ayrshare_real') {
                 // Solo guardar si son datos reales de la API
                 const newInts = [
-                  { tipo_interaccion: 'like',       cantidad: analytics.likes       ?? 0, id_publicacion: pub.id_publicacion },
+                  { tipo_interaccion: 'like', cantidad: analytics.likes ?? 0, id_publicacion: pub.id_publicacion },
                   { tipo_interaccion: 'comentario', cantidad: analytics.comentarios ?? 0, id_publicacion: pub.id_publicacion },
                   { tipo_interaccion: 'compartido', cantidad: analytics.compartidos ?? 0, id_publicacion: pub.id_publicacion },
-                  { tipo_interaccion: 'alcance',    cantidad: analytics.alcance     ?? 0, id_publicacion: pub.id_publicacion },
+                  { tipo_interaccion: 'alcance', cantidad: analytics.alcance ?? 0, id_publicacion: pub.id_publicacion },
                 ];
                 await supabase.from('interacciones').delete().eq('id_publicacion', pub.id_publicacion);
                 await supabase.from('interacciones').insert(newInts);
@@ -420,10 +420,10 @@ export const PublicacionesModule: React.FC = () => {
       // Solo guardar si obtuvimos datos reales de la API
       if (analytics && analytics.source === 'ayrshare_real') {
         const newInts = [
-          { tipo_interaccion: 'like',       cantidad: analytics.likes       ?? 0, id_publicacion: pub.id_publicacion },
+          { tipo_interaccion: 'like', cantidad: analytics.likes ?? 0, id_publicacion: pub.id_publicacion },
           { tipo_interaccion: 'comentario', cantidad: analytics.comentarios ?? 0, id_publicacion: pub.id_publicacion },
           { tipo_interaccion: 'compartido', cantidad: analytics.compartidos ?? 0, id_publicacion: pub.id_publicacion },
-          { tipo_interaccion: 'alcance',    cantidad: analytics.alcance     ?? 0, id_publicacion: pub.id_publicacion },
+          { tipo_interaccion: 'alcance', cantidad: analytics.alcance ?? 0, id_publicacion: pub.id_publicacion },
         ];
         await supabase.from('interacciones').delete().eq('id_publicacion', pub.id_publicacion);
         await supabase.from('interacciones').insert(newInts);
@@ -627,36 +627,35 @@ export const PublicacionesModule: React.FC = () => {
                             📸 Ver en Instagram
                           </a>
                         )}
-                        <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full ${
-                          p.ayrshare_post_id
-                            ? 'text-emerald-600 bg-emerald-50'
-                            : 'text-slate-400 bg-slate-100'
-                        }`}>
+                        <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full ${p.ayrshare_post_id
+                          ? 'text-emerald-600 bg-emerald-50'
+                          : 'text-slate-400 bg-slate-100'
+                          }`}>
                           {p.ayrshare_post_id ? '🔗 Ayrshare' : 'Sin datos reales'}
                         </span>
                       </div>
                     </div>
                     <div className="grid grid-cols-4 gap-0 text-center">
                       <div className="py-2 px-1 border-r border-slate-100">
-                        <p className={`text-[14px] font-black ${ p.likes != null ? 'text-rose-500' : 'text-slate-300' }`}>
+                        <p className={`text-[14px] font-black ${p.likes != null ? 'text-rose-500' : 'text-slate-300'}`}>
                           {p.likes != null ? p.likes.toLocaleString() : '—'}
                         </p>
                         <p className="text-[8px] font-bold text-slate-400 mt-0.5">❤️ Likes</p>
                       </div>
                       <div className="py-2 px-1 border-r border-slate-100">
-                        <p className={`text-[14px] font-black ${ p.comentarios != null ? 'text-blue-500' : 'text-slate-300' }`}>
+                        <p className={`text-[14px] font-black ${p.comentarios != null ? 'text-blue-500' : 'text-slate-300'}`}>
                           {p.comentarios != null ? p.comentarios.toLocaleString() : '—'}
                         </p>
                         <p className="text-[8px] font-bold text-slate-400 mt-0.5">💬 Coment.</p>
                       </div>
                       <div className="py-2 px-1 border-r border-slate-100">
-                        <p className={`text-[14px] font-black ${ p.compartidos != null ? 'text-emerald-500' : 'text-slate-300' }`}>
+                        <p className={`text-[14px] font-black ${p.compartidos != null ? 'text-emerald-500' : 'text-slate-300'}`}>
                           {p.compartidos != null ? p.compartidos.toLocaleString() : '—'}
                         </p>
                         <p className="text-[8px] font-bold text-slate-400 mt-0.5">🔗 Compart.</p>
                       </div>
                       <div className="py-2 px-1">
-                        <p className={`text-[14px] font-black ${ p.alcance != null ? 'text-amber-500' : 'text-slate-300' }`}>
+                        <p className={`text-[14px] font-black ${p.alcance != null ? 'text-amber-500' : 'text-slate-300'}`}>
                           {p.alcance != null ? p.alcance.toLocaleString() : '—'}
                         </p>
                         <p className="text-[8px] font-bold text-slate-400 mt-0.5">👁️ Alcance</p>
