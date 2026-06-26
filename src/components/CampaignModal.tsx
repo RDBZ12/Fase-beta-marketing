@@ -2,6 +2,43 @@ import React, { useState, useEffect } from 'react';
 import { X, Save } from 'lucide-react';
 import type { Campaign } from '../types';
 
+function toISODate(dateStr: string): string {
+  if (!dateStr) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+  
+  const d = new Date(dateStr);
+  if (!isNaN(d.getTime())) {
+    return d.toISOString().split('T')[0];
+  }
+  try {
+    const parts = dateStr.trim().split(/\s+/);
+    if (parts.length === 3) {
+      const day = parseInt(parts[0], 10);
+      const year = parseInt(parts[2], 10);
+      const months: Record<string, number> = {
+        ene: 0, feb: 1, mar: 2, abr: 3, may: 4, jun: 5,
+        jul: 6, ago: 7, sep: 8, oct: 9, nov: 10, dic: 11
+      };
+      const monthStr = parts[1].toLowerCase().substring(0, 3);
+      if (monthStr in months && !isNaN(day) && !isNaN(year)) {
+        const nd = new Date(year, months[monthStr], day);
+        return nd.toISOString().split('T')[0];
+      }
+    }
+  } catch (e) {
+    console.error(e);
+  }
+  return '';
+}
+
+const getLocalDateString = () => {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 interface CampaignModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -24,6 +61,7 @@ export const CampaignModal: React.FC<CampaignModalProps> = ({
   const [reach, setReach] = useState('');
   const [ctr, setCtr] = useState(0.0);
   const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   useEffect(() => {
     if (campaignToEdit) {
@@ -35,7 +73,8 @@ export const CampaignModal: React.FC<CampaignModalProps> = ({
       setLeads(campaignToEdit.leads);
       setReach(campaignToEdit.reach);
       setCtr(campaignToEdit.ctr);
-      setStartDate(campaignToEdit.startDate);
+      setStartDate(toISODate(campaignToEdit.startDate));
+      setEndDate(toISODate(campaignToEdit.endDate || ''));
     } else {
       setName('');
       setBrand('');
@@ -45,10 +84,8 @@ export const CampaignModal: React.FC<CampaignModalProps> = ({
       setLeads(0);
       setReach('');
       setCtr(0.0);
-      // Format current date: DD MMM YYYY
-      const options: Intl.DateTimeFormatOptions = { day: '2-digit', month: 'short', year: 'numeric' };
-      const formattedDate = new Date().toLocaleDateString('es-ES', options).replace(/\./g, '');
-      setStartDate(formattedDate);
+      setStartDate(getLocalDateString());
+      setEndDate('');
     }
   }, [campaignToEdit, isOpen]);
 
@@ -69,6 +106,11 @@ export const CampaignModal: React.FC<CampaignModalProps> = ({
     e.preventDefault();
     if (!name.trim()) return alert('El nombre de la campaña es requerido.');
     if (!brand.trim()) return alert('La marca de tabaco es requerida.');
+    if (!startDate) return alert('La fecha de inicio es requerida.');
+    if (!endDate) return alert('La fecha de fin es requerida.');
+    if (new Date(endDate) < new Date(startDate)) {
+      return alert('La fecha de fin debe ser posterior o igual a la fecha de inicio.');
+    }
 
     const campaignData: Campaign = {
       id: campaignToEdit ? campaignToEdit.id : Math.random().toString(36).substring(2, 9),
@@ -81,6 +123,7 @@ export const CampaignModal: React.FC<CampaignModalProps> = ({
       reach: reach || '0',
       ctr: Number(ctr),
       startDate,
+      endDate,
     };
 
     onSave(campaignData);
@@ -230,17 +273,33 @@ export const CampaignModal: React.FC<CampaignModalProps> = ({
             </div>
           </div>
 
-          <div>
-            <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-              Fecha de Inicio
-            </label>
-            <input
-              type="text"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              placeholder="Ej. 01 Jun 2026"
-              className="w-full px-3 py-2 text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all duration-200"
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                Fecha de Inicio
+              </label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full px-3 py-2 text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all duration-200"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                Fecha de Fin
+              </label>
+              <input
+                type="date"
+                value={endDate}
+                min={startDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-full px-3 py-2 text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all duration-200"
+                required
+              />
+            </div>
           </div>
 
           <div className="pt-4 border-t border-slate-100 flex justify-end gap-2 bg-slate-50/30 -mx-5 -mb-5 p-5">

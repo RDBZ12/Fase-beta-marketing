@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { PayPalButtons } from '@paypal/react-paypal-js'
 import jsPDF from 'jspdf'
+import QRCode from 'qrcode'
 import { X, ShieldCheck, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react'
 import { supabase } from '../supabaseClient'
 import type { Campaign } from '../types'
@@ -23,12 +24,18 @@ const generarPDF = async (datos: {
   itbis: number
   total: number
   paypalOrderId: string
+  fecha?: string
 }) => {
   const doc   = new jsPDF({ unit: 'mm', format: 'a4' })
   const W     = 210  // page width
   const M     = 16   // left margin
   const MR    = 194  // right margin
   let   Y     = 0    // current Y cursor
+
+  const TASA_CAMBIO = 59.00
+  const montoUSD = datos.monto / TASA_CAMBIO
+  const itbisUSD = datos.itbis / TASA_CAMBIO
+  const totalUSD = datos.total / TASA_CAMBIO
 
   // ── Logo La Élite (top-right) ────────────────────────────────────────────
   try {
@@ -98,7 +105,8 @@ const generarPDF = async (datos: {
   doc.text('Forma de Pago:', midX + 6, Y + 12)
   doc.text('Ambiente:', midX + 6, Y + 18)
   
-  const now = new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  const dateObj = datos.fecha ? new Date(datos.fecha) : new Date()
+  const now = `${String(dateObj.getDate()).padStart(2, '0')}/${String(dateObj.getMonth() + 1).padStart(2, '0')}/${dateObj.getFullYear()} ${String(dateObj.getHours()).padStart(2, '0')}:${String(dateObj.getMinutes()).padStart(2, '0')}:${String(dateObj.getSeconds()).padStart(2, '0')}`
   doc.setFont('helvetica', 'normal').setTextColor(15, 23, 42)
   doc.text(now, midX + 30, Y + 6)
   doc.text('PayPal', midX + 30, Y + 12)
@@ -129,8 +137,8 @@ const generarPDF = async (datos: {
   
   doc.setTextColor(15, 23, 42)
   doc.text('1', M + 110, Y)
-  doc.text(`RD$ ${datos.monto.toFixed(2)}`, M + 130, Y)
-  doc.text(`RD$ ${datos.monto.toFixed(2)}`, MR - 2, Y, { align: 'right' })
+  doc.text(`USD $ ${montoUSD.toFixed(2)}`, M + 130, Y)
+  doc.text(`USD $ ${montoUSD.toFixed(2)}`, MR - 2, Y, { align: 'right' })
 
   Y += 16
   doc.setDrawColor(226, 232, 240).line(M, Y, MR, Y)
@@ -139,14 +147,18 @@ const generarPDF = async (datos: {
   Y += 8
   const tableX = MR - 60
   doc.setFontSize(9).setFont('helvetica', 'bold').setTextColor(100, 116, 139)
-  doc.text('Monto Gravado:', tableX, Y); doc.setTextColor(15, 23, 42); doc.text(`RD$ ${datos.monto.toFixed(2)}`, MR - 2, Y, { align: 'right' }); Y += 6;
-  doc.setTextColor(100, 116, 139); doc.text('ITBIS (18%):', tableX, Y); doc.setTextColor(15, 23, 42); doc.text(`RD$ ${datos.itbis.toFixed(2)}`, MR - 2, Y, { align: 'right' }); Y += 8;
+  doc.text('Monto Gravado:', tableX, Y); doc.setTextColor(15, 23, 42); doc.text(`USD $ ${montoUSD.toFixed(2)}`, MR - 2, Y, { align: 'right' }); Y += 6;
+  doc.setTextColor(100, 116, 139); doc.text('ITBIS (18%):', tableX, Y); doc.setTextColor(15, 23, 42); doc.text(`USD $ ${itbisUSD.toFixed(2)}`, MR - 2, Y, { align: 'right' }); Y += 8;
   
   doc.setFillColor(44, 62, 46) // dark green
   doc.roundedRect(tableX - 4, Y - 5, 66, 10, 2, 2, 'F')
   doc.setTextColor(255, 255, 255).setFont('helvetica', 'bold').setFontSize(10)
   doc.text('TOTAL FACTURA', tableX, Y + 1.5)
-  doc.text(`RD$ ${datos.total.toFixed(2)}`, MR - 2, Y + 1.5, { align: 'right' })
+  doc.text(`USD $ ${totalUSD.toFixed(2)}`, MR - 2, Y + 1.5, { align: 'right' })
+
+  Y += 10
+  doc.setFontSize(7).setFont('helvetica', 'normal').setTextColor(100, 116, 139)
+  doc.text(`Tasa de Cambio oficial: RD$ 59.00 / USD. Total Equivalente en Pesos: RD$ ${datos.total.toLocaleString('es-ES', { minimumFractionDigits: 2 })}`, MR - 2, Y, { align: 'right' })
 
   // ── QR Code ──────────────────────────────────────────────────────────────
   Y += 20
@@ -155,8 +167,11 @@ const generarPDF = async (datos: {
   
   Y += 10
   try {
-    const QRCode = (await import('qrcode')).default
-    const qrData = `NCF:${datos.ncf}|CAMPANA:${datos.nombreCampana || ''}|TOTAL:RD$${datos.total.toFixed(2)}|FECHA:${now}`
+    let origin = window.location.origin;
+    if (!origin.includes('trycloudflare.com')) {
+      origin = 'https://programmes-fourth-dark-gravity.trycloudflare.com';
+    }
+    const qrData = `${origin}/?verificar_ncf=${encodeURIComponent(datos.ncf)}&total=${encodeURIComponent(totalUSD.toFixed(2))}&fecha=${encodeURIComponent(now)}&receptor=${encodeURIComponent(datos.razonSocial || 'Consumidor Final')}&concepto=${encodeURIComponent(datos.nombreCampana || 'Servicio de Marketing Digital')}&rnc_receptor=${encodeURIComponent(datos.rncCliente || '')}`
     const qrDataUrl = await QRCode.toDataURL(qrData, { 
       width: 120, margin: 1, color: { dark: '#2c3e2e', light: '#ffffff' } 
     })
@@ -168,6 +183,9 @@ const generarPDF = async (datos: {
     
     doc.setFontSize(6).setFont('helvetica', 'bold').setTextColor(148, 163, 184)
     doc.text('VERIFICAR', M + 16, Y + 36, { align: 'center' })
+    doc.setFontSize(5).setFont('helvetica', 'normal').setTextColor(148, 163, 184)
+    doc.text('Firma Digital: UTESA-MARKETDEV-SECURE-SIGN', M + 16, Y + 39, { align: 'center' })
+    doc.text(`Fecha Gen: ${now}`, M + 16, Y + 42, { align: 'center' })
     
     // Texto de DGII
     doc.setFontSize(8).setFont('helvetica', 'normal').setTextColor(71, 85, 105)
@@ -179,7 +197,9 @@ const generarPDF = async (datos: {
     doc.text('Este comprobante ha sido generado y firmado electrónicamente por Marketdev S.A.S.', M + 40, Y + 14)
     doc.text('Autorizado por la Dirección General de Impuestos Internos (DGII).', M + 40, Y + 18)
     
-  } catch (_) { }
+  } catch (errQr) {
+    console.error("Error generating QR code in PaymentModal:", errQr);
+  }
 
   doc.save(`Comprobante_${datos.ncf}.pdf`)
 }
@@ -187,14 +207,14 @@ const generarPDF = async (datos: {
 // ── Component ─────────────────────────────────────────────────────────────────
 type ModalState = 'idle' | 'processing' | 'success' | 'error'
 
-export function PaymentModal({ isOpen, onClose, campaign, session, onPagado }: PaymentModalProps) {
+export function PaymentModal({ isOpen, onClose, campaign, onPagado }: PaymentModalProps) {
   const [monto,      setMonto]      = useState(0)
   const [rncCliente, setRncCliente] = useState('')
   const [razonSocial, setRazonSocial] = useState('')
   const [estado,     setEstado]     = useState<ModalState>('idle')
   const [mensaje,    setMensaje]    = useState('')
   const [ncfFinal,   setNcfFinal]   = useState('')
-  const [orderId,    setOrderId]    = useState('')
+  const [, setOrderId] = useState('')
 
   useEffect(() => {
     if (campaign) {
@@ -263,7 +283,126 @@ export function PaymentModal({ isOpen, onClose, campaign, session, onPagado }: P
         itbis:        data.pago.itbis,
         total:        data.pago.total_con_itbis,
         paypalOrderId,
+        fecha:        data.pago.fecha,
       })
+
+      // ── PUBLICACIÓN AUTOMÁTICA EN REDES ────────────────────────────────────
+      setMensaje(`Pago aprobado. Publicando campaña en redes sociales...`)
+      try {
+        // Obtener publicaciones de esta campaña
+        const { data: pubs } = await supabase.from('publicaciones')
+          .select('id_publicacion, contenido, imagen_url, fecha_publicacion, redes_sociales(nombre_red)')
+          .eq('id_campana', campaign.id);
+
+        if (pubs && pubs.length > 0) {
+          for (const pub of pubs) {
+            let finalMediaUrl = pub.imagen_url;
+            
+            // Subir imagen local o base64 si es necesario a Storage para que Ayrshare e Instagram la puedan descargar públicamente
+            const isLocalOrBase64 = finalMediaUrl && (
+              finalMediaUrl.startsWith('data:image') ||
+              finalMediaUrl.startsWith('/') ||
+              finalMediaUrl.includes('localhost') ||
+              finalMediaUrl.includes('127.0.0.1') ||
+              finalMediaUrl.includes('10.100.')
+            );
+
+            if (isLocalOrBase64) {
+              try {
+                let blob: Blob;
+                let contentType = 'image/png';
+                let extension = 'png';
+
+                if (finalMediaUrl.startsWith('data:image')) {
+                  const match = finalMediaUrl.match(/^data:(image\/\w+);base64,(.+)$/);
+                  if (match) {
+                    contentType = match[1];
+                    const b64Data = match[2];
+                    const byteCharacters = atob(b64Data);
+                    const byteArrays = [];
+                    for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+                      const slice = byteCharacters.slice(offset, offset + 512);
+                      const byteNumbers = new Array(slice.length);
+                      for (let i = 0; i < slice.length; i++) byteNumbers[i] = slice.charCodeAt(i);
+                      byteArrays.push(new Uint8Array(byteNumbers));
+                    }
+                    blob = new Blob(byteArrays, { type: contentType });
+                    extension = contentType.split('/')[1] || 'png';
+                  } else {
+                    throw new Error('Formato base64 de imagen inválido.');
+                  }
+                } else {
+                  // Descargar imagen local/relativa para subirla al bucket público
+                  const res = await fetch(finalMediaUrl);
+                  if (!res.ok) throw new Error('No se pudo descargar la imagen local: ' + finalMediaUrl);
+                  blob = await res.blob();
+                  contentType = blob.type || 'image/png';
+                  extension = contentType.split('/')[1] || 'png';
+                }
+
+                const fileName = `pub_${Date.now()}_${Math.random().toString(36).substring(7)}.${extension}`;
+                await supabase.storage.from('img').upload(fileName, blob, { contentType });
+                const { data: publicUrlData } = supabase.storage.from('img').getPublicUrl(fileName);
+                finalMediaUrl = publicUrlData.publicUrl;
+                await supabase.from('publicaciones').update({ imagen_url: finalMediaUrl }).eq('id_publicacion', pub.id_publicacion);
+              } catch (errUpload) {
+                console.error("Error subiendo imagen local/base64 a Storage:", errUpload);
+              }
+            }
+
+            // Identificar plataforma (por defecto Instagram si el cliente no especificó otra)
+            let plat = 'instagram'; 
+            const nred = (Array.isArray(pub.redes_sociales) ? pub.redes_sociales[0]?.nombre_red : (pub.redes_sociales as any)?.nombre_red)?.toLowerCase() || '';
+            if (nred.includes('face')) plat = 'facebook';
+            else if (nred.includes('twit') || nred.includes('x')) plat = 'twitter';
+            else if (nred.includes('link')) plat = 'linkedin';
+            else if (nred.includes('tele')) plat = 'telegram';
+
+            // Lógica de programación (15 min rule)
+            let isFutureEnough = false;
+            let isoDate = undefined;
+            if (pub.fecha_publicacion) {
+              const pDate = new Date(pub.fecha_publicacion);
+              const diffMinutes = (pDate.getTime() - new Date().getTime()) / 60000;
+              if (diffMinutes >= 15) {
+                isFutureEnough = true;
+                isoDate = pDate.toISOString();
+              }
+            }
+
+            // Invocar Edge Function de publicación (Ayrshare)
+            const { data: ayrData, error: ayrError } = await supabase.functions.invoke('publish_social', {
+              body: { 
+                post: pub.contenido, 
+                platforms: [plat], 
+                mediaUrls: finalMediaUrl ? [finalMediaUrl] : [],
+                scheduleDate: isoDate
+              }
+            });
+
+            if (!ayrError && !ayrData?.error) {
+               // Marcar publicación como exitosa
+               const nuevoEstado = isFutureEnough ? 'Programada' : 'Publicada';
+               const updatePayload: any = { estado: nuevoEstado };
+               if (ayrData?.postId) updatePayload.ayrshare_post_id = ayrData.postId;
+               if (ayrData?.data?.id) updatePayload.ayrshare_post_id = ayrData.data.id;
+               await supabase.from('publicaciones').update(updatePayload).eq('id_publicacion', pub.id_publicacion);
+            } else {
+               console.warn("Error enviando a Ayrshare tras pago:", ayrError || ayrData?.error);
+            }
+
+            // Evitar saturar la API de Ayrshare metiendo un delay de 2 segundos entre publicaciones
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
+        }
+        
+        // Activar la campaña automáticamente
+        await supabase.from('campaigns').update({ estado: 'Activa' }).eq('id', campaign.id);
+        setMensaje(`¡Campaña publicada en redes sociales y activa!`)
+      } catch (pubErr) {
+        console.error("Error publicando la campaña:", pubErr);
+      }
+      // ─────────────────────────────────────────────────────────────────────────
 
       onPagado?.()
     } catch (err: any) {

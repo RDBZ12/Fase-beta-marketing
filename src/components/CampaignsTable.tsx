@@ -86,6 +86,7 @@ export const CampaignsTable: React.FC<CampaignsTableProps> = ({
           <thead>
             <tr className="border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
               <th className="pb-3 pt-1">Campaña</th>
+              <th className="pb-3 pt-1">Creador</th>
               <th className="pb-3 pt-1">Canal</th>
               <th className="pb-3 pt-1">Estado</th>
               <th className="pb-3 pt-1 text-right">Leads</th>
@@ -123,6 +124,14 @@ export const CampaignsTable: React.FC<CampaignsTableProps> = ({
                     </div>
                   </td>
                   <td className="py-3.5">
+                    <div className="flex flex-col">
+                      <span className="font-bold text-slate-700">{camp.creatorName || 'Desconocido'}</span>
+                      <span className="text-[10px] text-slate-500 font-medium">
+                        {camp.creatorRole || 'N/A'}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="py-3.5">
                     <span className={`inline-flex px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${getChannelStyle(camp.channel)}`}>
                       {camp.channel}
                     </span>
@@ -146,12 +155,21 @@ export const CampaignsTable: React.FC<CampaignsTableProps> = ({
                         <Edit2 className="w-2.5 h-2.5" />
                         <span>Modificar</span>
                       </button>
-                      <button
-                        onClick={() => onPagarCampaign(camp)}
-                        className="px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors"
-                      >
-                        Pagar
-                      </button>
+                      {camp.status === 'Pendiente de Pago' || camp.status === 'Borrador' ? (
+                        <button
+                          onClick={() => onPagarCampaign(camp)}
+                          className="px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors"
+                        >
+                          Pagar
+                        </button>
+                      ) : (
+                        <button
+                          disabled
+                          className="px-3 py-1.5 text-xs font-medium text-slate-400 bg-slate-50 border border-slate-100 rounded-lg cursor-not-allowed"
+                        >
+                          Pagada
+                        </button>
+                      )}
                       <button
                         onClick={() => {
                           if (confirm(`¿Estás seguro de eliminar la campaña "${camp.name}"?`)) {

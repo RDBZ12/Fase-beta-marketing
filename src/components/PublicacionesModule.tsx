@@ -23,6 +23,11 @@ interface ModalProps {
   onPublishNow: (pub: Publicacion, bypassConfirm?: boolean) => Promise<void>;
 }
 
+const getLocalISOString = (dateObj: Date): string => {
+  const tzOffset = dateObj.getTimezoneOffset() * 60000;
+  return new Date(dateObj.getTime() - tzOffset).toISOString().slice(0, 16);
+};
+
 const PubModal: React.FC<ModalProps> = ({ isOpen, onClose, onSaved, pub, redes, tipos, campaigns, onPublishNow }) => {
   const [titulo, setTitulo] = useState('');
   const [contenido, setContenido] = useState('');
@@ -38,13 +43,13 @@ const PubModal: React.FC<ModalProps> = ({ isOpen, onClose, onSaved, pub, redes, 
   useEffect(() => {
     if (pub) {
       setTitulo(pub.titulo); setContenido(pub.contenido);
-      setFechaPub(pub.fecha_publicacion?.slice(0, 16) ?? '');
+      setFechaPub(pub.fecha_publicacion ? getLocalISOString(new Date(pub.fecha_publicacion)) : '');
       setEstado(pub.estado); setIdRed(pub.id_red ?? '');
       setIdTipo(pub.id_tipo_contenido ?? ''); setIdCampana(pub.id_campana ?? '');
       setImagenUrl(pub.imagen_url ?? '');
     } else {
       setTitulo(''); setContenido('');
-      setFechaPub(new Date().toISOString().slice(0, 16));
+      setFechaPub(getLocalISOString(new Date()));
       setEstado('Borrador'); setIdRed(''); setIdTipo(''); setIdCampana(''); setImagenUrl('');
     }
     setError('');
@@ -69,6 +74,15 @@ const PubModal: React.FC<ModalProps> = ({ isOpen, onClose, onSaved, pub, redes, 
     if (!contenido.trim()) return setError('El contenido es obligatorio.');
     if (!idRed) return setError('La red social es obligatoria.');
     if (!fechaPub) return setError('La fecha de publicación es obligatoria.');
+    
+    // Validar que no permita fechas pasadas (con 1 minuto de gracia)
+    const selectedDate = new Date(fechaPub);
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - 1);
+    if (selectedDate < now) {
+      return setError('La fecha de publicación no puede ser en el pasado.');
+    }
+
     setSaving(true);
     try {
       const payload = {
@@ -352,6 +366,7 @@ export const PublicacionesModule: React.FC = () => {
               // Intentar analíticas reales (requiere Premium — devuelve null si no)
               const analytics = await getPostAnalytics(match.id);
 
+              // @ts-ignore
               if (analytics && analytics.source === 'ayrshare_real') {
                 // Solo guardar si son datos reales de la API
                 const newInts = [
@@ -373,6 +388,8 @@ export const PublicacionesModule: React.FC = () => {
           // Error en un post — continuar con el siguiente sin datos falsos
           notFoundCount++;
         }
+        // Evitar saturar la API de Ayrshare metiendo un delay de 1.5 segundos entre sincronizaciones
+        await new Promise(resolve => setTimeout(resolve, 1500));
       }
 
       await fetchAll();
@@ -404,7 +421,7 @@ export const PublicacionesModule: React.FC = () => {
   const handleFetchAnalytics = async (pub: Publicacion) => {
     setFetchingAnalyticsId(pub.id_publicacion);
     try {
-      let analytics: import('../lib/ayrshare').RealAnalytics | null = null;
+      let analytics: any | null = null;
       let instagramUrl: string | null = null;
 
       if (pub.ayrshare_post_id) {
@@ -454,40 +471,62 @@ export const PublicacionesModule: React.FC = () => {
     try {
       let finalMediaUrl = pub.imagen_url;
 
-      // 1. Si la imagen es un base64, subirla al bucket público 'img' primero
-      if (finalMediaUrl && finalMediaUrl.startsWith('data:image')) {
-        const match = finalMediaUrl.match(/^data:(image\/\w+);base64,(.+)$/);
-        if (match) {
-          const contentType = match[1];
-          const b64Data = match[2];
+      // 1. Si la imagen es local, relativa o base64, subirla al bucket público 'img' para que sea accesible externamente
+      const isLocalOrBase64 = finalMediaUrl && (
+        finalMediaUrl.startsWith('data:image') ||
+        finalMediaUrl.startsWith('/') ||
+        finalMediaUrl.includes('localhost') ||
+        finalMediaUrl.includes('127.0.0.1') ||
+        finalMediaUrl.includes('10.100.')
+      );
 
-          // Convertir base64 a Blob
-          const byteCharacters = atob(b64Data);
-          const byteArrays = [];
-          for (let offset = 0; offset < byteCharacters.length; offset += 512) {
-            const slice = byteCharacters.slice(offset, offset + 512);
-            const byteNumbers = new Array(slice.length);
-            for (let i = 0; i < slice.length; i++) {
-              byteNumbers[i] = slice.charCodeAt(i);
+      if (isLocalOrBase64 && finalMediaUrl) {
+        let blob: Blob;
+        let contentType = 'image/png';
+        let extension = 'png';
+
+        if (finalMediaUrl.startsWith('data:image')) {
+          const match = finalMediaUrl.match(/^data:(image\/\w+);base64,(.+)$/);
+          if (match) {
+            contentType = match[1];
+            const b64Data = match[2];
+            const byteCharacters = atob(b64Data);
+            const byteArrays = [];
+            for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+              const slice = byteCharacters.slice(offset, offset + 512);
+              const byteNumbers = new Array(slice.length);
+              for (let i = 0; i < slice.length; i++) {
+                byteNumbers[i] = slice.charCodeAt(i);
+              }
+              const byteArray = new Uint8Array(byteNumbers);
+              byteArrays.push(byteArray);
             }
-            const byteArray = new Uint8Array(byteNumbers);
-            byteArrays.push(byteArray);
+            blob = new Blob(byteArrays, { type: contentType });
+            extension = contentType.split('/')[1] || 'png';
+          } else {
+            throw new Error('Formato base64 de imagen inválido.');
           }
-          const blob = new Blob(byteArrays, { type: contentType });
-          const extension = contentType.split('/')[1] || 'png';
-          const fileName = `pub_${Date.now()}_${Math.random().toString(36).substring(7)}.${extension}`;
-
-          // Subir al bucket
-          const { error: uploadError } = await supabase.storage.from('img').upload(fileName, blob, { contentType });
-          if (uploadError) throw new Error('Error al subir imagen al bucket: ' + uploadError.message);
-
-          // 2. Obtener la URL pública absoluta
-          const { data: publicUrlData } = supabase.storage.from('img').getPublicUrl(fileName);
-          finalMediaUrl = publicUrlData.publicUrl;
-
-          // Guardar la URL pública en la BD para limpiar el base64
-          await supabase.from('publicaciones').update({ imagen_url: finalMediaUrl }).eq('id_publicacion', pub.id_publicacion);
+        } else {
+          // Descargar imagen local/relativa para subirla al bucket público
+          const res = await fetch(finalMediaUrl);
+          if (!res.ok) throw new Error('No se pudo descargar la imagen local: ' + finalMediaUrl);
+          blob = await res.blob();
+          contentType = blob.type || 'image/png';
+          extension = contentType.split('/')[1] || 'png';
         }
+
+        const fileName = `pub_${Date.now()}_${Math.random().toString(36).substring(7)}.${extension}`;
+        
+        // Subir al bucket
+        const { error: uploadError } = await supabase.storage.from('img').upload(fileName, blob, { contentType });
+        if (uploadError) throw new Error('Error al subir imagen al bucket: ' + uploadError.message);
+
+        // 2. Obtener la URL pública absoluta
+        const { data: publicUrlData } = supabase.storage.from('img').getPublicUrl(fileName);
+        finalMediaUrl = publicUrlData.publicUrl;
+
+        // Guardar la URL pública en la BD para limpiar el base64 o ruta local
+        await supabase.from('publicaciones').update({ imagen_url: finalMediaUrl }).eq('id_publicacion', pub.id_publicacion);
       }
 
       // Mapear nombre de red a formato esperado por Ayrshare
@@ -497,6 +536,7 @@ export const PublicacionesModule: React.FC = () => {
       else if (nred.includes('twit') || nred.includes('x')) plat = 'twitter';
       else if (nred.includes('link')) plat = 'linkedin';
       else if (nred.includes('tik')) plat = 'tiktok';
+      else if (nred.includes('tele')) plat = 'telegram';
 
       // 3. Invocar la Edge Function con la URL pública
       const { data, error } = await supabase.functions.invoke('publish_social', {

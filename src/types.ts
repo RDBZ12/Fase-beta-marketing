@@ -6,18 +6,20 @@ export interface Campaign {
   brand?: string;
   image_url?: string;
   channel: 'Email' | 'Social' | 'Display' | 'Multi';
-  status: 'Activa' | 'Pausada' | 'Completada' | 'Borrador';
+  status: 'Activa' | 'Pausada' | 'Completada' | 'Borrador' | 'Pendiente de Pago' | 'Aprobada';
   leads: number;
   reach: string;
   ctr: number;
   startDate: string;
-  // Extended fields from new schema
+  endDate?: string;
   descripcion?: string;
   objetivo?: string;
   presupuesto?: number;
   fechaInicio?: string;
   fechaFin?: string;
   idCliente?: string;
+  creatorName?: string;
+  creatorRole?: string;
 }
 
 export interface Metric {

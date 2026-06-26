@@ -29,7 +29,7 @@ const permisosRol: Record<number, string[]> = {
   2: ['dashboard', 'campanas', 'analytics'],
   3: ['dashboard', 'campanas', 'analytics', 'audiencia'],
   4: ['dashboard', 'campanas', 'portal-cliente'],
-  5: ['audiencia'],
+  5: ['dashboard', 'campanas', 'audiencia', 'clientes', 'portal-cliente'],
 };
 
 export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, rolUsuario }) => {

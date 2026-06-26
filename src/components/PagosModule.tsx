@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { useUser } from '../context/UserContext';
 import type { Campaign } from '../types';
+import QRCode from 'qrcode';
 import {
   CreditCard, Plus, X, Save, Loader2, FileText,
-  CheckCircle, Clock, XCircle,
+  CheckCircle, Clock, XCircle, Download,
 } from 'lucide-react';
 
-interface Pago {
+export interface Pago {
   id_pago: string; id_campana?: string; monto: number;
   itbis?: number; total_con_itbis?: number; ncf?: string;
   estado_dgii: string; metodo_pago: string;
@@ -27,11 +28,17 @@ const ESTADO_ICONS: Record<string, React.ReactNode> = {
 };
 
 // ─── PDF Receipt generator (con Logo + QR) ────────────────────────────────────
-async function generateReceiptHTML(pago: Partial<Pago>, ncf: string): Promise<string> {
-  const now   = new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  const monto = Number(pago.monto ?? 0);
-  const itbis = +(monto * 0.18).toFixed(2);
-  const total = +(monto * 1.18).toFixed(2);
+export async function generateReceiptHTML(pago: Partial<Pago>, ncf: string): Promise<string> {
+  const dateObj = pago.fecha ? new Date(pago.fecha) : new Date();
+  const now = `${String(dateObj.getDate()).padStart(2, '0')}/${String(dateObj.getMonth() + 1).padStart(2, '0')}/${dateObj.getFullYear()} ${String(dateObj.getHours()).padStart(2, '0')}:${String(dateObj.getMinutes()).padStart(2, '0')}:${String(dateObj.getSeconds()).padStart(2, '0')}`;
+  const montoDOP = Number(pago.monto ?? 0);
+  const itbisDOP = +(montoDOP * 0.18).toFixed(2);
+  const totalDOP = +(montoDOP * 1.18).toFixed(2);
+
+  const TASA_CAMBIO = 59.00;
+  const montoUSD = montoDOP / TASA_CAMBIO;
+  const itbisUSD = itbisDOP / TASA_CAMBIO;
+  const totalUSD = totalDOP / TASA_CAMBIO;
 
   // ── Logo La Élite como base64 ────────────────────────────────────────────
   let logoHtml = '';
@@ -50,8 +57,12 @@ async function generateReceiptHTML(pago: Partial<Pago>, ncf: string): Promise<st
   // ── QR Code con datos del comprobante ─────────────────────────────────────
   let qrHtml = '';
   try {
-    const QRCode  = (await import('qrcode')).default;
-    const qrData  = `NCF:${ncf}|CAMPANA:${pago.nombre_campana ?? ''}|TOTAL:RD$${total.toFixed(2)}|FECHA:${now}`;
+    const receptor = pago.razon_social || 'Consumidor Final';
+    let origin = window.location.origin;
+    if (!origin.includes('trycloudflare.com')) {
+      origin = 'https://programmes-fourth-dark-gravity.trycloudflare.com';
+    }
+    const qrData  = `${origin}/?verificar_ncf=${encodeURIComponent(ncf)}&total=${encodeURIComponent(totalUSD.toFixed(2))}&fecha=${encodeURIComponent(now)}&receptor=${encodeURIComponent(receptor)}&concepto=${encodeURIComponent(pago.nombre_campana || 'Servicio de Marketing Digital')}&rnc_receptor=${encodeURIComponent(pago.rnc_cedula || '')}`;
     const qrDataUrl = await QRCode.toDataURL(qrData, { 
       width: 120, 
       margin: 1,
@@ -59,9 +70,11 @@ async function generateReceiptHTML(pago: Partial<Pago>, ncf: string): Promise<st
     });
     qrHtml = `
       <div style="margin-top:40px;display:flex;align-items:flex-end;gap:16px;">
-        <div style="background:#fff;padding:4px;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 2px 4px rgba(0,0,0,0.05);">
+        <div style="background:#fff;padding:4px;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 2px 4px rgba(0,0,0,0.05);text-align:center;">
           <img src="${qrDataUrl}" style="width:100px;height:100px;display:block;" alt="QR Comprobante" />
-          <p style="font-size:9px;color:#64748b;margin:6px 0 2px;text-align:center;font-weight:600;letter-spacing:0.5px;">VERIFICAR</p>
+          <p style="font-size:9px;color:#64748b;margin:6px 0 2px;font-weight:600;letter-spacing:0.5px;">VERIFICAR</p>
+          <p style="font-size:7px;color:#94a3b8;margin:2px 0 0;font-family:monospace;line-height:1.2;">Firma: UTESA-MARKETDEV-SECURE-SIGN</p>
+          <p style="font-size:7px;color:#94a3b8;margin:2px 0 0;font-family:monospace;line-height:1.2;">Fecha Gen: ${now}</p>
         </div>
         <div style="flex:1;padding-bottom:8px;">
           <p style="font-size:10px;color:#475569;line-height:1.6;margin:0;">
@@ -71,8 +84,9 @@ async function generateReceiptHTML(pago: Partial<Pago>, ncf: string): Promise<st
           </p>
         </div>
       </div>`;
-  } catch (_) {
-    qrHtml = `<p style="text-align:center;color:#64748b;font-size:10px;margin-top:30px;">Estado DGII: Aceptado · Comprobante generado electrónicamente por Marketdev</p>`;
+  } catch (errQr) {
+    console.error("Error generating QR code in generateReceiptHTML:", errQr);
+    qrHtml = `<p style="text-align:center;color:#64748b;font-size:10px;margin-top:30px;">Estado DGII: Aceptado · Comprobante generado electrónicamente por Marketdev (QR no disponible)</p>`;
   }
 
   return `
@@ -211,31 +225,42 @@ async function generateReceiptHTML(pago: Partial<Pago>, ncf: string): Promise<st
           <div style="font-size:11px;color:#64748b;">Campaña publicitaria: ${pago.nombre_campana ?? 'General'}</div>
         </td>
         <td style="text-align:center;">1</td>
-        <td>RD$ ${monto.toFixed(2)}</td>
-        <td>RD$ ${monto.toFixed(2)}</td>
+        <td>USD $ ${montoUSD.toFixed(2)}</td>
+        <td>USD $ ${montoUSD.toFixed(2)}</td>
       </tr>
     </tbody>
   </table>
 
-  <div class="totals-wrapper">
+  <div class="totals-wrapper" style="flex-direction:column; align-items:flex-end;">
     <table class="totals-table">
       <tr>
         <td class="totals-label">Monto Gravado:</td>
-        <td class="totals-value">RD$ ${monto.toFixed(2)}</td>
+        <td class="totals-value">USD $ ${montoUSD.toFixed(2)}</td>
       </tr>
       <tr>
         <td class="totals-label">ITBIS (18%):</td>
-        <td class="totals-value">RD$ ${itbis.toFixed(2)}</td>
+        <td class="totals-value">USD $ ${itbisUSD.toFixed(2)}</td>
       </tr>
       <tr class="grand-total">
         <td class="totals-label">TOTAL FACTURA</td>
-        <td class="totals-value">RD$ ${total.toFixed(2)}</td>
+        <td class="totals-value">USD $ ${totalUSD.toFixed(2)}</td>
       </tr>
     </table>
+    <div style="text-align:right;margin-top:12px;font-size:11px;color:#64748b;font-weight:500;">
+      Tasa de Cambio oficial: <strong>RD$ 59.00 / USD</strong><br/>
+      Total Equivalente en Pesos: <strong>RD$ ${totalDOP.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+    </div>
   </div>
   
   <div class="footer-line"></div>
   ${qrHtml}
+  <script>
+    window.addEventListener('load', () => {
+      setTimeout(() => {
+        window.print();
+      }, 500);
+    });
+  </script>
 </body></html>`;
 }
 
@@ -272,7 +297,7 @@ const PagoModal: React.FC<ModalProps> = ({ isOpen, onClose, onSaved, campaigns }
 
       const payload = {
         id_campana:      idCampana || null,
-        monto:           Number(monto),
+        monto:           Number(monto) * 59.00, // Almacenar en DOP aplicando tasa de cambio
         ncf,
         estado_dgii:     'Pendiente',
         metodo_pago:     metodo,
@@ -293,9 +318,10 @@ const PagoModal: React.FC<ModalProps> = ({ isOpen, onClose, onSaved, campaigns }
         rnc_cedula:   payload.rnc_cedula   ?? undefined,
         razon_social: payload.razon_social ?? undefined,
         nombre_campana: selectedCamp?.name,
+        fecha:        new Date().toISOString(),
       }, ncf);
       const win = window.open('', '_blank');
-      if (win) { win.document.write(html); win.document.close(); win.print(); }
+      if (win) { win.document.write(html); win.document.close(); }
 
       onSaved(); onClose();
     } catch (err: any) {
@@ -329,7 +355,7 @@ const PagoModal: React.FC<ModalProps> = ({ isOpen, onClose, onSaved, campaigns }
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={lbl}>Monto (RD$) *</label>
+              <label className={lbl}>Monto (USD) *</label>
               <input type="number" step="0.01" min="0.01" value={monto} onChange={e => setMonto(e.target.value)} className={cls} required placeholder="0.00" />
             </div>
             <div>
@@ -341,9 +367,9 @@ const PagoModal: React.FC<ModalProps> = ({ isOpen, onClose, onSaved, campaigns }
           </div>
           {monto && Number(monto) > 0 && (
             <div className="bg-slate-50 rounded-xl p-3 text-xs space-y-1">
-              <div className="flex justify-between text-slate-500"><span>Monto base:</span><span>RD$ {Number(monto).toFixed(2)}</span></div>
-              <div className="flex justify-between text-slate-500"><span>ITBIS (18%):</span><span>RD$ {(Number(monto) * 0.18).toFixed(2)}</span></div>
-              <div className="flex justify-between font-bold text-slate-800 border-t border-slate-200 pt-1"><span>Total:</span><span>RD$ {(Number(monto) * 1.18).toFixed(2)}</span></div>
+              <div className="flex justify-between text-slate-500"><span>Monto base:</span><span>USD $ {Number(monto).toFixed(2)}</span></div>
+              <div className="flex justify-between text-slate-500"><span>ITBIS (18%):</span><span>USD $ {(Number(monto) * 0.18).toFixed(2)}</span></div>
+              <div className="flex justify-between font-bold text-slate-800 border-t border-slate-200 pt-1"><span>Total:</span><span>USD $ {(Number(monto) * 1.18).toFixed(2)}</span></div>
             </div>
           )}
           <div>
@@ -414,7 +440,7 @@ export const PagosModule: React.FC = () => {
       <div className="grid grid-cols-3 gap-4">
         {[
           { label: 'Total Transacciones', value: pagos.length, color: 'text-slate-700' },
-          { label: 'Ingresos Totales (con ITBIS)', value: `RD$ ${totalIngresos.toLocaleString('es-ES', { minimumFractionDigits: 2 })}`, color: 'text-emerald-600' },
+          { label: 'Ingresos Totales (con ITBIS)', value: `RD$ ${totalIngresos.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, color: 'text-emerald-600' },
           { label: 'Pendientes DGII', value: pagos.filter(p => p.estado_dgii === 'Pendiente').length, color: 'text-amber-600' },
         ].map(s => (
           <div key={s.label} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
@@ -438,7 +464,7 @@ export const PagosModule: React.FC = () => {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/60">
-                  {['NCF','Campaña','Razón Social','Monto','ITBIS','Total','Método','Estado DGII','Fecha'].map(h => (
+                  {['NCF','Campaña','Razón Social','Monto','ITBIS','Total','Método','Estado DGII','Fecha','Acciones'].map(h => (
                     <th key={h} className="px-4 py-3 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider">{h}</th>
                   ))}
                 </tr>
@@ -449,9 +475,9 @@ export const PagosModule: React.FC = () => {
                     <td className="px-4 py-3 text-[10px] font-bold text-violet-600 font-mono">{p.ncf ?? '—'}</td>
                     <td className="px-4 py-3 text-xs text-slate-600">{p.nombre_campana ?? '—'}</td>
                     <td className="px-4 py-3 text-xs text-slate-500">{p.razon_social || 'Consumidor Final'}</td>
-                    <td className="px-4 py-3 text-xs font-semibold text-slate-700">RD$ {Number(p.monto).toFixed(2)}</td>
-                    <td className="px-4 py-3 text-xs text-slate-500">RD$ {(Number(p.monto) * 0.18).toFixed(2)}</td>
-                    <td className="px-4 py-3 text-xs font-bold text-slate-800">RD$ {(Number(p.monto) * 1.18).toFixed(2)}</td>
+                    <td className="px-4 py-3 text-xs font-semibold text-slate-700">RD$ {Number(p.monto).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                    <td className="px-4 py-3 text-xs text-slate-500">RD$ {(Number(p.monto) * 0.18).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                    <td className="px-4 py-3 text-xs font-bold text-slate-800">RD$ {(Number(p.monto) * 1.18).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
                     <td className="px-4 py-3 text-xs text-slate-500">{p.metodo_pago}</td>
                     <td className="px-4 py-3">
                       <span className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full w-fit ${ESTADO_COLORS[p.estado_dgii] ?? 'bg-slate-100 text-slate-600'}`}>
@@ -460,6 +486,31 @@ export const PagosModule: React.FC = () => {
                     </td>
                     <td className="px-4 py-3 text-[10px] text-slate-400">
                       {new Date(p.fecha).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    </td>
+                    <td className="px-4 py-3 text-left">
+                      <button 
+                        onClick={async () => {
+                          const html = await generateReceiptHTML({
+                            id_campana:   p.id_campana,
+                            monto:        p.monto,
+                            ncf:          p.ncf,
+                            metodo_pago:  p.metodo_pago,
+                            rnc_cedula:   p.rnc_cedula,
+                            razon_social: p.razon_social,
+                            nombre_campana: p.nombre_campana,
+                            fecha:        p.fecha,
+                          }, p.ncf || '');
+                          const win = window.open('', '_blank');
+                          if (win) { 
+                            win.document.write(html); 
+                            win.document.close(); 
+                          }
+                        }}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold text-violet-600 hover:text-slate-900 bg-violet-50 hover:bg-violet-100 rounded-lg transition-colors border border-violet-200/50"
+                      >
+                        <Download className="w-3 h-3" />
+                        <span>PDF</span>
+                      </button>
                     </td>
                   </tr>
                 ))}

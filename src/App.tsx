@@ -10,6 +10,7 @@ import { CampaignsTable } from './components/CampaignsTable';
 import { CampaignModal } from './components/CampaignModal';
 import { AIModal } from './components/AIModal';
 import { ClientGallery } from './components/ClientGallery';
+import { ClientPortal } from './components/ClientPortal';
 import { PaymentModal } from './components/PaymentModal';
 import { UsuariosModule } from './components/UsuariosModule';
 import { ClientesModule } from './components/ClientesModule';
@@ -18,9 +19,11 @@ import { PublicacionesModule } from './components/PublicacionesModule';
 import { AnalyticsModule } from './components/AnalyticsModule';
 import { PagosModule } from './components/PagosModule';
 import { AjustesModule } from './components/AjustesModule';
+import { CampanasModule } from './components/CampanasModule';
 import { ChatbotWidget } from './components/ChatbotWidget';
 import { UserProvider } from './context/UserContext';
 import type { Campaign, Metric } from './types';
+import { ShieldCheck } from 'lucide-react';
 import './App.css';
 
 function mapCampaign(item: any): Campaign {
@@ -34,10 +37,14 @@ function mapCampaign(item: any): Campaign {
     leads:       item.leads ?? 0,
     reach:       item.reach ?? '0',
     ctr:         Number(item.ctr) || 0,
-    startDate:   item.start_date ?? '',
+    startDate:   item.fecha_inicio ?? item.start_date ?? '',
+    endDate:     item.fecha_fin ?? '',
     descripcion: item.descripcion,
     objetivo:    item.objetivo,
     presupuesto: item.presupuesto,
+    idCliente:   item.id_usuario || item.usuario_id || item.id_cliente,
+    creatorName: item.creatorName,
+    creatorRole: item.creatorRole,
   };
 }
 
@@ -89,6 +96,8 @@ function AppLayout({
         nombre_campana: campaign.name, brand: campaign.brand, image_url: campaign.image_url,
         channel: campaign.channel, estado: campaign.status, leads: campaign.leads,
         reach: campaign.reach, ctr: campaign.ctr, start_date: campaign.startDate,
+        fecha_inicio: campaign.startDate,
+        fecha_fin: campaign.endDate,
         descripcion: campaign.descripcion, objetivo: campaign.objetivo, presupuesto: campaign.presupuesto,
       };
       if (editingCampaign) {
@@ -181,14 +190,12 @@ function AppLayout({
         {activeTab === 'ajustes'         && <AjustesModule />}
 
         {activeTab === 'campanas' && (
-          <div className="bg-white border border-slate-100 rounded-2xl p-12 shadow-sm text-center">
-            <h2 className="text-lg font-bold text-slate-800">Gestión de Campañas</h2>
-            <p className="text-xs text-slate-400 mt-1">Las campañas se gestionan desde el Dashboard principal.</p>
-            <button onClick={() => setActiveTab('dashboard')}
-              className="mt-4 px-4 py-2 text-xs font-bold text-white bg-violet-600 hover:bg-violet-700 rounded-xl transition-colors">
-              Ir al Dashboard
-            </button>
-          </div>
+          <CampanasModule
+            campaigns={campaigns}
+            onModifyCampaign={(c) => { setEditingCampaign(c); setIsCampaignModalOpen(true); }}
+            onDeleteCampaign={handleDeleteCampaign}
+            onPagarCampaign={onPagarCampaign}
+          />
         )}
       </main>
 
@@ -215,6 +222,14 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('');
   const [paymentCampaign, setPaymentCampaign] = useState<Campaign | null>(null);
   const [totalInteractions, setTotalInteractions] = useState(0);
+  const [verificationData, setVerificationData] = useState<{
+    ncf: string;
+    total: string;
+    fecha: string;
+    receptor: string;
+    rnc_receptor?: string;
+    concepto?: string;
+  } | null>(null);
 
   const fetchInteractions = async () => {
     try {
@@ -235,13 +250,13 @@ export default function App() {
       .eq('id_usuario', userId)
       .single();
 
-    if (data && !error) {
+    if (data && !error && data.id_rol === 1) {
       setTipoUsuario('equipo');
       setRolUsuario(data.id_rol);
       setActiveTab('dashboard');
     } else {
       setTipoUsuario('cliente');
-      setRolUsuario(null);
+      setRolUsuario(data?.id_rol || null);
       setActiveTab('portal-cliente');
     }
   };
@@ -277,7 +292,65 @@ export default function App() {
         const { data: legacy } = await supabase.from('tobacco_products').select('*').order('created_at', { ascending: false });
         if (legacy) setCampaigns(legacy.map(mapCampaign));
       } else if (data) {
-        setCampaigns(data.map(mapCampaign));
+        // 1. Obtener todos los IDs de creadores
+        const creatorIds = [...new Set(data.map(c => c.id_usuario || c.id_cliente).filter(Boolean))];
+        
+        let usersMap: Record<string, { name: string, role: string }> = {};
+
+        if (creatorIds.length > 0) {
+          // 2. Buscar en usuarios internos
+          const { data: teamData } = await supabase
+            .from('usuarios')
+            .select('id_usuario, nombre, apellido, id_rol')
+            .in('id_usuario', creatorIds);
+
+          // 3. Buscar en clientes del portal
+          const { data: clientsData } = await supabase
+            .from('clientes_portal')
+            .select('auth_user_id, nombre, apellido')
+            .in('auth_user_id', creatorIds);
+
+          // Roles estáticos para el mapeo
+          const roles: Record<number, string> = {
+            1: 'Administrador',
+            2: 'Gerencia',
+            3: 'Marketing',
+            4: 'Community Manager',
+            5: 'Servicio al Cliente'
+          };
+
+          if (teamData) {
+            teamData.forEach((u: any) => {
+              usersMap[u.id_usuario] = {
+                name: `${u.nombre || ''} ${u.apellido || ''}`.trim() || 'Usuario Desconocido',
+                role: roles[u.id_rol] || 'Equipo'
+              };
+            });
+          }
+
+          if (clientsData) {
+            clientsData.forEach((c: any) => {
+              usersMap[c.auth_user_id] = {
+                name: `${c.nombre || ''} ${c.apellido || ''}`.trim() || 'Cliente Sin Nombre',
+                role: 'Cliente'
+              };
+            });
+          }
+        }
+
+        // 4. Mapear campañas y adjuntar los nombres/roles
+        const mappedCampaigns = data.map(c => {
+          const creatorId = c.id_usuario || c.id_cliente;
+          const creatorInfo = creatorId && usersMap[creatorId] ? usersMap[creatorId] : { name: 'Desconocido', role: 'N/A' };
+          
+          return mapCampaign({
+            ...c,
+            creatorName: creatorInfo.name,
+            creatorRole: creatorInfo.role
+          });
+        });
+
+        setCampaigns(mappedCampaigns);
       }
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
@@ -289,10 +362,148 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (activeTab === 'dashboard') {
-      fetchInteractions();
+    const params = new URLSearchParams(window.location.search);
+    const ncf = params.get('verificar_ncf');
+    if (ncf) {
+      setVerificationData({
+        ncf,
+        total: params.get('total') || '0.00',
+        fecha: params.get('fecha') || '',
+        receptor: params.get('receptor') || 'Consumidor Final',
+        rnc_receptor: params.get('rnc_receptor') || '',
+        concepto: params.get('concepto') || ''
+      });
     }
-  }, [activeTab]);
+  }, []);
+
+  if (verificationData) {
+    const totalVal = Number(verificationData.total) || 0;
+    const netVal = totalVal / 1.18;
+    const itbisVal = totalVal - netVal;
+
+    return (
+      <div className="min-h-screen bg-slate-100 text-slate-800 flex items-center justify-center p-4 selection:bg-blue-500 selection:text-white font-sans">
+        <div className="w-full max-w-lg bg-white rounded-xl p-6 md:p-8 border border-slate-200 shadow-lg space-y-6">
+          
+          {/* Logo y Encabezado de Impuestos Internos */}
+          <div className="flex items-center justify-between border-b border-slate-200 pb-4">
+            <div className="flex items-center gap-3">
+              {/* Escudo del Emisor */}
+              <div className="flex items-center justify-center">
+                <svg className="w-12 h-12 text-[#0f2d59]" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2C11.5 2 2 4 2 8c0 5.25 3.8 11.2 10 13 6.2-1.8 10-7.75 10-13 0-4-9.5-6-10-6zm0 16.5c-3.8-1.5-7-6.25-7-10.5 0-1.5 1-2.5 3-3 1.5.5 3 1.5 4 2.5 1-1 2.5-2 4-2.5 2 .5 3 1.5 3 3 0 4.25-3.2 9-7 10.5z" />
+                </svg>
+              </div>
+              <div className="w-[1.5px] h-10 bg-red-600 self-center mx-1" />
+              {/* Sol y Texto "IMPUESTOS INTERNOS" */}
+              <div className="flex items-center gap-2">
+                <div className="relative w-8 h-8 flex items-center justify-center">
+                  <svg className="w-8 h-8 text-[#8ec63f] animate-[spin_20s_linear_infinite]" viewBox="0 0 100 100" fill="currentColor">
+                    <circle cx="50" cy="50" r="10" />
+                    <circle cx="50" cy="20" r="6" />
+                    <circle cx="50" cy="80" r="6" />
+                    <circle cx="20" cy="50" r="6" />
+                    <circle cx="80" cy="50" r="6" />
+                    <circle cx="29" cy="29" r="6" />
+                    <circle cx="71" cy="71" r="6" />
+                    <circle cx="29" cy="71" r="6" />
+                    <circle cx="71" cy="29" r="6" />
+                  </svg>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[12px] font-black text-[#58595b] leading-tight tracking-wider">IMPUESTOS</span>
+                  <span className="text-[12px] font-black text-[#58595b] leading-tight tracking-wider">INTERNOS</span>
+                </div>
+              </div>
+            </div>
+            <div className="text-right">
+              <span className="text-[9px] text-slate-400 block font-bold uppercase tracking-wider">GOBIERNO DIGITAL</span>
+            </div>
+          </div>
+
+          <div>
+            <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Verificación e-NCF</h1>
+          </div>
+
+          {/* Tabla de Verificación de Datos */}
+          <div className="border border-slate-200 rounded-lg overflow-hidden">
+            <table className="w-full text-sm text-left border-collapse">
+              <tbody>
+                <tr className="border-b border-slate-100 bg-slate-50/50">
+                  <td className="px-4 py-3.5 font-bold text-slate-600 w-1/3">RNC Emisor</td>
+                  <td className="px-4 py-3.5 text-slate-800 font-semibold">1-31-00000-0</td>
+                </tr>
+                <tr className="border-b border-slate-100">
+                  <td className="px-4 py-3.5 font-bold text-slate-600">Razón Social Emisor</td>
+                  <td className="px-4 py-3.5 text-slate-800 font-semibold">MARKETDEV S.A.S.</td>
+                </tr>
+                <tr className="border-b border-slate-100 bg-slate-50/50">
+                  <td className="px-4 py-3.5 font-bold text-slate-600">e-NCF</td>
+                  <td className="px-4 py-3.5 text-amber-600 font-mono font-bold text-lg tracking-wider">{verificationData.ncf}</td>
+                </tr>
+                <tr className="border-b border-slate-100">
+                  <td className="px-4 py-3.5 font-bold text-slate-600">Estado DGII</td>
+                  <td className="px-4 py-3.5 font-bold text-emerald-600">Aceptado</td>
+                </tr>
+                <tr className="border-b border-slate-100 bg-slate-50/50">
+                  <td className="px-4 py-3.5 font-bold text-slate-600">Razón Social Receptor</td>
+                  <td className="px-4 py-3.5 text-slate-800 font-semibold">{verificationData.receptor}</td>
+                </tr>
+                <tr className="border-b border-slate-100">
+                  <td className="px-4 py-3.5 font-bold text-slate-600">RNC Receptor</td>
+                  <td className="px-4 py-3.5 text-slate-800 font-semibold">{verificationData.rnc_receptor || '—'}</td>
+                </tr>
+                <tr className="border-b border-slate-100 bg-slate-50/50">
+                  <td className="px-4 py-3.5 font-bold text-slate-600">Detalle de Compra</td>
+                  <td className="px-4 py-3.5 text-blue-600 font-extrabold bg-blue-50/30">
+                    {verificationData.concepto || 'Servicio de Marketing Digital'}
+                  </td>
+                </tr>
+                <tr className="border-b border-slate-100">
+                  <td className="px-4 py-3.5 font-bold text-slate-600">Fecha de Emisión</td>
+                  <td className="px-4 py-3.5 text-slate-800 font-medium">{verificationData.fecha}</td>
+                </tr>
+                 <tr className="border-b border-slate-100 bg-slate-50/50">
+                  <td className="px-4 py-3.5 font-bold text-slate-600">Monto Gravado</td>
+                  <td className="px-4 py-3.5 text-slate-800 font-semibold">
+                    USD $ {netVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </td>
+                </tr>
+                <tr className="border-b border-slate-100">
+                  <td className="px-4 py-3.5 font-bold text-slate-600">ITBIS Facturado (18%)</td>
+                  <td className="px-4 py-3.5 text-slate-800 font-semibold">
+                    USD $ {itbisVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </td>
+                </tr>
+                <tr className="bg-slate-50">
+                  <td className="px-4 py-3.5 font-bold text-slate-600">Total Facturado</td>
+                  <td className="px-4 py-3.5 text-emerald-600 font-black text-base">
+                    USD $ {totalVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {/* Sello de Certificación Digital */}
+          <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex gap-3">
+            <ShieldCheck className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+            <div className="text-xs text-blue-800 leading-relaxed">
+              Comprobante Fiscal Electrónico (e-CF) verificado exitosamente. Esta transacción está firmada digitalmente y registrada bajo los estándares fiscales del sandbox de la DGII de la República Dominicana para **UTESA**.
+            </div>
+          </div>
+
+          {/* Pie de página */}
+          <div className="pt-2">
+            <p className="text-[10px] text-slate-400 text-center uppercase tracking-widest">
+              Marketdev · UTESA Proyecto Integrador
+            </p>
+          </div>
+
+        </div>
+      </div>
+    );
+  }
 
   if (loadingAuth || (session && tipoUsuario === null)) {
     return (
@@ -305,10 +516,20 @@ export default function App() {
   if (!session) return <AuthButton />;
 
   if (tipoUsuario === 'cliente') {
+    const clientCampaigns = campaigns.filter(c => c.idCliente === session.user.id);
     return (
-      <div className="min-h-screen bg-slate-50">
-        <ClientGallery campaigns={campaigns} onBackToDashboard={() => {}} />
-      </div>
+      <>
+        <UserProvider userId={session.user.id}>
+          <ClientPortal campaigns={clientCampaigns} onPagarCampaign={(c) => setPaymentCampaign(c)} />
+        </UserProvider>
+        <PaymentModal
+          isOpen={!!paymentCampaign}
+          onClose={() => setPaymentCampaign(null)}
+          campaign={paymentCampaign}
+          session={session}
+          onPagado={fetchCampaigns}
+        />
+      </>
     );
   }
 
