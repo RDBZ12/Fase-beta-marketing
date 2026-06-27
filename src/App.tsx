@@ -143,8 +143,6 @@ function AppLayout({
               const el = document.querySelector('input[placeholder="Buscar campaña..."]');
               if (el instanceof HTMLInputElement) el.focus();
             }}
-            onSaveClick={() => alert('¡Datos guardados!')}
-            onPublishClick={() => alert('¡Dashboard publicado!')}
             onToggleSidebar={() => setIsSidebarOpen(prev => !prev)}
           />
         )}
