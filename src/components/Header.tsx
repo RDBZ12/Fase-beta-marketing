@@ -2,8 +2,6 @@ import React from 'react';
 import { 
   Menu,
   Search, 
-  Save, 
-  Upload, 
   Plus, 
   Sparkles 
 } from 'lucide-react';
@@ -12,8 +10,6 @@ interface HeaderProps {
   onNewCampaign: () => void;
   onOpenAIModal: () => void;
   onSearchClick: () => void;
-  onSaveClick: () => void;
-  onPublishClick: () => void;
   onToggleSidebar: () => void;
 }
 
@@ -21,8 +17,6 @@ export const Header: React.FC<HeaderProps> = ({
   onNewCampaign,
   onOpenAIModal,
   onSearchClick,
-  onSaveClick,
-  onPublishClick,
   onToggleSidebar,
 }) => {
   return (

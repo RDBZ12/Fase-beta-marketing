@@ -13,7 +13,6 @@ import {
   AlertCircle,
   ChevronLeft,
   ChevronRight,
-  Sparkles,
   Users,
   Target,
   DollarSign,
