@@ -124,7 +124,8 @@ function AppLayout({
     c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (c.brand && c.brand.toLowerCase().includes(searchTerm.toLowerCase())) ||
     c.channel.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.status.toLowerCase().includes(searchTerm.toLowerCase())
+    c.status.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (c.creatorName && c.creatorName.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   return (
@@ -520,7 +521,7 @@ export default function App() {
     return (
       <>
         <UserProvider userId={session.user.id}>
-          <ClientPortal campaigns={clientCampaigns} onPagarCampaign={(c) => setPaymentCampaign(c)} />
+          <ClientPortal campaigns={clientCampaigns} onPagarCampaign={(c) => setPaymentCampaign(c)} refreshCampaigns={fetchCampaigns} />
         </UserProvider>
         <PaymentModal
           isOpen={!!paymentCampaign}

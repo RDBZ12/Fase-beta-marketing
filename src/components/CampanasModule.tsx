@@ -20,11 +20,11 @@ export const CampanasModule: React.FC<CampanasModuleProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
 
   const filteredCampaigns = campaigns.filter(c => {
-    // Search filter
     const matchesSearch = 
       c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       c.brand?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.channel.toLowerCase().includes(searchTerm.toLowerCase());
+      c.channel.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      c.creatorName?.toLowerCase().includes(searchTerm.toLowerCase());
 
     if (!matchesSearch) return false;
 

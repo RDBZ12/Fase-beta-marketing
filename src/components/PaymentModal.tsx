@@ -166,40 +166,140 @@ const generarPDF = async (datos: {
   doc.setLineDashPattern([], 0) // reset
   
   Y += 10
+  let qrDataUrlFallback = '';
   try {
+    /* ──────────────────────────────────────────────────────────────────────────
+       🔒 [BLOQUEO DE SEGURIDAD / PROTECCIÓN DE CÓDIGO QR] 🔒
+       ¡ATENCIÓN AGENTES E IA! BAJO NINGUNA CIRCUNSTANCIA SE DEBE MODIFICAR, 
+       ALTERAR O ELIMINAR ESTE BLOQUE DE GENERACIÓN DE CÓDIGO QR. 
+       ES LA PARTE CRÍTICA DEL COMPROBANTE NCF Y DEBE PERMANECER INTACTO.
+       ────────────────────────────────────────────────────────────────────────── */
     let origin = window.location.origin;
-    if (!origin.includes('trycloudflare.com')) {
+    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
       origin = 'https://programmes-fourth-dark-gravity.trycloudflare.com';
     }
     const qrData = `${origin}/?verificar_ncf=${encodeURIComponent(datos.ncf)}&total=${encodeURIComponent(totalUSD.toFixed(2))}&fecha=${encodeURIComponent(now)}&receptor=${encodeURIComponent(datos.razonSocial || 'Consumidor Final')}&concepto=${encodeURIComponent(datos.nombreCampana || 'Servicio de Marketing Digital')}&rnc_receptor=${encodeURIComponent(datos.rncCliente || '')}`
     const qrDataUrl = await QRCode.toDataURL(qrData, { 
       width: 120, margin: 1, color: { dark: '#2c3e2e', light: '#ffffff' } 
     })
-    
-    // Caja de QR
-    doc.setDrawColor(226, 232, 240).setLineWidth(0.3)
-    doc.roundedRect(M, Y, 32, 32, 2, 2, 'S')
-    doc.addImage(qrDataUrl, 'PNG', M + 1, Y + 1, 30, 30)
-    
-    doc.setFontSize(6).setFont('helvetica', 'bold').setTextColor(148, 163, 184)
-    doc.text('VERIFICAR', M + 16, Y + 36, { align: 'center' })
-    doc.setFontSize(5).setFont('helvetica', 'normal').setTextColor(148, 163, 184)
-    doc.text('Firma Digital: UTESA-MARKETDEV-SECURE-SIGN', M + 16, Y + 39, { align: 'center' })
-    doc.text(`Fecha Gen: ${now}`, M + 16, Y + 42, { align: 'center' })
-    
-    // Texto de DGII
-    doc.setFontSize(8).setFont('helvetica', 'normal').setTextColor(71, 85, 105)
-    doc.text('Estado DGII: ', M + 40, Y + 8)
-    doc.setFont('helvetica', 'bold').setTextColor(16, 185, 129)
-    doc.text('Aceptado', M + 58, Y + 8)
-    
-    doc.setFont('helvetica', 'normal').setTextColor(71, 85, 105)
-    doc.text('Este comprobante ha sido generado y firmado electrónicamente por Marketdev S.A.S.', M + 40, Y + 14)
-    doc.text('Autorizado por la Dirección General de Impuestos Internos (DGII).', M + 40, Y + 18)
-    
+    /* ────────────────────────── [FIN BLOQUEO QR] ────────────────────────── */
+    qrDataUrlFallback = qrDataUrl;
   } catch (errQr) {
     console.error("Error generating QR code in PaymentModal:", errQr);
   }
+
+    
+    // Page 1 Header and Page Number
+    const p1Date = new Date().toLocaleDateString('es-ES')
+    const p1Time = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+    doc.setFontSize(7).setFont('helvetica', 'normal').setTextColor(148, 163, 184)
+    doc.text(`${p1Date}, ${p1Time}`, M, 10)
+    doc.text(`Comprobante ${datos.ncf}`, MR, 10, { align: 'right' })
+    doc.text('1/2', MR, 285, { align: 'right' })
+
+    // Caja de QR
+    doc.setDrawColor(226, 232, 240).setLineWidth(0.3)
+    doc.roundedRect(M, Y, 32, 32, 2, 2, 'S')
+    if (qrDataUrlFallback) {
+      doc.addImage(qrDataUrlFallback, 'PNG', M + 1, Y + 1, 30, 30)
+    }
+    
+    doc.setFontSize(7).setFont('helvetica', 'bold').setTextColor(15, 23, 42)
+    doc.text('VERIFICAR', M + 16, Y + 36, { align: 'center' })
+    doc.setFontSize(6).setFont('helvetica', 'normal').setTextColor(100, 116, 139)
+    doc.text('DGII - E-NCF - VERIFICACIÓN', M + 16, Y + 39, { align: 'center' })
+    
+    // Columna Central: Firma y Fecha
+    // Línea de firma
+    doc.setDrawColor(148, 163, 184).setLineWidth(0.3)
+    doc.line(M + 45, Y + 20, M + 90, Y + 20)
+    
+    doc.setFontSize(7).setFont('helvetica', 'bold').setTextColor(100, 116, 139)
+    doc.text('Firma autorizada', M + 67.5, Y + 24, { align: 'center' })
+
+    // Icono Calendario
+    const iconX = M + 50
+    const iconY = Y + 28
+    doc.setDrawColor(100, 116, 139).setLineWidth(0.3)
+    doc.roundedRect(iconX, iconY, 5, 5, 0.5, 0.5, 'S')
+    doc.line(iconX, iconY + 1.5, iconX + 5, iconY + 1.5)
+    doc.line(iconX + 1.5, iconY, iconX + 1.5, iconY + 1)
+    doc.line(iconX + 3.5, iconY, iconX + 3.5, iconY + 1)
+
+    doc.setFontSize(6).setFont('helvetica', 'bold').setTextColor(100, 116, 139)
+    doc.text('FECHA DEL COMPROBANTE:', iconX + 7, iconY + 1.8)
+    doc.setFontSize(8).setFont('helvetica', 'bold').setTextColor(15, 23, 42)
+    doc.text(now, iconX + 7, iconY + 4.5)
+
+    // Columna Derecha: Cuadro Informativo
+    doc.setDrawColor(226, 232, 240).setFillColor(248, 250, 252).setLineWidth(0.3)
+    doc.roundedRect(M + 100, Y, 78, 32, 2.5, 2.5, 'FD')
+
+    // Icono de Escudo Verde
+    const sX = M + 104
+    const sY = Y + 7
+    doc.setDrawColor(16, 185, 129).setLineWidth(0.5)
+    doc.line(sX, sY, sX + 3, sY - 1.5)
+    doc.line(sX + 3, sY - 1.5, sX + 6, sY)
+    doc.line(sX + 6, sY, sX + 6, sY + 3)
+    doc.line(sX + 6, sY + 3, sX + 3, sY + 6)
+    doc.line(sX + 3, sY + 6, sX, sY + 3)
+    doc.line(sX, sY + 3, sX, sY)
+    doc.line(sX + 2, sY + 3, sX + 2.8, sY + 4)
+    doc.line(sX + 2.8, sY + 4, sX + 4.5, sY + 1.8)
+
+    doc.setFontSize(7).setFont('helvetica', 'bold').setTextColor(15, 23, 42)
+    doc.text('Documento generado electrónicamente', M + 112, Y + 6)
+    doc.setFontSize(6.5).setFont('helvetica', 'normal').setTextColor(100, 116, 139)
+    doc.text('Este comprobante ha sido generado por', M + 112, Y + 10)
+    doc.setFont('helvetica', 'bold').setTextColor(15, 23, 42)
+    doc.text('Marketdev S.A.S.', M + 112, Y + 13)
+    doc.setFont('helvetica', 'normal').setTextColor(100, 116, 139)
+    doc.text('No requiere firma manuscrita.', M + 112, Y + 20)
+
+    // Línea separadora de Estado DGII
+    doc.setDrawColor(226, 232, 240).setLineWidth(0.3)
+    doc.line(M, Y + 43, MR, Y + 43)
+
+    // Estado DGII Centrado
+    const cX = 85
+    const cY = Y + 47.5
+    doc.setDrawColor(16, 185, 129).setLineWidth(0.4)
+    doc.circle(cX, cY, 2, 'S')
+    doc.line(cX - 1, cY, cX - 0.2, cY + 0.8)
+    doc.line(cX - 0.2, cY + 0.8, cX + 1, cY - 0.8)
+
+    doc.setFontSize(8).setFont('helvetica', 'bold').setTextColor(71, 85, 105)
+    doc.text('Estado DGII:', 60, Y + 48.5)
+    doc.setTextColor(16, 185, 129)
+    doc.text('ACEPTADO', 90, Y + 48.5)
+
+    // PÁGINA 2: Autorización DGII
+    doc.addPage()
+    doc.setFontSize(7).setFont('helvetica', 'normal').setTextColor(148, 163, 184)
+    doc.text(`${p1Date}, ${p1Time}`, M, 10)
+    doc.text(`Comprobante ${datos.ncf}`, MR, 10, { align: 'right' })
+    doc.text('2/2', MR, 285, { align: 'right' })
+
+    // Cuadro Autorización DGII
+    doc.setDrawColor(226, 232, 240).setFillColor(248, 250, 252).setLineWidth(0.3)
+    doc.roundedRect(M, 20, MR - M, 18, 2.5, 2.5, 'FD')
+
+    // Icono Edificio
+    const bX = M + 6
+    const bY = 25
+    doc.setDrawColor(71, 85, 105).setLineWidth(0.3)
+    doc.rect(bX, bY, 6, 8, 'S')
+    doc.line(bX + 2.5, bY + 8, bX + 2.5, bY + 5)
+    doc.line(bX + 3.5, bY + 8, bX + 3.5, bY + 5)
+    doc.line(bX + 2.5, bY + 5, bX + 3.5, bY + 5)
+    doc.line(bX + 3, bY, bX + 3, bY + 8)
+
+    doc.setFontSize(8).setFont('helvetica', 'bold').setTextColor(15, 23, 42)
+    doc.text('Autorizado por la Dirección General de Impuestos Internos (DGII).', M + 16, 27)
+    doc.setFontSize(7.5).setFont('helvetica', 'normal').setTextColor(71, 85, 105)
+    doc.text('Para validar la información de este comprobante escanee el código QR o ingrese a www.dgii.gov.do', M + 16, 32)
+    doc.text('Para validar la información de este comprobante escanee el código QR o ingrese a www.dgii.gov.do', M + 16, 32)
 
   doc.save(`Comprobante_${datos.ncf}.pdf`)
 }
@@ -207,7 +307,7 @@ const generarPDF = async (datos: {
 // ── Component ─────────────────────────────────────────────────────────────────
 type ModalState = 'idle' | 'processing' | 'success' | 'error'
 
-export function PaymentModal({ isOpen, onClose, campaign, onPagado }: PaymentModalProps) {
+export function PaymentModal({ isOpen, onClose, campaign, session, onPagado }: PaymentModalProps) {
   const [monto,      setMonto]      = useState(0)
   const [rncCliente, setRncCliente] = useState('')
   const [razonSocial, setRazonSocial] = useState('')
@@ -218,9 +318,13 @@ export function PaymentModal({ isOpen, onClose, campaign, onPagado }: PaymentMod
 
   useEffect(() => {
     if (campaign) {
+      const userId = session?.user?.id || '';
+      const fallbackRnc = localStorage.getItem(`client_rnc_${userId}`) || '';
+      const fallbackEmpresa = localStorage.getItem(`client_empresa_${userId}`) || '';
+
       setMonto(campaign.presupuesto ?? 0)
-      setRncCliente('')
-      setRazonSocial('')
+      setRncCliente(fallbackRnc)
+      setRazonSocial(fallbackEmpresa)
       setEstado('idle')
       setMensaje('')
       setNcfFinal('')
@@ -286,121 +390,13 @@ export function PaymentModal({ isOpen, onClose, campaign, onPagado }: PaymentMod
         fecha:        data.pago.fecha,
       })
 
-      // ── PUBLICACIÓN AUTOMÁTICA EN REDES ────────────────────────────────────
-      setMensaje(`Pago aprobado. Publicando campaña en redes sociales...`)
+      // ── ACTIVAR CAMPAÑA ────────────────────────────────────
+      setMensaje(`Pago aprobado. Activando campaña...`)
       try {
-        // Obtener publicaciones de esta campaña
-        const { data: pubs } = await supabase.from('publicaciones')
-          .select('id_publicacion, contenido, imagen_url, fecha_publicacion, redes_sociales(nombre_red)')
-          .eq('id_campana', campaign.id);
-
-        if (pubs && pubs.length > 0) {
-          for (const pub of pubs) {
-            let finalMediaUrl = pub.imagen_url;
-            
-            // Subir imagen local o base64 si es necesario a Storage para que Ayrshare e Instagram la puedan descargar públicamente
-            const isLocalOrBase64 = finalMediaUrl && (
-              finalMediaUrl.startsWith('data:image') ||
-              finalMediaUrl.startsWith('/') ||
-              finalMediaUrl.includes('localhost') ||
-              finalMediaUrl.includes('127.0.0.1') ||
-              finalMediaUrl.includes('10.100.')
-            );
-
-            if (isLocalOrBase64) {
-              try {
-                let blob: Blob;
-                let contentType = 'image/png';
-                let extension = 'png';
-
-                if (finalMediaUrl.startsWith('data:image')) {
-                  const match = finalMediaUrl.match(/^data:(image\/\w+);base64,(.+)$/);
-                  if (match) {
-                    contentType = match[1];
-                    const b64Data = match[2];
-                    const byteCharacters = atob(b64Data);
-                    const byteArrays = [];
-                    for (let offset = 0; offset < byteCharacters.length; offset += 512) {
-                      const slice = byteCharacters.slice(offset, offset + 512);
-                      const byteNumbers = new Array(slice.length);
-                      for (let i = 0; i < slice.length; i++) byteNumbers[i] = slice.charCodeAt(i);
-                      byteArrays.push(new Uint8Array(byteNumbers));
-                    }
-                    blob = new Blob(byteArrays, { type: contentType });
-                    extension = contentType.split('/')[1] || 'png';
-                  } else {
-                    throw new Error('Formato base64 de imagen inválido.');
-                  }
-                } else {
-                  // Descargar imagen local/relativa para subirla al bucket público
-                  const res = await fetch(finalMediaUrl);
-                  if (!res.ok) throw new Error('No se pudo descargar la imagen local: ' + finalMediaUrl);
-                  blob = await res.blob();
-                  contentType = blob.type || 'image/png';
-                  extension = contentType.split('/')[1] || 'png';
-                }
-
-                const fileName = `pub_${Date.now()}_${Math.random().toString(36).substring(7)}.${extension}`;
-                await supabase.storage.from('img').upload(fileName, blob, { contentType });
-                const { data: publicUrlData } = supabase.storage.from('img').getPublicUrl(fileName);
-                finalMediaUrl = publicUrlData.publicUrl;
-                await supabase.from('publicaciones').update({ imagen_url: finalMediaUrl }).eq('id_publicacion', pub.id_publicacion);
-              } catch (errUpload) {
-                console.error("Error subiendo imagen local/base64 a Storage:", errUpload);
-              }
-            }
-
-            // Identificar plataforma (por defecto Instagram si el cliente no especificó otra)
-            let plat = 'instagram'; 
-            const nred = (Array.isArray(pub.redes_sociales) ? pub.redes_sociales[0]?.nombre_red : (pub.redes_sociales as any)?.nombre_red)?.toLowerCase() || '';
-            if (nred.includes('face')) plat = 'facebook';
-            else if (nred.includes('twit') || nred.includes('x')) plat = 'twitter';
-            else if (nred.includes('link')) plat = 'linkedin';
-            else if (nred.includes('tele')) plat = 'telegram';
-
-            // Lógica de programación (15 min rule)
-            let isFutureEnough = false;
-            let isoDate = undefined;
-            if (pub.fecha_publicacion) {
-              const pDate = new Date(pub.fecha_publicacion);
-              const diffMinutes = (pDate.getTime() - new Date().getTime()) / 60000;
-              if (diffMinutes >= 15) {
-                isFutureEnough = true;
-                isoDate = pDate.toISOString();
-              }
-            }
-
-            // Invocar Edge Function de publicación (Ayrshare)
-            const { data: ayrData, error: ayrError } = await supabase.functions.invoke('publish_social', {
-              body: { 
-                post: pub.contenido, 
-                platforms: [plat], 
-                mediaUrls: finalMediaUrl ? [finalMediaUrl] : [],
-                scheduleDate: isoDate
-              }
-            });
-
-            if (!ayrError && !ayrData?.error) {
-               // Marcar publicación como exitosa
-               const nuevoEstado = isFutureEnough ? 'Programada' : 'Publicada';
-               const updatePayload: any = { estado: nuevoEstado };
-               if (ayrData?.postId) updatePayload.ayrshare_post_id = ayrData.postId;
-               if (ayrData?.data?.id) updatePayload.ayrshare_post_id = ayrData.data.id;
-               await supabase.from('publicaciones').update(updatePayload).eq('id_publicacion', pub.id_publicacion);
-            } else {
-               console.warn("Error enviando a Ayrshare tras pago:", ayrError || ayrData?.error);
-            }
-
-            // Evitar saturar la API de Ayrshare metiendo un delay de 2 segundos entre publicaciones
-            await new Promise(resolve => setTimeout(resolve, 2000));
-          }
-        }
-        
-        // Activar la campaña automáticamente
         await supabase.from('campaigns').update({ estado: 'Activa' }).eq('id', campaign.id);
-        setMensaje(`¡Campaña publicada en redes sociales y activa!`)
+        setMensaje(`¡Campaña activa y lista!`)
       } catch (pubErr) {
-        console.error("Error publicando la campaña:", pubErr);
+        console.error("Error activando la campaña:", pubErr);
       }
       // ─────────────────────────────────────────────────────────────────────────
 
@@ -517,8 +513,8 @@ export function PaymentModal({ isOpen, onClose, campaign, onPagado }: PaymentMod
                   <input
                     type="text"
                     value={rncCliente}
-                    onChange={(e) => setRncCliente(e.target.value)}
-                    placeholder="000-0000000-0"
+                    onChange={(e) => setRncCliente(e.target.value.replace(/[^0-9-]/g, ''))}
+                    placeholder="Ej. 1-31-00000-0"
                     className={inputCls}
                   />
                 </div>

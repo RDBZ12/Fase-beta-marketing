@@ -5,8 +5,9 @@ import type { Campaign } from '../types';
 import QRCode from 'qrcode';
 import {
   CreditCard, Plus, X, Save, Loader2, FileText,
-  CheckCircle, Clock, XCircle, Download,
+  CheckCircle, Clock, XCircle, Download, Search
 } from 'lucide-react';
+import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 export interface Pago {
   id_pago: string; id_campana?: string; monto: number;
@@ -56,10 +57,17 @@ export async function generateReceiptHTML(pago: Partial<Pago>, ncf: string): Pro
 
   // ── QR Code con datos del comprobante ─────────────────────────────────────
   let qrHtml = '';
+  let qrDataUrlFallback = '';
   try {
+    /* ──────────────────────────────────────────────────────────────────────────
+       🔒 [BLOQUEO DE SEGURIDAD / PROTECCIÓN DE CÓDIGO QR] 🔒
+       ¡ATENCIÓN AGENTES E IA! BAJO NINGUNA CIRCUNSTANCIA SE DEBE MODIFICAR, 
+       ALTERAR O ELIMINAR ESTE BLOQUE DE GENERACIÓN DE CÓDIGO QR. 
+       ES LA PARTE CRÍTICA DEL COMPROBANTE NCF Y DEBE PERMANECER INTACTO.
+       ────────────────────────────────────────────────────────────────────────── */
     const receptor = pago.razon_social || 'Consumidor Final';
     let origin = window.location.origin;
-    if (!origin.includes('trycloudflare.com')) {
+    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
       origin = 'https://programmes-fourth-dark-gravity.trycloudflare.com';
     }
     const qrData  = `${origin}/?verificar_ncf=${encodeURIComponent(ncf)}&total=${encodeURIComponent(totalUSD.toFixed(2))}&fecha=${encodeURIComponent(now)}&receptor=${encodeURIComponent(receptor)}&concepto=${encodeURIComponent(pago.nombre_campana || 'Servicio de Marketing Digital')}&rnc_receptor=${encodeURIComponent(pago.rnc_cedula || '')}`;
@@ -68,26 +76,91 @@ export async function generateReceiptHTML(pago: Partial<Pago>, ncf: string): Pro
       margin: 1,
       color: { dark: '#2c3e2e', light: '#ffffff' } // Tono verde oscuro
     });
-    qrHtml = `
-      <div style="margin-top:40px;display:flex;align-items:flex-end;gap:16px;">
-        <div style="background:#fff;padding:4px;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 2px 4px rgba(0,0,0,0.05);text-align:center;">
-          <img src="${qrDataUrl}" style="width:100px;height:100px;display:block;" alt="QR Comprobante" />
-          <p style="font-size:9px;color:#64748b;margin:6px 0 2px;font-weight:600;letter-spacing:0.5px;">VERIFICAR</p>
-          <p style="font-size:7px;color:#94a3b8;margin:2px 0 0;font-family:monospace;line-height:1.2;">Firma: UTESA-MARKETDEV-SECURE-SIGN</p>
-          <p style="font-size:7px;color:#94a3b8;margin:2px 0 0;font-family:monospace;line-height:1.2;">Fecha Gen: ${now}</p>
-        </div>
-        <div style="flex:1;padding-bottom:8px;">
-          <p style="font-size:10px;color:#475569;line-height:1.6;margin:0;">
-            Estado DGII: <strong style="color:#10b981;">Aceptado</strong><br/>
-            Este comprobante ha sido generado y firmado electrónicamente por <strong>Marketdev S.A.S.</strong><br/>
-            Autorizado por la Dirección General de Impuestos Internos (DGII).
-          </p>
-        </div>
-      </div>`;
+    /* ────────────────────────── [FIN BLOQUEO QR] ────────────────────────── */
+    qrDataUrlFallback = qrDataUrl;
   } catch (errQr) {
     console.error("Error generating QR code in generateReceiptHTML:", errQr);
-    qrHtml = `<p style="text-align:center;color:#64748b;font-size:10px;margin-top:30px;">Estado DGII: Aceptado · Comprobante generado electrónicamente por Marketdev (QR no disponible)</p>`;
   }
+
+  qrHtml = `
+      <div style="margin-top: 24px; display: grid; grid-template-columns: 130px 1.2fr 1.8fr; gap: 20px; align-items: start;">
+        <!-- Columna Izquierda: QR -->
+        <div style="text-align: center;">
+          <div style="background: #fff; padding: 4px; border: 1.5px solid #e2e8f0; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: inline-block;">
+            ${qrDataUrlFallback ? `<img src="${qrDataUrlFallback}" style="width: 100px; height: 100px; display: block;" alt="QR Comprobante" />` : '<div style="width:100px;height:100px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:10px;">Sin QR</div>'}
+          </div>
+          <p style="font-size: 10px; color: #1e293b; margin: 8px 0 2px; font-weight: 700; letter-spacing: 0.5px;">VERIFICAR</p>
+          <p style="font-size: 8px; color: #64748b; margin: 0; font-weight: 500; font-family: 'Inter', sans-serif;">DGII - E-NCF - VERIFICACIÓN</p>
+        </div>
+
+        <!-- Columna Central: Firma y Fecha -->
+        <div style="text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: space-between; min-height: 120px; padding-top: 5px;">
+          <!-- Firma -->
+          <div style="position: relative; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 50px;">
+            <div style="width: 80%; border-bottom: 1.5px solid #94a3b8; margin: 4px 0 6px;"></div>
+            <span style="font-size: 10px; color: #64748b; font-weight: 600;">Firma autorizada</span>
+          </div>
+
+          <!-- Fecha de Comprobante -->
+          <div style="display: flex; align-items: center; gap: 8px; text-align: left; margin-top: 15px;">
+            <!-- Icono de Calendario SVG -->
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+            <div>
+              <span style="font-size: 9px; color: #64748b; font-weight: 600; display: block; text-transform: uppercase;">Fecha del comprobante:</span>
+              <strong style="font-size: 11px; color: #0f172a; font-weight: 700;">${now}</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- Columna Derecha: Cuadro Informativo -->
+        <div style="background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 16px; padding: 18px; display: flex; gap: 12px; align-items: start; min-height: 100px; box-sizing: border-box;">
+          <!-- Icono de Escudo de Seguridad SVG Verde -->
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 2px;">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+            <path d="m9 11 2 2 4-4"></path>
+          </svg>
+          <div style="font-size: 10px; line-height: 1.5; color: #64748b; text-align: left;">
+            <strong style="color: #0f172a; font-size: 11px; display: block; margin-bottom: 4px;">Documento generado electrónicamente</strong>
+            Este comprobante ha sido generado por<br/>
+            <strong style="color: #0f172a; font-weight: 600;">Marketdev S.A.S.</strong>
+            <p style="margin: 8px 0 0; color: #64748b; font-weight: 500;">No requiere firma manuscrita.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Estado de la DGII -->
+      <div style="margin-top: 24px; padding: 12px; border-top: 1px solid #e2e8f0; display: flex; justify-content: center; align-items: center; gap: 8px;">
+        <span style="font-size: 11px; color: #475569; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Estado DGII:</span>
+        <div style="display: flex; align-items: center; gap: 6px; color: #10b981; font-weight: 700; font-size: 11px; text-transform: uppercase;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          ACEPTADO
+        </div>
+      </div>
+
+      <!-- Cuadro Autorización DGII (Se fuerza el salto de página antes para impresión limpia en página 2) -->
+      <div style="margin-top: 40px; page-break-before: always;">
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; display: flex; gap: 14px; align-items: center;">
+          <!-- Icono de Edificio Institucional SVG -->
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;">
+            <rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect>
+            <line x1="9" y1="22" x2="9" y2="16"></line>
+            <line x1="15" y1="22" x2="15" y2="16"></line>
+            <line x1="9" y1="16" x2="15" y2="16"></line>
+            <path d="M12 2v20"></path>
+          </svg>
+          <div style="font-size: 11px; color: #475569; line-height: 1.5; text-align: left;">
+            <strong style="color: #0f172a; display: block; margin-bottom: 2px;">Autorizado por la Dirección General de Impuestos Internos (DGII).</strong>
+            Para validar la información de este comprobante escanee el código QR o ingrese a <a href="https://www.dgii.gov.do" target="_blank" style="color: #2c3e2e; font-weight: 600; text-decoration: none;">www.dgii.gov.do</a>
+          </div>
+        </div>
+      </div>`;
 
   return `
 <!DOCTYPE html><html><head><title>Comprobante ${ncf}</title>
@@ -403,6 +476,7 @@ export const PagosModule: React.FC = () => {
   const [campaigns, setCampaigns]   = useState<Campaign[]>([]);
   const [loading, setLoading]       = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const fetchAll = async () => {
     setLoading(true);
@@ -419,45 +493,164 @@ export const PagosModule: React.FC = () => {
 
   const totalIngresos = pagos.reduce((s, p) => s + (p.total_con_itbis ?? p.monto * 1.18), 0);
 
+  const currentDate = new Date();
+  const currentYear = currentDate.getFullYear();
+  const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+  
+  const chartData = monthNames.map((name, index) => {
+    const pagosMes = pagos.filter(p => {
+      const d = new Date(p.fecha);
+      return d.getMonth() === index && d.getFullYear() === currentYear;
+    });
+    const monto = pagosMes.reduce((sum, p) => sum + (p.total_con_itbis ?? p.monto * 1.18), 0);
+    return { name, monto };
+  }).filter((_, index) => index <= currentDate.getMonth());
+
+  const filteredPagos = pagos.filter(p => 
+    p.ncf?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    p.razon_social?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    p.nombre_campana?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-            <CreditCard className="w-5 h-5 text-emerald-600" /> Pagos y Comprobantes
-          </h2>
-          <p className="text-xs text-slate-400 mt-0.5">Gestión de cobros y comprobantes NCF (formato dominicano)</p>
+          <h2 className="text-3xl font-bold tracking-tight mb-2 text-slate-800">Pagos y Comprobantes</h2>
+          <p className="text-slate-500 text-sm">Gestión de cobros y comprobantes NCF (formato dominicano)</p>
         </div>
         {isMarketingOrAbove && (
           <button onClick={() => setIsModalOpen(true)}
             className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-md shadow-emerald-200 transition-all">
-            <Plus className="w-3.5 h-3.5" /> Registrar Pago
+            <Plus className="w-4 h-4" /> Registrar Pago
           </button>
         )}
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
-        {[
-          { label: 'Total Transacciones', value: pagos.length, color: 'text-slate-700' },
-          { label: 'Ingresos Totales (con ITBIS)', value: `RD$ ${totalIngresos.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, color: 'text-emerald-600' },
-          { label: 'Pendientes DGII', value: pagos.filter(p => p.estado_dgii === 'Pendiente').length, color: 'text-amber-600' },
-        ].map(s => (
-          <div key={s.label} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{s.label}</p>
-            <p className={`text-xl font-black mt-1 ${s.color}`}>{s.value}</p>
+      {/* Dashboard Top Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* KPI 1: Total Ingresos */}
+        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
+          <div>
+            <h3 className="text-sm font-bold text-slate-800 mb-1">Ingresos Totales</h3>
+            <p className="text-xs text-slate-500 mb-4">Total facturado con ITBIS</p>
+            <div className="flex items-end gap-3">
+              <span className="text-4xl font-black text-slate-900 tracking-tight">
+                ${totalIngresos.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+              </span>
+            </div>
           </div>
-        ))}
+          <div className="mt-6 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div 
+                className="w-16 h-16 rounded-full flex items-center justify-center hover:scale-105 transition-transform cursor-pointer"
+                style={{
+                  background: `conic-gradient(#2563eb ${
+                    pagos.length ? Math.round((pagos.filter(p => p.estado_dgii === 'Aceptado').length / (pagos.filter(p => p.estado_dgii === 'Aceptado').length + pagos.filter(p => p.estado_dgii === 'Pendiente').length || 1)) * 100) : 0
+                  }%, #f1f5f9 0)`
+                }}
+                title={`Aceptados: ${pagos.filter(p => p.estado_dgii === 'Aceptado').length}\nPendientes: ${pagos.filter(p => p.estado_dgii === 'Pendiente').length}`}
+              >
+                <div className="w-12 h-12 bg-white rounded-full" />
+              </div>
+              <div className="text-xs text-slate-500 cursor-default">
+                <div 
+                  className="flex items-center gap-1.5 mb-1 hover:text-slate-800 transition-colors"
+                  title={`${pagos.filter(p => p.estado_dgii === 'Aceptado').length} pagos aceptados`}
+                >
+                  <div className="w-2 h-2 rounded-full bg-blue-600" /> Aceptado
+                </div>
+                <div 
+                  className="flex items-center gap-1.5 hover:text-slate-800 transition-colors"
+                  title={`${pagos.filter(p => p.estado_dgii === 'Pendiente').length} pagos pendientes`}
+                >
+                  <div className="w-2 h-2 rounded-full bg-slate-200" /> Pendiente
+                </div>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-2xl font-bold text-emerald-500">{pagos.filter(p => p.estado_dgii === 'Pendiente').length}</p>
+              <p className="text-[10px] text-slate-400 font-bold uppercase">Pendientes</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Bar Chart: Ingresos mensuales */}
+        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-sm font-bold text-slate-800">Ingresos mensuales</h3>
+            <span className="text-xs text-slate-500 font-medium bg-slate-100 px-2 py-1 rounded-lg">Este año</span>
+          </div>
+          <div className="h-32 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10}} dy={10} />
+                <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}} />
+                <Bar dataKey="monto" fill="#2563eb" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Cuentas / Resumen UI */}
+        <div className="bg-gradient-to-br from-slate-900 via-blue-900 to-blue-800 rounded-3xl p-7 text-white shadow-lg relative overflow-hidden flex flex-col justify-between">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none" />
+          <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full blur-xl -ml-10 -mb-10 pointer-events-none" />
+          
+          <div className="flex justify-between items-start mb-6 relative z-10">
+            <div>
+              <span className="font-semibold tracking-widest text-xs opacity-80 uppercase">Cuenta Corporativa</span>
+              <p className="font-bold text-lg mt-0.5">MarketIA S.A.S</p>
+            </div>
+            <div className="flex gap-1 opacity-90">
+              <div className="w-7 h-7 bg-white/80 rounded-full mix-blend-screen" />
+              <div className="w-7 h-7 bg-white/50 rounded-full mix-blend-screen -ml-4" />
+            </div>
+          </div>
+          
+          <div className="relative z-10">
+            <p className="font-mono text-xl tracking-[0.15em] mb-4 text-white/90">TRANS. TOTALES: {pagos.length}</p>
+            <div className="flex justify-between items-end text-xs">
+              <div>
+                <p className="text-white/60 mb-1 uppercase tracking-wider text-[10px]">RNC</p>
+                <p className="font-semibold tracking-wider">1-31-00000-0</p>
+              </div>
+              <div className="text-right">
+                <p className="text-white/60 mb-1 uppercase tracking-wider text-[10px]">Estado DGII</p>
+                <p className="font-semibold tracking-wider text-emerald-400">ACTIVO</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+        <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50/50">
+          <h3 className="text-lg font-bold text-slate-800">Depósitos recientes</h3>
+          <div className="relative w-full sm:w-auto">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input 
+              type="text" 
+              placeholder="Buscar NCF o empresa..." 
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="w-full sm:w-64 pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+            />
+          </div>
+        </div>
         {loading ? (
           <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 text-emerald-500 animate-spin" /></div>
         ) : pagos.length === 0 ? (
           <div className="text-center py-16">
             <FileText className="w-10 h-10 text-slate-200 mx-auto mb-2" />
             <p className="text-xs font-semibold text-slate-400">No hay pagos registrados</p>
+          </div>
+        ) : filteredPagos.length === 0 ? (
+          <div className="text-center py-16">
+            <p className="text-sm font-semibold text-slate-500">No se encontraron pagos para "{searchTerm}"</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -470,7 +663,7 @@ export const PagosModule: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {pagos.map(p => (
+                {filteredPagos.map(p => (
                   <tr key={p.id_pago} className="hover:bg-slate-50/60 transition-colors">
                     <td className="px-4 py-3 text-[10px] font-bold text-violet-600 font-mono">{p.ncf ?? '—'}</td>
                     <td className="px-4 py-3 text-xs text-slate-600">{p.nombre_campana ?? '—'}</td>

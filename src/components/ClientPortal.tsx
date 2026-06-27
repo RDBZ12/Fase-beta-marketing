@@ -10,18 +10,29 @@ import {
   Rocket,
   Image as ImageIcon,
   Calendar,
-  AlertCircle
+  AlertCircle,
+  ChevronLeft,
+  ChevronRight,
+  Sparkles,
+  Users,
+  Target,
+  DollarSign,
+  TrendingUp,
+  Search
 } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import type { Campaign } from '../types';
 import { CampaignWizard } from './CampaignWizard';
 import { MisPublicacionesModule } from './MisPublicacionesModule';
 import { ClientPagosModule, ClientEstadisticasModule, ClientPerfilModule } from './ClientModules';
+import { ChatbotWidget } from './ChatbotWidget';
 
 interface ClientPortalProps {
   campaigns: Campaign[];
   onPagarCampaign: (campaign: Campaign) => void;
+  refreshCampaigns: () => void;
 }
 
 const getLocalDateString = () => {
@@ -32,9 +43,9 @@ const getLocalDateString = () => {
   return `${year}-${month}-${day}`;
 };
 
-export const ClientPortal: React.FC<ClientPortalProps> = ({ campaigns, onPagarCampaign }) => {
+export const ClientPortal: React.FC<ClientPortalProps> = ({ campaigns, onPagarCampaign, refreshCampaigns }) => {
   const [activeTab, setActiveTab] = useState('mis-campanas');
-  const [isSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -55,15 +66,22 @@ export const ClientPortal: React.FC<ClientPortalProps> = ({ campaigns, onPagarCa
       <aside
         className={`${
           isSidebarOpen ? 'w-64' : 'w-20'
-        } transition-all duration-300 ease-in-out border-r border-slate-200 bg-white backdrop-blur-xl flex flex-col`}
+        } transition-all duration-300 ease-in-out border-r border-slate-800 bg-slate-900 flex flex-col relative z-20`}
       >
-        <div className="h-20 flex items-center justify-between px-6 border-b border-slate-200">
+        <button
+          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+          className="absolute -right-3 top-7 w-6 h-6 bg-slate-800 border border-slate-700 rounded-full flex items-center justify-center text-slate-400 hover:text-white hover:border-slate-600 hover:bg-slate-700 transition-colors z-30 shadow-sm"
+        >
+          {isSidebarOpen ? <ChevronLeft className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+        </button>
+
+        <div className="h-20 flex items-center justify-between px-6 border-b border-slate-800">
           {isSidebarOpen ? (
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-violet-600/20">
                 <Rocket className="w-4 h-4 text-white" />
               </div>
-              <span className="font-bold text-lg tracking-tight text-slate-800">
+              <span className="font-bold text-lg tracking-tight text-white">
                 Marketdev
               </span>
             </div>
@@ -84,31 +102,34 @@ export const ClientPortal: React.FC<ClientPortalProps> = ({ campaigns, onPagarCa
                 onClick={() => setActiveTab(item.id)}
                 className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 group ${
                   isActive
-                    ? 'bg-violet-600/10 text-violet-600 border border-violet-500/20'
-                    : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
+                    ? 'bg-violet-600 text-white shadow-md shadow-violet-900/20'
+                    : 'text-slate-400 hover:text-white hover:bg-white/5'
                 }`}
                 title={!isSidebarOpen ? item.label : undefined}
               >
                 <Icon
                   className={`w-5 h-5 shrink-0 ${
-                    isActive ? 'text-violet-600' : 'text-slate-500 group-hover:text-slate-700'
+                    isActive ? 'text-white' : 'text-slate-400 group-hover:text-white'
                   }`}
                 />
                 {isSidebarOpen && (
                   <span className="text-sm font-medium tracking-wide">{item.label}</span>
                 )}
                 {isActive && isSidebarOpen && (
-                  <div className="ml-auto w-1.5 h-1.5 rounded-full bg-violet-400 shadow-[0_0_8px_rgba(124,58,237,0.8)]" />
+                  <div className="ml-auto w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]" />
+                )}
+                {!isSidebarOpen && isActive && (
+                  <div className="absolute left-1 w-1 h-8 rounded-full bg-violet-500" />
                 )}
               </button>
             );
           })}
         </nav>
 
-        <div className="p-4 border-t border-slate-200">
+        <div className="p-4 border-t border-slate-800">
           <button
             onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-red-500/10 hover:border hover:border-red-500/20 transition-all duration-200"
+            className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-all duration-200"
           >
             <LogOut className="w-5 h-5 shrink-0" />
             {isSidebarOpen && <span className="text-sm font-medium">Cerrar Sesión</span>}
@@ -140,8 +161,8 @@ export const ClientPortal: React.FC<ClientPortalProps> = ({ campaigns, onPagarCa
         </header>
 
         <div className="flex-1 overflow-y-auto p-8 z-10 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
-          {activeTab === 'mis-campanas' && <MisCampanasModule campaigns={campaigns} onNew={() => setActiveTab('nueva-campana')} onPagar={onPagarCampaign} />}
-          {activeTab === 'nueva-campana' && <CampaignWizard onCancel={() => setActiveTab('mis-campanas')} onFinish={() => setActiveTab('mis-campanas')} />}
+          {activeTab === 'mis-campanas' && <MisCampanasModule campaigns={campaigns} onNew={() => setActiveTab('nueva-campana')} onPagar={onPagarCampaign} refreshCampaigns={refreshCampaigns} />}
+          {activeTab === 'nueva-campana' && <CampaignWizard onCancel={() => setActiveTab('mis-campanas')} onFinish={() => { refreshCampaigns(); setActiveTab('mis-campanas'); }} />}
           
           {activeTab === 'mis-publicaciones' && <MisPublicacionesModule campaigns={campaigns} />}
           {activeTab === 'estadisticas' && <ClientEstadisticasModule campaigns={campaigns} />}
@@ -149,29 +170,128 @@ export const ClientPortal: React.FC<ClientPortalProps> = ({ campaigns, onPagarCa
           {activeTab === 'perfil' && <ClientPerfilModule />}
         </div>
       </main>
+
+      <ChatbotWidget />
     </div>
   );
 };
 
 // --- Subcomponentes de Vista ---
 
-const MisCampanasModule = ({ campaigns, onNew, onPagar }: { campaigns: Campaign[], onNew: () => void, onPagar: (c: Campaign) => void }) => {
+const MisCampanasModule = ({ campaigns, onNew, onPagar, refreshCampaigns }: { campaigns: Campaign[], onNew: () => void, onPagar: (c: Campaign) => void, refreshCampaigns: () => void }) => {
+  const activeCamp = campaigns.filter(c => c.status === 'Activa').length;
+  const totalLeads = campaigns.reduce((acc, c) => acc + (c.leads || 0), 0);
+  const totalReach = campaigns.reduce((acc, c) => acc + (parseInt(String(c.reach).replace(/\D/g, '')) || 0), 0);
+  const totalPresupuesto = campaigns.filter(c => c.status !== 'Borrador' && c.status !== 'Pendiente de Pago').reduce((acc, c) => acc + (c.presupuesto || 0), 0);
+
+  const chartData = [
+    { name: 'Lun', alcance: 1200 },
+    { name: 'Mar', alcance: 1900 },
+    { name: 'Mie', alcance: 1500 },
+    { name: 'Jue', alcance: 2400 },
+    { name: 'Vie', alcance: 2100 },
+    { name: 'Sab', alcance: 3200 },
+    { name: 'Dom', alcance: 3800 },
+  ];
+
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-end">
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
         <div>
           <h2 className="text-3xl font-bold tracking-tight mb-2">Mis Campañas</h2>
           <p className="text-slate-500">Crea, edita y revisa el estado de tus campañas publicitarias.</p>
         </div>
-        <button 
-          onClick={onNew}
-          className="flex items-center gap-2 px-5 py-2.5 bg-violet-600 hover:bg-violet-500 text-white rounded-xl font-medium transition-all shadow-[0_0_20px_rgba(124,58,237,0.3)] hover:shadow-[0_0_25px_rgba(124,58,237,0.5)]"
-        >
-          <PlusCircle className="w-4 h-4" />
-          Crear Campaña
-        </button>
+        <div className="flex gap-3">
+          <button 
+            onClick={onNew}
+            className="flex items-center gap-2 px-5 py-2.5 bg-violet-600 hover:bg-violet-500 text-white rounded-xl font-medium transition-all shadow-[0_0_20px_rgba(124,58,237,0.3)] hover:shadow-[0_0_25px_rgba(124,58,237,0.5)]"
+          >
+            <PlusCircle className="w-4 h-4" />
+            Crear Campaña
+          </button>
+        </div>
       </div>
-      <MisCampanasView campaigns={campaigns} onPagar={onPagar} />
+
+      {/* KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 hover:border-emerald-300 transition-colors group shadow-sm flex items-center gap-4">
+          <div className="w-12 h-12 bg-emerald-50 text-emerald-500 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+            <Target className="w-6 h-6" />
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Campañas Activas</p>
+            <p className="text-2xl font-bold text-slate-900 mt-1">{activeCamp}</p>
+          </div>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 hover:border-blue-300 transition-colors group shadow-sm flex items-center gap-4">
+          <div className="w-12 h-12 bg-blue-50 text-blue-500 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+            <Users className="w-6 h-6" />
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Leads Generados</p>
+            <p className="text-2xl font-bold text-slate-900 mt-1">{totalLeads}</p>
+          </div>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 hover:border-violet-300 transition-colors group shadow-sm flex items-center gap-4">
+          <div className="w-12 h-12 bg-violet-50 text-violet-500 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+            <TrendingUp className="w-6 h-6" />
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Alcance Total</p>
+            <p className="text-2xl font-bold text-slate-900 mt-1">{totalReach > 0 ? (totalReach / 1000).toFixed(1) + 'K' : '0'}</p>
+          </div>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 hover:border-amber-300 transition-colors group shadow-sm flex items-center gap-4">
+          <div className="w-12 h-12 bg-amber-50 text-amber-500 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+            <DollarSign className="w-6 h-6" />
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Presupuesto Usado</p>
+            <p className="text-2xl font-bold text-slate-900 mt-1">${totalPresupuesto}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Chart Section */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm relative overflow-hidden">
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <h3 className="text-lg font-bold text-slate-800">Alcance esta semana</h3>
+            <p className="text-sm text-slate-500">Personas alcanzadas por día</p>
+          </div>
+          <div className="flex items-center gap-2 text-emerald-500 bg-emerald-50 px-3 py-1.5 rounded-lg text-sm font-semibold">
+            <TrendingUp className="w-4 h-4" />
+            +34% esta semana
+          </div>
+        </div>
+        
+        <div className="h-[250px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12}} dy={10} />
+              <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12}} dx={-10} />
+              <Tooltip 
+                contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                itemStyle={{ color: '#7c3aed', fontWeight: 'bold' }}
+              />
+              <Line 
+                type="monotone" 
+                dataKey="alcance" 
+                stroke="#7c3aed" 
+                strokeWidth={3}
+                dot={{ r: 4, fill: '#7c3aed', strokeWidth: 2, stroke: '#ffffff' }}
+                activeDot={{ r: 6, fill: '#7c3aed', stroke: '#ffffff', strokeWidth: 2 }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      <MisCampanasView campaigns={campaigns} onPagar={onPagar} refreshCampaigns={refreshCampaigns} />
     </div>
   );
 };
@@ -180,12 +300,13 @@ const MisCampanasModule = ({ campaigns, onNew, onPagar }: { campaigns: Campaign[
 
 
 
-const MisCampanasView = ({ campaigns, onPagar }: { campaigns: Campaign[], onPagar: (c: Campaign) => void }) => {
+const MisCampanasView = ({ campaigns, onPagar, refreshCampaigns }: { campaigns: Campaign[], onPagar: (c: Campaign) => void, refreshCampaigns: () => void }) => {
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
   const [publicaciones, setPublicaciones] = useState<any[]>([]);
   const [loadingPubs, setLoadingPubs] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<{presupuesto: number, startDate: string, endDate: string}>({presupuesto: 0, startDate: '', endDate: ''});
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     if (selectedCampaign) {
@@ -296,6 +417,21 @@ const MisCampanasView = ({ campaigns, onPagar }: { campaigns: Campaign[], onPaga
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+        {campaigns.length > 0 && (
+          <div className="p-6 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50/50">
+            <h3 className="text-lg font-bold text-slate-800">Tus campañas</h3>
+            <div className="relative w-full sm:w-auto">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input 
+                type="text" 
+                placeholder="Buscar por nombre o red..." 
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                className="w-full sm:w-64 pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all"
+              />
+            </div>
+          </div>
+        )}
         {campaigns.length === 0 ? (
           <div className="py-20 text-center">
             <Megaphone className="w-12 h-12 text-slate-400 mx-auto mb-3" />
@@ -316,7 +452,13 @@ const MisCampanasView = ({ campaigns, onPagar }: { campaigns: Campaign[], onPaga
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {campaigns.map((camp) => {
+                {campaigns.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()) || (c.brand || c.channel).toLowerCase().includes(searchTerm.toLowerCase())).length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-12 text-center text-slate-500">
+                      No se encontraron campañas para "{searchTerm}"
+                    </td>
+                  </tr>
+                ) : campaigns.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()) || (c.brand || c.channel).toLowerCase().includes(searchTerm.toLowerCase())).map((camp) => {
                   const isEditing = editingId === camp.id;
                   return (
                   <tr 
@@ -397,7 +539,7 @@ const MisCampanasView = ({ campaigns, onPagar }: { campaigns: Campaign[], onPaga
                                   fecha_fin: editForm.endDate
                                 }).eq('id', camp.id);
                                 setEditingId(null);
-                                window.location.reload();
+                                refreshCampaigns();
                               }}
                               className="px-3 py-1 bg-violet-600 hover:bg-violet-500 text-white font-medium rounded-lg text-xs"
                             >

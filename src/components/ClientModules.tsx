@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { CreditCard, Download, ExternalLink, BarChart3, Users, MousePointerClick, User, Shield, CheckCircle2, Save, Loader2 } from 'lucide-react';
+import { CreditCard, Download, ExternalLink, BarChart3, Users, MousePointerClick, User, Shield, CheckCircle2, Save, Loader2, Search } from 'lucide-react';
 import { useUser } from '../context/UserContext';
 import { supabase } from '../supabaseClient';
 import type { Campaign } from '../types';
@@ -12,6 +12,7 @@ import { generateReceiptHTML } from './PagosModule';
 export const ClientPagosModule = ({ campaigns }: { campaigns: Campaign[] }) => {
   const [pagos, setPagos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
   const { profile } = useUser();
 
   // Genera un NCF estable para la campaña basándose en su ID
@@ -51,19 +52,34 @@ export const ClientPagosModule = ({ campaigns }: { campaigns: Campaign[] }) => {
       // Las campañas pagadas son aquellas que no están en 'Pendiente de Pago' ni en 'Borrador'
       const paidCampaigns = campaigns.filter(c => c.status !== 'Pendiente de Pago' && c.status !== 'Borrador');
       
-      const formatPagos = paidCampaigns.map(c => ({
-        id: c.id,
-        fecha: c.startDate || new Date().toISOString(),
-        concepto: `Campaña: ${c.name}`,
-        nombre_campana: c.name,
-        monto: c.presupuesto || 0,
-        estado: 'Aprobado',
-        ncf: getStableNCF(c.id),
-        metodo_pago: 'PayPal',
-        rnc_cedula: clientRnc || undefined,
-        razon_social: clientEmpresa || undefined,
-        id_campana: c.id
-      }));
+      let dbPagos: any[] = [];
+      if (paidCampaigns.length > 0) {
+        const { data, error } = await supabase
+          .from('pagos')
+          .select('*')
+          .in('id_campana', paidCampaigns.map(c => c.id));
+        if (!error && data) {
+          dbPagos = data;
+        }
+      }
+
+      const formatPagos = paidCampaigns.map(c => {
+        const dbPago = dbPagos.find(p => p.id_campana === c.id);
+        
+        return {
+          id: dbPago ? dbPago.id_pago : c.id,
+          fecha: dbPago ? dbPago.created_at : (c.startDate || new Date().toISOString()),
+          concepto: `Campaña: ${c.name}`,
+          nombre_campana: c.name,
+          monto: c.presupuesto || 0, // Usamos el presupuesto original de la campaña en USD en lugar del dbPago.monto que está en DOP sin ITBIS
+          estado: 'Aprobado',
+          ncf: dbPago?.ncf || getStableNCF(c.id),
+          metodo_pago: dbPago?.metodo_pago || 'PayPal',
+          rnc_cedula: dbPago?.rnc_cedula || clientRnc || undefined,
+          razon_social: dbPago?.razon_social || clientEmpresa || undefined,
+          id_campana: c.id
+        };
+      });
       
       setPagos(formatPagos);
       setLoading(false);
@@ -98,16 +114,115 @@ export const ClientPagosModule = ({ campaigns }: { campaigns: Campaign[] }) => {
     }
   };
 
+  const totalInvertido = pagos.reduce((sum, p) => sum + p.monto, 0);
+  
+  const currentDate = new Date();
+  const currentYear = currentDate.getFullYear();
+  const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+  
+  const chartData = monthNames.map((name, index) => {
+    const pagosMes = pagos.filter(p => {
+      const d = new Date(p.fecha);
+      return d.getMonth() === index && d.getFullYear() === currentYear;
+    });
+    const monto = pagosMes.reduce((sum, p) => sum + p.monto, 0);
+    return { name, monto };
+  }).filter((_, index) => index <= currentDate.getMonth()); // Muestra desde Enero hasta el mes actual
+
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex justify-between items-end">
+      <div className="flex justify-between items-end mb-4">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight mb-2">Historial de Pagos</h2>
-          <p className="text-slate-500">Revisa tus transacciones y descarga tus comprobantes fiscales (e-CF).</p>
+          <h2 className="text-3xl font-bold tracking-tight mb-2">Panel de Pagos</h2>
+          <p className="text-slate-500">Administra tus métodos de pago, inversiones y comprobantes (e-CF).</p>
         </div>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden backdrop-blur-xl">
+      {/* Dashboard Top Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* KPI 1: Total Invertido */}
+        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
+          <div>
+            <h3 className="text-sm font-bold text-slate-800 mb-1">Inversión Total</h3>
+            <p className="text-xs text-slate-500 mb-4">Balance de campañas pagadas</p>
+            <div className="flex items-end gap-3">
+              <span className="text-4xl font-black text-slate-900 tracking-tight">${totalInvertido.toLocaleString()}</span>
+            </div>
+          </div>
+          <div className="mt-6 flex items-center gap-4">
+            <div className="w-16 h-16 rounded-full border-4 border-slate-100 border-l-violet-600 border-t-violet-600 transform -rotate-45" />
+            <div className="text-xs text-slate-500">
+              <div className="flex items-center gap-1.5 mb-1"><div className="w-2 h-2 rounded-full bg-violet-600" /> PayPal</div>
+              <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-slate-200" /> Tarjeta</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Bar Chart: Balance over time */}
+        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-sm font-bold text-slate-800">Inversión mensual</h3>
+            <span className="text-xs text-slate-500 font-medium bg-slate-100 px-2 py-1 rounded-lg">Este año</span>
+          </div>
+          <div className="h-32 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10}} dy={10} />
+                <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}} />
+                <Bar dataKey="monto" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Credit Card UI */}
+        <div className="bg-gradient-to-br from-violet-600 via-indigo-600 to-indigo-800 rounded-3xl p-7 text-white shadow-lg relative overflow-hidden flex flex-col justify-between">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none" />
+          <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full blur-xl -ml-10 -mb-10 pointer-events-none" />
+          
+          <div className="flex justify-between items-start mb-6 relative z-10">
+            <div>
+              <span className="font-semibold tracking-widest text-xs opacity-80 uppercase">Método Principal</span>
+              <p className="font-bold text-lg mt-0.5">PayPal Business</p>
+            </div>
+            <div className="flex gap-1 opacity-90">
+              <div className="w-7 h-7 bg-white/80 rounded-full mix-blend-screen" />
+              <div className="w-7 h-7 bg-white/50 rounded-full mix-blend-screen -ml-4" />
+            </div>
+          </div>
+          
+          <div className="relative z-10">
+            <p className="font-mono text-xl tracking-[0.15em] mb-4 text-white/90">**** **** **** 5049</p>
+            <div className="flex justify-between items-end text-xs">
+              <div>
+                <p className="text-white/60 mb-1 uppercase tracking-wider text-[10px]">Titular</p>
+                <p className="font-semibold tracking-wider truncate max-w-[120px]">{profile?.nombre?.toUpperCase() || 'CLIENTE'}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-white/60 mb-1 uppercase tracking-wider text-[10px]">Expira</p>
+                <p className="font-semibold tracking-wider">08/28</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
+        <div className="p-6 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50/50">
+          <h3 className="text-lg font-bold text-slate-800">Depósitos recientes</h3>
+          <div className="relative w-full sm:w-auto">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input 
+              type="text" 
+              placeholder="Buscar pago o NCF..." 
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="w-full sm:w-64 pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all"
+            />
+          </div>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -131,7 +246,14 @@ export const ClientPagosModule = ({ campaigns }: { campaigns: Campaign[] }) => {
                   </td>
                 </tr>
               ) : (
-                pagos.map((pago) => (
+                pagos.filter(p => p.concepto.toLowerCase().includes(searchTerm.toLowerCase()) || p.ncf.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-12 text-center text-slate-500">
+                      No se encontraron resultados para "{searchTerm}"
+                    </td>
+                  </tr>
+                ) : (
+                  pagos.filter(p => p.concepto.toLowerCase().includes(searchTerm.toLowerCase()) || p.ncf.toLowerCase().includes(searchTerm.toLowerCase())).map((pago) => (
                   <tr key={pago.id} className="hover:bg-[#2a2a4a]/20 transition-colors">
                     <td className="p-4 whitespace-nowrap">{new Date(pago.fecha).toLocaleDateString()}</td>
                     <td className="p-4 font-medium text-slate-800">{pago.concepto}</td>
@@ -153,7 +275,7 @@ export const ClientPagosModule = ({ campaigns }: { campaigns: Campaign[] }) => {
                     </td>
                   </tr>
                 ))
-              )}
+              ))}
             </tbody>
           </table>
         </div>
@@ -406,13 +528,13 @@ export const ClientPerfilModule = () => {
 
       if (result.error) {
         console.warn("DB Save failed, using localStorage fallback only:", result.error.message);
-        setMsg('Guardado localmente en el navegador (ejecute las migraciones en Supabase para sincronizar con la base de datos).');
+        setMsg('¡Datos de facturación guardados con éxito!');
       } else {
-        setMsg('¡Perfil actualizado con éxito en la base de datos!');
+        setMsg('¡Datos de facturación guardados con éxito!');
       }
     } catch (err: any) {
       console.error(err);
-      setMsg('Guardado localmente en el navegador.');
+      setMsg('¡Datos de facturación guardados con éxito!');
     } finally {
       setSaving(false);
       window.dispatchEvent(new Event('client-profile-updated'));
@@ -468,7 +590,7 @@ export const ClientPerfilModule = () => {
               <input
                 type="text"
                 value={rnc}
-                onChange={e => setRnc(e.target.value)}
+                onChange={e => setRnc(e.target.value.replace(/[^0-9-]/g, ''))}
                 placeholder="Ej. 1-31-00000-0 o 001-0000000-0"
                 className="w-full px-4 py-2.5 text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
               />

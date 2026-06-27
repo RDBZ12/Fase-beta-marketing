@@ -51,21 +51,7 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <button 
-          onClick={onSaveClick}
-          className="flex items-center gap-3.5 px-3.5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-md shadow-blue-200 transition-all duration-200"
-        >
-          <Save className="w-3.5 h-3.5" />
-          <span>Guardar</span>
-        </button>
 
-        <button 
-          onClick={onPublishClick}
-          className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg shadow-sm transition-all duration-200"
-        >
-          <Upload className="w-3.5 h-3.5" />
-          <span>Publicar</span>
-        </button>
 
         <button 
           onClick={onNewCampaign}

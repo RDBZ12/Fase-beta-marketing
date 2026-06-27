@@ -105,7 +105,7 @@ serve(async (req) => {
     console.log("Plataformas:", platforms);
     console.log("Contenido:", post);
 
-    const response = await fetch("https://app.ayrshare.com/api/post", {
+    const response = await fetch("https://api.ayrshare.com/api/post", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Image as ImageIcon, Calendar, Sparkles, UploadCloud, AlertCircle, PlusCircle, Edit2 } from 'lucide-react';
+import { Image as ImageIcon, Calendar, Sparkles, UploadCloud, AlertCircle, PlusCircle, Edit2, Share2 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import type { Campaign } from '../types';
 
@@ -46,6 +46,9 @@ export const MisPublicacionesModule: React.FC<MisPublicacionesModuleProps> = ({ 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null);
   const [redes, setRedes] = useState<any[]>([]);
+  const [replicateTargetPub, setReplicateTargetPub] = useState<any | null>(null);
+  const [selectedRedId, setSelectedRedId] = useState<string>('');
+  const [isReplicating, setIsReplicating] = useState(false);
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
     setToast({ message, type });
@@ -150,17 +153,18 @@ REGLAS ESTRICTAS:
       return;
     }
 
-    const activePlats = redes.map(r => {
-      const nred = r.nombre_red.toLowerCase();
-      if (nred.includes('tele')) return 'telegram';
-      if (nred.includes('face')) return 'facebook';
-      if (nred.includes('twit') || nred.includes('x')) return 'twitter';
-      if (nred.includes('link')) return 'linkedin';
-      if (nred.includes('tik')) return 'tiktok';
-      if (nred.includes('you')) return 'youtube';
-      return 'instagram';
-    });
-    const uniquePlats = activePlats.length > 0 ? Array.from(new Set(activePlats)) : ['instagram'];
+    const selectedRedObj = redes.find(r => String(r.id_red) === formData.id_red);
+    let plat = 'instagram';
+    if (selectedRedObj) {
+      const nred = selectedRedObj.nombre_red.toLowerCase();
+      if (nred.includes('tele')) plat = 'telegram';
+      else if (nred.includes('face')) plat = 'facebook';
+      else if (nred.includes('twit') || nred.includes('x')) plat = 'twitter';
+      else if (nred.includes('link')) plat = 'linkedin';
+      else if (nred.includes('tik')) plat = 'tiktok';
+      else if (nred.includes('you')) plat = 'youtube';
+    }
+    const uniquePlats = [plat];
 
     if (!formData.imagen_url) {
       showToast("Se requiere obligatoriamente una imagen o video para publicar en cualquier red social. Por favor, sube un archivo multimedia.", 'error');
@@ -243,9 +247,23 @@ REGLAS ESTRICTAS:
       if (!ayrError && ayrData && !ayrData.error) {
         ayrshareId = ayrData.postId || ayrData.data?.id || null;
       } else {
-        const errorMsg = ayrError?.message || ayrData?.error || 'Error desconocido';
-        console.warn("Ayrshare Edge Function warning:", errorMsg);
-        showToast("Advertencia: No se pudo programar en redes (" + errorMsg + ").", 'error');
+        const errorRaw = ayrError?.message || ayrData?.error || 'Error desconocido';
+        console.warn("Ayrshare Edge Function warning:", errorRaw);
+        
+        let userFriendlyMsg = "Ocurrió un error al intentar publicar en las redes sociales.";
+        try {
+          const errorText = typeof errorRaw === 'string' ? errorRaw : JSON.stringify(errorRaw);
+          if (errorText.toLowerCase().includes('duplicate') || errorText.includes('"code":137')) {
+            userFriendlyMsg = "⚠️ Bloqueo por Spam: Ya publicaste este contenido hace poco. Modifica un poco el texto o cambia de red social para proteger tu cuenta.";
+          } else if (errorText.toLowerCase().includes('unauthorized')) {
+            userFriendlyMsg = "No se pudo conectar. Verifica que tus redes estén vinculadas correctamente.";
+          } else {
+            userFriendlyMsg = typeof errorRaw === 'string' ? errorRaw : "Error en el publicador.";
+          }
+        } catch(e) { userFriendlyMsg = String(errorRaw); }
+
+        showToast(userFriendlyMsg, 'error');
+        setIsSaving(false);
         return; // Detener guardado si falla en Ayrshare
       }
     } catch (edgeErr: any) {
@@ -261,15 +279,18 @@ REGLAS ESTRICTAS:
       id_campana: resolvedCampanaId,
       fecha_publicacion: isoDate,
       imagen_url: finalMediaUrl,
-      id_red: null
+      id_red: formData.id_red ? Number(formData.id_red) : null
     };
     if (ayrshareId) payload.ayrshare_post_id = ayrshareId;
 
+    const nuevoEstado = isFutureEnough ? 'Programada' : 'Publicada';
+
     if (editingId) {
+      payload.estado = nuevoEstado;
       const { error } = await supabase.from('publicaciones').update(payload).eq('id_publicacion', editingId);
       actionError = error;
     } else {
-      payload.estado = 'Programada';
+      payload.estado = nuevoEstado;
       const { error } = await supabase.from('publicaciones').insert([payload]);
       actionError = error;
     }
@@ -303,6 +324,81 @@ REGLAS ESTRICTAS:
     });
     setEditingId(pub.id_publicacion);
     setIsCreating(true);
+  };
+
+  const handleReplicateSubmit = async () => {
+    if (!selectedRedId || !replicateTargetPub) return;
+    setIsReplicating(true);
+
+    const selectedRedObj = redes.find(r => String(r.id_red) === selectedRedId);
+    let plat = 'instagram';
+    if (selectedRedObj) {
+      const nred = selectedRedObj.nombre_red.toLowerCase();
+      if (nred.includes('tele')) plat = 'telegram';
+      else if (nred.includes('face')) plat = 'facebook';
+      else if (nred.includes('twit') || nred.includes('x')) plat = 'twitter';
+      else if (nred.includes('link')) plat = 'linkedin';
+      else if (nred.includes('tik')) plat = 'tiktok';
+      else if (nred.includes('you')) plat = 'youtube';
+    }
+
+    let ayrshareId = null;
+    try {
+      // 1. Invocar la Edge Function para publicar inmediatamente
+      const { data: ayrData, error: ayrError } = await supabase.functions.invoke('publish_social', {
+        body: { 
+          post: replicateTargetPub.contenido, 
+          platforms: [plat], 
+          mediaUrls: replicateTargetPub.imagen_url ? [replicateTargetPub.imagen_url] : [],
+        }
+      });
+
+      if (!ayrError && ayrData && !ayrData.error) {
+        ayrshareId = ayrData.postId || ayrData.data?.id || null;
+      } else {
+        const errorRaw = ayrError?.message || ayrData?.error || 'Error desconocido';
+        let userFriendlyMsg = "Error al publicar en " + (selectedRedObj?.nombre_red || plat) + ".";
+        
+        try {
+          const errorText = typeof errorRaw === 'string' ? errorRaw : JSON.stringify(errorRaw);
+          if (errorText.toLowerCase().includes('duplicate') || errorText.includes('"code":137')) {
+            userFriendlyMsg = "⚠️ Bloqueo por Spam: Esta red social ya tiene una publicación idéntica reciente. Cambia el texto para proteger tu cuenta.";
+          } else if (errorText.toLowerCase().includes('unauthorized')) {
+            userFriendlyMsg = "Cuenta desvinculada. Verifica tu conexión con " + (selectedRedObj?.nombre_red || plat) + ".";
+          }
+        } catch(e) {}
+
+        showToast(userFriendlyMsg, 'error');
+        setIsReplicating(false);
+        return;
+      }
+
+      // 2. Guardar en Base de Datos
+      const payload: any = {
+        titulo: replicateTargetPub.titulo || 'Post Manual',
+        contenido: replicateTargetPub.contenido,
+        id_campana: replicateTargetPub.id_campana,
+        fecha_publicacion: new Date().toISOString(),
+        imagen_url: replicateTargetPub.imagen_url,
+        id_red: Number(selectedRedId),
+        estado: 'Publicada',
+        ayrshare_post_id: ayrshareId
+      };
+
+      const { error } = await supabase.from('publicaciones').insert([payload]);
+      if (!error) {
+        showToast("Publicación subida a " + (selectedRedObj?.nombre_red || plat) + " exitosamente.", 'success');
+        setReplicateTargetPub(null);
+        setSelectedRedId('');
+        fetchPublicaciones();
+      } else {
+        showToast("Error al guardar en base de datos: " + error.message, 'error');
+      }
+    } catch (err: any) {
+      showToast("Error de conexión: " + err.message, 'error');
+    } finally {
+      setIsReplicating(false);
+    }
   };
 
   if (isCreating) {
@@ -402,6 +498,21 @@ REGLAS ESTRICTAS:
               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:border-violet-500 resize-none"></textarea>
           </div>
 
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Red Social *</label>
+            <select 
+              value={formData.id_red}
+              onChange={e => setFormData({...formData, id_red: e.target.value})}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:border-violet-500"
+              required
+            >
+              <option value="">Seleccionar Red Social...</option>
+              {redes.map(r => (
+                <option key={r.id_red} value={r.id_red}>{r.nombre_red}</option>
+              ))}
+            </select>
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">Fecha de Publicación</label>
@@ -461,7 +572,13 @@ REGLAS ESTRICTAS:
                onClick={handleSave}
                disabled={isSaving}
                className={`px-8 py-2.5 bg-violet-600 text-white rounded-xl font-bold shadow-lg shadow-violet-500/20 transition-colors ${isSaving ? 'opacity-70 cursor-not-allowed' : 'hover:bg-violet-500'}`}>
-               {isSaving ? 'Procesando...' : (editingId ? 'Actualizar Publicación' : 'Programar Publicación')}
+               {isSaving ? 'Procesando...' : (
+                 editingId 
+                   ? 'Actualizar Publicación' 
+                   : (new Date(`${formData.fecha_publicacion}T${formData.hora_publicacion || '12:00'}:00`).getTime() - new Date().getTime()) / 60000 < 15 
+                     ? 'Publicar Ahora' 
+                     : 'Programar Publicación'
+               )}
              </button>
           </div>
         </div>
@@ -533,16 +650,26 @@ REGLAS ESTRICTAS:
                     ) : (
                        <ImageIcon className="w-10 h-10 text-[#2a2a4a]" />
                     )}
-                    {pub.estado === 'Programada' && (
+                    <div className="absolute top-3 left-3 flex gap-2">
+                      {(pub.estado === 'Programada' || pub.estado === 'Borrador') && (
+                        <button 
+                          onClick={() => handleEditClick(pub, camp)}
+                          className="bg-white/90 backdrop-blur-md px-2 py-1.5 rounded-md text-slate-600 hover:text-violet-600 transition-colors shadow-sm flex items-center gap-1 group/edit"
+                          title="Editar publicación"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                          <span className="text-[10px] font-bold uppercase tracking-wider max-w-0 overflow-hidden group-hover/edit:max-w-xs transition-all duration-300 ease-in-out whitespace-nowrap">Editar</span>
+                        </button>
+                      )}
                       <button 
-                        onClick={() => handleEditClick(pub, camp)}
-                        className="absolute top-3 left-3 bg-white/90 backdrop-blur-md px-2 py-1.5 rounded-md text-slate-600 hover:text-violet-600 transition-colors shadow-sm flex items-center gap-1 group/edit"
-                        title="Editar publicación"
+                        onClick={() => { setReplicateTargetPub(pub); setSelectedRedId(''); }}
+                        className="bg-white/90 backdrop-blur-md px-2 py-1.5 rounded-md text-slate-600 hover:text-violet-600 transition-colors shadow-sm flex items-center gap-1 group/replicate"
+                        title="Subir a otra red social"
                       >
-                        <Edit2 className="w-3.5 h-3.5" />
-                        <span className="text-[10px] font-bold uppercase tracking-wider max-w-0 overflow-hidden group-hover/edit:max-w-xs transition-all duration-300 ease-in-out whitespace-nowrap">Editar</span>
+                        <Share2 className="w-3.5 h-3.5" />
+                        <span className="text-[10px] font-bold uppercase tracking-wider max-w-0 overflow-hidden group-hover/replicate:max-w-xs transition-all duration-300 ease-in-out whitespace-nowrap">Subir a otra red</span>
                       </button>
-                    )}
+                    </div>
                     <div className="absolute top-3 right-3 bg-black/60 backdrop-blur-md px-2 py-1 rounded-md flex items-center gap-1">
                       <Calendar className="w-3 h-3 text-violet-400" />
                       <span className="text-[10px] font-bold text-slate-900">
@@ -574,6 +701,65 @@ REGLAS ESTRICTAS:
             })
           )}
         </div>
+
+      {/* Modal para publicar en otra red social */}
+      {replicateTargetPub && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-300">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-2xl max-w-md w-full max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-300">
+            <h3 className="text-xl font-bold text-slate-900 mb-2 shrink-0">Subir a otra red social</h3>
+            <p className="text-sm text-slate-500 mb-4 shrink-0">
+              Esta publicación se copiará con el mismo contenido e imagen. Selecciona la red social de destino:
+            </p>
+
+            <div className="space-y-3 mb-6 overflow-y-auto flex-1 pr-2">
+              {redes
+                .filter(r => String(r.id_red) !== String(replicateTargetPub.id_red))
+                .map(r => (
+                  <label 
+                    key={r.id_red} 
+                    className={`flex items-center gap-3 p-4 rounded-2xl border cursor-pointer transition-all ${
+                      selectedRedId === String(r.id_red) 
+                        ? 'border-violet-500 bg-violet-50/50 shadow-md ring-1 ring-violet-500' 
+                        : 'border-slate-100 bg-slate-50 hover:bg-slate-100 hover:border-slate-200'
+                    }`}
+                  >
+                    <input 
+                      type="radio" 
+                      name="replicate-network" 
+                      value={r.id_red}
+                      checked={selectedRedId === String(r.id_red)}
+                      onChange={e => setSelectedRedId(e.target.value)}
+                      className="w-4 h-4 text-violet-600 border-slate-300 focus:ring-violet-500"
+                    />
+                    <div className="flex-1">
+                      <span className="font-semibold text-slate-800 block text-sm">{r.nombre_red}</span>
+                    </div>
+                  </label>
+              ))}
+              {redes.filter(r => String(r.id_red) !== String(replicateTargetPub.id_red)).length === 0 && (
+                <p className="text-sm text-slate-400 text-center py-4">No hay otras redes sociales activas disponibles.</p>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 shrink-0">
+              <button 
+                onClick={() => { setReplicateTargetPub(null); setSelectedRedId(''); }}
+                disabled={isReplicating}
+                className="px-5 py-2.5 rounded-xl font-medium text-slate-500 hover:text-slate-900 transition-colors disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={handleReplicateSubmit}
+                disabled={isReplicating || !selectedRedId}
+                className="px-6 py-2.5 bg-violet-600 text-white rounded-xl font-bold hover:bg-violet-500 transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {isReplicating ? 'Publicando...' : 'Publicar Ahora'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
