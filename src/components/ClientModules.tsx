@@ -68,7 +68,7 @@ export const ClientPagosModule = ({ campaigns }: { campaigns: Campaign[] }) => {
         
         return {
           id: dbPago ? dbPago.id_pago : c.id,
-          fecha: dbPago ? dbPago.created_at : (c.startDate || new Date().toISOString()),
+          fecha: dbPago ? dbPago.fecha : (c.startDate || new Date().toISOString()),
           concepto: `Campaña: ${c.name}`,
           nombre_campana: c.name,
           monto: c.presupuesto || 0, // Usamos el presupuesto original de la campaña en USD en lugar del dbPago.monto que está en DOP sin ITBIS
@@ -77,7 +77,8 @@ export const ClientPagosModule = ({ campaigns }: { campaigns: Campaign[] }) => {
           metodo_pago: dbPago?.metodo_pago || 'PayPal',
           rnc_cedula: dbPago?.rnc_cedula || clientRnc || undefined,
           razon_social: dbPago?.razon_social || clientEmpresa || undefined,
-          id_campana: c.id
+          id_campana: c.id,
+          url_dgii: dbPago?.url_dgii
         };
       });
       
@@ -102,6 +103,7 @@ export const ClientPagosModule = ({ campaigns }: { campaigns: Campaign[] }) => {
         razon_social: pago.razon_social,
         nombre_campana: pago.nombre_campana,
         fecha:        pago.fecha,
+        url_dgii:     pago.url_dgii,
       }, pago.ncf);
       const win = window.open('', '_blank');
       if (win) {

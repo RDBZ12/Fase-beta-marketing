@@ -25,6 +25,7 @@ const generarPDF = async (datos: {
   total: number
   paypalOrderId: string
   fecha?: string
+  url_dgii?: string
 }) => {
   const doc   = new jsPDF({ unit: 'mm', format: 'a4' })
   const W     = 210  // page width
@@ -178,7 +179,7 @@ const generarPDF = async (datos: {
     if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
       origin = 'https://programmes-fourth-dark-gravity.trycloudflare.com';
     }
-    const qrData = `${origin}/?verificar_ncf=${encodeURIComponent(datos.ncf)}&total=${encodeURIComponent(totalUSD.toFixed(2))}&fecha=${encodeURIComponent(now)}&receptor=${encodeURIComponent(datos.razonSocial || 'Consumidor Final')}&concepto=${encodeURIComponent(datos.nombreCampana || 'Servicio de Marketing Digital')}&rnc_receptor=${encodeURIComponent(datos.rncCliente || '')}`
+    const qrData = datos.url_dgii || `${origin}/?verificar_ncf=${encodeURIComponent(datos.ncf)}&total=${encodeURIComponent(totalUSD.toFixed(2))}&fecha=${encodeURIComponent(now)}&receptor=${encodeURIComponent(datos.razonSocial || 'Consumidor Final')}&concepto=${encodeURIComponent(datos.nombreCampana || 'Servicio de Marketing Digital')}&rnc_receptor=${encodeURIComponent(datos.rncCliente || '')}`
     const qrDataUrl = await QRCode.toDataURL(qrData, { 
       width: 120, margin: 1, color: { dark: '#2c3e2e', light: '#ffffff' } 
     })
@@ -388,6 +389,7 @@ export function PaymentModal({ isOpen, onClose, campaign, session, onPagado }: P
         total:        data.pago.total_con_itbis,
         paypalOrderId,
         fecha:        data.pago.fecha,
+        url_dgii:     data.url_dgii,
       })
 
       // ── ACTIVAR CAMPAÑA ────────────────────────────────────

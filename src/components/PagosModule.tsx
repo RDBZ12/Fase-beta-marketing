@@ -70,7 +70,7 @@ export async function generateReceiptHTML(pago: Partial<Pago>, ncf: string): Pro
     if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
       origin = 'https://programmes-fourth-dark-gravity.trycloudflare.com';
     }
-    const qrData  = `${origin}/?verificar_ncf=${encodeURIComponent(ncf)}&total=${encodeURIComponent(totalUSD.toFixed(2))}&fecha=${encodeURIComponent(now)}&receptor=${encodeURIComponent(receptor)}&concepto=${encodeURIComponent(pago.nombre_campana || 'Servicio de Marketing Digital')}&rnc_receptor=${encodeURIComponent(pago.rnc_cedula || '')}`;
+    const qrData = (pago as any).url_dgii || `${origin}/?verificar_ncf=${encodeURIComponent(ncf)}&total=${encodeURIComponent(totalUSD.toFixed(2))}&fecha=${encodeURIComponent(now)}&receptor=${encodeURIComponent(receptor)}&concepto=${encodeURIComponent(pago.nombre_campana || 'Servicio de Marketing Digital')}&rnc_receptor=${encodeURIComponent(pago.rnc_cedula || '')}`;
     const qrDataUrl = await QRCode.toDataURL(qrData, { 
       width: 120, 
       margin: 1,
@@ -692,6 +692,7 @@ export const PagosModule: React.FC = () => {
                             razon_social: p.razon_social,
                             nombre_campana: p.nombre_campana,
                             fecha:        p.fecha,
+                            url_dgii:     (p as any).url_dgii,
                           }, p.ncf || '');
                           const win = window.open('', '_blank');
                           if (win) { 
