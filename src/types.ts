@@ -154,6 +154,7 @@ export interface Pago {
   tipo_comprobante?: string;
   fecha: string;
   nombre_campana?: string;
+  url_dgii?: string;
 }
 
 // ─── User Context ─────────────────────────────────────────────────────────────
