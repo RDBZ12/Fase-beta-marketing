@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Image as ImageIcon, Calendar, Sparkles, UploadCloud, AlertCircle, PlusCircle, Edit2, Share2 } from 'lucide-react';
+import { Image as ImageIcon, Calendar, Sparkles, UploadCloud, AlertCircle, PlusCircle, Edit2, Share2, MessageSquare, Loader2, Search, X } from 'lucide-react';
+import { sendWhatsAppTextMessage, sendWhatsAppImageMessage, getOpenWAChats, getOpenWAContacts, getOpenWASessions, getOpenWASettings } from '../lib/whatsapp';
 import { supabase } from '../supabaseClient';
 import type { Campaign } from '../types';
+import { useUser } from '../context/UserContext';
 
 interface MisPublicacionesModuleProps {
   campaigns: Campaign[];
@@ -18,6 +20,7 @@ const getLocalDateString = () => {
 export const MisPublicacionesModule: React.FC<MisPublicacionesModuleProps> = ({ campaigns }) => {
   const [publicaciones, setPublicaciones] = useState<any[]>([]);
   const [isCreating, setIsCreating] = useState(false);
+  const [sharingWhatsAppPub, setSharingWhatsAppPub] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Form State with local timezone date and time default
@@ -669,6 +672,14 @@ REGLAS ESTRICTAS:
                         <Share2 className="w-3.5 h-3.5" />
                         <span className="text-[10px] font-bold uppercase tracking-wider max-w-0 overflow-hidden group-hover/replicate:max-w-xs transition-all duration-300 ease-in-out whitespace-nowrap">Subir a otra red</span>
                       </button>
+                      <button 
+                        onClick={() => setSharingWhatsAppPub(pub)}
+                        className="bg-white/90 backdrop-blur-md px-2 py-1.5 rounded-md text-slate-600 hover:text-emerald-600 transition-colors shadow-sm flex items-center gap-1 group/wa"
+                        title="Compartir por WhatsApp"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5" />
+                        <span className="text-[10px] font-bold uppercase tracking-wider max-w-0 overflow-hidden group-hover/wa:max-w-xs transition-all duration-300 ease-in-out whitespace-nowrap">Compartir</span>
+                      </button>
                     </div>
                     <div className="absolute top-3 right-3 bg-black/60 backdrop-blur-md px-2 py-1 rounded-md flex items-center gap-1">
                       <Calendar className="w-3 h-3 text-violet-400" />
@@ -760,6 +771,376 @@ REGLAS ESTRICTAS:
           </div>
         </div>
       )}
+
+      {sharingWhatsAppPub && (
+        <ShareWhatsAppModal
+          isOpen={!!sharingWhatsAppPub}
+          onClose={() => setSharingWhatsAppPub(null)}
+          publication={sharingWhatsAppPub}
+        />
+      )}
     </div>
   );
 };
+
+// ─── ShareWhatsAppModal Component ──────────────────────────────────────────────
+interface ShareWhatsAppModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  publication: any;
+}
+
+const ShareWhatsAppModal: React.FC<ShareWhatsAppModalProps> = ({ isOpen, onClose, publication }) => {
+  const { profile } = useUser();
+  const [chats, setChats] = useState<any[]>([]);
+  const [recentChats, setRecentChats] = useState<any[]>([]);
+  const [loadingChats, setLoadingChats] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sendingId, setSendingId] = useState<string | null>(null);
+  const [successId, setSuccessId] = useState<string | null>(null);
+  const [error, setError] = useState('');
+  const [fullDataLoaded, setFullDataLoaded] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+
+  const clientSessionName = profile?.id_usuario 
+    ? (localStorage.getItem(`client_whatsapp_session_${profile.id_usuario}`) || undefined)
+    : undefined;
+
+  useEffect(() => {
+    if (isOpen) {
+      setFullDataLoaded(false);
+      setSearchQuery('');
+      loadData(false);
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (searchQuery.trim().length > 0 && !fullDataLoaded && !isSearching) {
+      loadData(true);
+    }
+  }, [searchQuery, fullDataLoaded, isSearching]);
+
+  const loadData = async (isFullLoad: boolean) => {
+    if (isFullLoad) setIsSearching(true);
+    else setLoadingChats(true);
+    
+    setReconnecting(false);
+    setError('');
+    
+    // Verificar estado de sesión primero para mostrar mensaje de reconexión
+    try {
+      const settings = getOpenWASettings();
+      const sessionName = clientSessionName || settings.sessionName;
+      const sessions = await getOpenWASessions().catch(() => []);
+      const currentSession = sessions.find((s: any) => s.name === sessionName);
+      if (currentSession && currentSession.status !== 'ready') {
+        setReconnecting(true);
+      }
+    } catch { /* ignore */ }
+    
+    try {
+      // 1. Obtener chats recientes
+      const [chatsData, contactsData, leadsResult] = await Promise.all([
+        getOpenWAChats(clientSessionName, isFullLoad ? 500 : 50).catch(() => []),
+        isFullLoad ? getOpenWAContacts(clientSessionName).catch(() => []) : Promise.resolve([]),
+        supabase.from('leads').select('nombre, telefono').not('telefono', 'is', null),
+      ]);
+
+      const leadsList = leadsResult.data || [];
+      const normalizePhone = (num: string) => num.replace(/[^0-9]/g, '');
+
+      // 2. Construir mapa de contactos: número → nombre (pushName es el nombre del perfil WA)
+      //    Ejemplo: "18493501454" → "Dr: José Manuel"
+      const contactMap = new Map<string, string>();
+      for (const c of (contactsData || [])) {
+        const phone = (c.id || '').split('@')[0].split(':')[0];
+        const displayName = (c.name || c.pushName || '').trim();
+        if (phone && displayName && !/^[0-9+()\-\s]+$/.test(displayName)) {
+          contactMap.set(phone, displayName);
+        }
+      }
+
+      const resolveDisplayName = (chat: any): string => {
+        const chatPhone = chat.id.split('@')[0].split(':')[0];
+
+        // 3a. Si el nombre del chat ya es real (grupos lo tienen), usarlo
+        const rawName = (chat.name || '').trim();
+        const isNumericName = rawName && /^[0-9+()\-\s]+$/.test(rawName);
+        if (rawName && !isNumericName) {
+          return rawName;
+        }
+
+        // 3b. Buscar en el mapa de contactos por número exacto
+        if (contactMap.has(chatPhone)) {
+          return contactMap.get(chatPhone)!;
+        }
+
+        // 3c. Buscar en leads de Supabase por número de teléfono
+        const matchingLead = leadsList.find(lead => {
+          const leadPhone = normalizePhone(lead.telefono || '');
+          return leadPhone && (chatPhone.endsWith(leadPhone) || leadPhone.endsWith(chatPhone));
+        });
+        if (matchingLead) return matchingLead.nombre;
+
+        // 3d. Fallback: número de teléfono
+        return chatPhone;
+      };
+
+      // 3. Resolver nombre para todos los chats para que el buscador funcione
+      const resolvedChats = (chatsData || []).map((chat: any) => ({
+        id: chat.id,
+        name: resolveDisplayName(chat),
+        isGroup: chat.isGroup,
+        lastMessage: chat.lastMessage,
+        timestamp: chat.timestamp,
+      }));
+
+      // 4. Agregar contactos que NO tienen chat reciente para que el buscador los encuentre (solo en Full Load)
+      if (isFullLoad) {
+        const chatIds = new Set(resolvedChats.map((c: any) => c.id));
+        for (const c of (contactsData || [])) {
+          if (c.id && !chatIds.has(c.id)) {
+            resolvedChats.push({
+              id: c.id,
+              name: resolveDisplayName({ id: c.id, name: c.name || c.pushName }),
+              isGroup: false,
+              lastMessage: null,
+              timestamp: 0,
+            });
+            chatIds.add(c.id);
+          }
+        }
+        setChats(resolvedChats);
+        setFullDataLoaded(true);
+      } else {
+        // Guardar solo los 10 más recientes para la vista por defecto
+        const recent = resolvedChats.filter(c => c.timestamp > 0).slice(0, 10);
+        setRecentChats(recent);
+        setChats(recent); // Temporary fallback
+      }
+    } catch (err) {
+      console.warn("Could not fetch WA chats/contacts:", err);
+      setError("No se pudieron cargar los chats de WhatsApp. Verifica la conexión.");
+    } finally {
+      if (isFullLoad) setIsSearching(false);
+      else setLoadingChats(false);
+      setReconnecting(false);
+    }
+  };
+
+
+
+
+  const handleSendToChat = async (chatId: string) => {
+    setSendingId(chatId);
+    setError('');
+    try {
+      if (publication.imagen_url) {
+        const imgUrl = publication.imagen_url;
+        const response = await fetch(imgUrl);
+        const blob = await response.blob();
+        
+        const reader = new FileReader();
+        reader.readAsDataURL(blob);
+        await new Promise<void>((resolve, reject) => {
+          reader.onloadend = async () => {
+            try {
+              const base64data = reader.result as string;
+              await sendWhatsAppImageMessage(
+                chatId, 
+                base64data, 
+                publication.contenido || undefined,
+                clientSessionName
+              );
+              resolve();
+            } catch (err) {
+              reject(err);
+            }
+          };
+          reader.onerror = (e) => reject(e);
+        });
+      } else {
+        await sendWhatsAppTextMessage(chatId, publication.contenido || '', clientSessionName);
+      }
+
+      setSuccessId(chatId);
+      // Actualizar chats silenciando la carga visible si ya estaban cargados
+      if (!fullDataLoaded) loadData(false);
+      setTimeout(() => {
+        setSuccessId(null);
+      }, 2000);
+    } catch (err: any) {
+      setError(err.message || 'Error al enviar el mensaje por WhatsApp.');
+    } finally {
+      setSendingId(null);
+    }
+  };
+
+  const filteredChats = searchQuery.trim() === ''
+    ? recentChats.slice(0, 10)
+    : chats
+        .filter(chat => {
+          const normalizeText = (text: string) => text.normalize('NFD').replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, '');
+          const searchNormalized = normalizeText(searchQuery);
+          const searchNumbers = searchQuery.replace(/[^0-9]/g, '');
+          
+          const nameMatch = normalizeText(chat.name || '').includes(searchNormalized);
+          const phoneMatch = chat.id.replace(/[^0-9]/g, '').includes(searchNumbers);
+          
+          return nameMatch || (searchNumbers.length > 0 && phoneMatch);
+        });
+
+  const cleanSearchQuery = searchQuery.replace(/[^0-9]/g, '');
+  const showCustomNumber = cleanSearchQuery.length >= 8;
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[85vh] animate-in fade-in zoom-in-95 duration-200">
+        <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-emerald-50/60 shrink-0">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 bg-emerald-100 rounded-lg flex items-center justify-center">
+              <MessageSquare className="w-4 h-4 text-emerald-600" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-800">Compartir por WhatsApp (OpenWA)</h3>
+              <p className="text-[10px] text-slate-400 font-medium">Publicación: {publication.titulo}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4 overflow-y-auto flex-1">
+          {error && <div className="text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-100 rounded-xl px-3 py-2">{error}</div>}
+
+          {/* Vista previa */}
+          <div className="border border-slate-100 rounded-xl p-3 bg-slate-50/50 space-y-2">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Vista previa del mensaje</p>
+            {publication.imagen_url && (
+              <div className="h-24 rounded-lg overflow-hidden border border-slate-100 bg-white">
+                <img src={publication.imagen_url} alt="Media preview" className="w-full h-full object-cover" />
+              </div>
+            )}
+            <p className="text-xs font-medium text-slate-700 whitespace-pre-line line-clamp-3">{publication.contenido}</p>
+          </div>
+
+          {/* Buscador */}
+          <div className="relative shrink-0">
+            <input
+              type="text"
+              placeholder="Buscar contacto o grupo..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-4 py-2.5 text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+            />
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+          </div>
+
+          {/* Listado de chats */}
+          <div className="space-y-2 flex-1 min-h-[200px] flex flex-col">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider shrink-0">Selecciona el chat o grupo</p>
+            
+            {loadingChats ? (
+              <div className="flex flex-col items-center justify-center py-10 text-slate-400 text-xs gap-2 flex-1">
+                <Loader2 className="w-6 h-6 animate-spin text-emerald-500" />
+                {reconnecting ? (
+                  <span className="text-center">
+                    <span className="font-semibold text-amber-600">Reconectando sesión de WhatsApp...</span>
+                    <br />
+                    <span className="text-[10px] text-slate-400">Esto puede tomar hasta 20 segundos.</span>
+                  </span>
+                ) : (
+                  <span>{isSearching ? 'Buscando en todos los contactos...' : 'Cargando conversaciones recientes...'}</span>
+                )}
+              </div>
+            ) : filteredChats.length === 0 && !showCustomNumber ? (
+              <div className="text-center py-10 text-slate-400 text-xs flex-1 flex items-center justify-center">
+                {searchQuery ? 'No se encontraron coincidencias.' : 'No hay conversaciones recientes activas.'}
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100 border border-slate-100 rounded-xl bg-slate-50/20 overflow-y-auto max-h-64 flex-1">
+                {showCustomNumber && (
+                  <div className="flex items-center justify-between p-3 bg-emerald-50/30 hover:bg-emerald-50/50 transition-colors border-b border-slate-100">
+                    <div className="flex-1 min-w-0 pr-4">
+                      <p className="text-xs font-bold text-emerald-700 flex items-center gap-1.5">
+                        📞 Enviar a número personalizado
+                      </p>
+                      <p className="text-[10px] text-slate-500 font-mono truncate">{cleanSearchQuery}</p>
+                    </div>
+                    
+                    <button
+                      type="button"
+                      disabled={sendingId !== null || successId === `${cleanSearchQuery}@c.us`}
+                      onClick={() => handleSendToChat(`${cleanSearchQuery}@c.us`)}
+                      className={`px-3 py-1.5 text-[10px] font-bold rounded-lg transition-all shrink-0 ${
+                        successId === `${cleanSearchQuery}@c.us`
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm'
+                      }`}
+                    >
+                      {sendingId === `${cleanSearchQuery}@c.us` ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : successId === `${cleanSearchQuery}@c.us` ? (
+                        '¡Enviado!'
+                      ) : (
+                        'Compartir'
+                      )}
+                    </button>
+                  </div>
+                )}
+                {filteredChats.map(chat => {
+                  const rawPhone = chat.id.split('@')[0];
+                  const isNumberOnly = chat.name === rawPhone;
+                  const displayName = isNumberOnly ? `+${rawPhone}` : (chat.name || 'Sin nombre');
+
+                  return (
+                    <div key={chat.id} className="flex items-center justify-between p-3 hover:bg-slate-50/50 transition-colors">
+                      <div className="flex-1 min-w-0 pr-4">
+                        <p className="text-xs font-bold text-slate-700 truncate flex items-center gap-1.5">
+                          {chat.isGroup ? '👥' : '👤'} {displayName}
+                        </p>
+                        {!isNumberOnly && (
+                          <p className="text-[9px] text-slate-400 font-mono truncate">{rawPhone}</p>
+                        )}
+                      </div>
+                      
+                      <button
+                        type="button"
+                        disabled={sendingId !== null || successId === chat.id}
+                        onClick={() => handleSendToChat(chat.id)}
+                        className={`px-3 py-1.5 text-[10px] font-bold rounded-lg transition-all shrink-0 ${
+                          successId === chat.id
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm'
+                        }`}
+                      >
+                        {sendingId === chat.id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : successId === chat.id ? (
+                          '¡Enviado!'
+                        ) : (
+                          'Compartir'
+                        )}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="p-5 bg-slate-50 border-t border-slate-100 flex justify-end shrink-0">
+          <button type="button" onClick={onClose} className="px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-colors">
+            Cerrar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+

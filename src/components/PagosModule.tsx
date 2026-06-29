@@ -66,10 +66,7 @@ export async function generateReceiptHTML(pago: Partial<Pago>, ncf: string): Pro
        ES LA PARTE CRÍTICA DEL COMPROBANTE NCF Y DEBE PERMANECER INTACTO.
        ────────────────────────────────────────────────────────────────────────── */
     const receptor = pago.razon_social || 'Consumidor Final';
-    let origin = window.location.origin;
-    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
-      origin = 'https://programmes-fourth-dark-gravity.trycloudflare.com';
-    }
+    const origin = import.meta.env.VITE_PUBLIC_URL || window.location.origin;
     const qrData  = `${origin}/?verificar_ncf=${encodeURIComponent(ncf)}&total=${encodeURIComponent(totalUSD.toFixed(2))}&fecha=${encodeURIComponent(now)}&receptor=${encodeURIComponent(receptor)}&concepto=${encodeURIComponent(pago.nombre_campana || 'Servicio de Marketing Digital')}&rnc_receptor=${encodeURIComponent(pago.rnc_cedula || '')}`;
     const qrDataUrl = await QRCode.toDataURL(qrData, { 
       width: 120, 

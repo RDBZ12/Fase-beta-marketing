@@ -5,7 +5,9 @@ import type { Lead, Segmento, Campaign } from '../types';
 import {
   Users, Plus, Pencil, Trash2, X, Save,
   Search, Loader2, Mail, Phone, Tag, Megaphone,
+  MessageSquare, Wand2
 } from 'lucide-react';
+import { sendWhatsAppTextMessage } from '../lib/whatsapp';
 
 const ESTADO_STYLES: Record<string, string> = {
   Nuevo:       'bg-blue-100 text-blue-700',
@@ -180,6 +182,8 @@ export const LeadsModule: React.FC = () => {
   const [filterSegmento, setFilterSegmento] = useState('todos');
   const [isModalOpen, setIsModalOpen]       = useState(false);
   const [editingLead, setEditingLead]       = useState<Lead | null>(null);
+  const [isWhatsAppOpen, setIsWhatsAppOpen] = useState(false);
+  const [selectedWhatsAppLead, setSelectedWhatsAppLead] = useState<Lead | null>(null);
 
   const fetchAll = async () => {
     setLoading(true);
@@ -332,6 +336,13 @@ export const LeadsModule: React.FC = () => {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {l.telefono && (
+                          <button onClick={() => { setSelectedWhatsAppLead(l); setIsWhatsAppOpen(true); }}
+                            title="Enviar WhatsApp"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors">
+                            <MessageSquare className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                         <button onClick={() => { setEditingLead(l); setIsModalOpen(true); }}
                           className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors">
                           <Pencil className="w-3.5 h-3.5" />
@@ -360,6 +371,193 @@ export const LeadsModule: React.FC = () => {
         segmentos={segmentos}
         campaigns={campaigns}
       />
+
+      {selectedWhatsAppLead && (
+        <WhatsAppModal
+          isOpen={isWhatsAppOpen}
+          onClose={() => { setIsWhatsAppOpen(false); setSelectedWhatsAppLead(null); }}
+          lead={selectedWhatsAppLead}
+          onSent={fetchAll}
+        />
+      )}
+    </div>
+  );
+};
+
+// ─── WhatsApp modal sub-component ────────────────────────────────────────────
+interface WhatsAppModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  lead: Lead;
+  onSent?: () => void;
+}
+
+const WhatsAppModal: React.FC<WhatsAppModalProps> = ({ isOpen, onClose, lead, onSent }) => {
+  const [message, setMessage] = useState('');
+  const [sending, setSending] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [error, setError] = useState('');
+
+  const TEMPLATES = [
+    { id: 'bienvenida', label: 'Mensaje de Bienvenida', text: `Hola ${lead.nombre}, gracias por registrarte en nuestra plataforma de marketing. ¿En qué podemos ayudarte hoy?` },
+    { id: 'seguimiento', label: 'Seguimiento de Interés', text: `Hola ${lead.nombre}, queríamos dar seguimiento a tu interés en "${lead.interes || 'Servicio de Marketing'}" de nuestra plataforma. ¿Tienes tiempo para una breve llamada hoy?` },
+    { id: 'promocion', label: 'Promoción Especial', text: `¡Hola ${lead.nombre}! Te escribimos de parte de Marketdev para comentarte que este mes tenemos un 15% de descuento en la contratación de nuevas campañas digitales. ¿Te interesaría recibir más detalles?` },
+  ];
+
+  const handleTemplateSelect = (text: string) => {
+    setMessage(text);
+  };
+
+  const handleGenerateAI = async () => {
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    if (!apiKey) {
+      setError('⚠️ No se encontró la API Key de Gemini en tu archivo .env. Asegúrate de tener VITE_GEMINI_API_KEY configurado.');
+      return;
+    }
+
+    setGenerating(true);
+    setError('');
+    
+    const systemPrompt = `Eres un asistente de marketing profesional.
+Crea un mensaje corto y persuasivo para enviar por WhatsApp a un cliente potencial (Lead).
+El mensaje debe ser directo, amigable y respetuoso. Debe invitar al cliente a conversar o responder.`;
+    
+    const userPrompt = `Escribe un mensaje de WhatsApp personalizado para ${lead.nombre}.
+Su interés registrado es: "${lead.interes || 'Servicio de Marketing Digital'}".
+El tono debe ser amigable y profesional. Mantén el mensaje corto (máximo de 3-4 oraciones) e incluye un llamado a la acción claro y amigable. No uses texto de marcador de posición ni corchetes.`;
+
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts: [{ text: systemPrompt + '\n\n' + userPrompt }] }],
+            generationConfig: { temperature: 0.7, maxOutputTokens: 500 },
+          }),
+        }
+      );
+
+      if (!response.ok) throw new Error(`Error de Gemini API: ${response.status}`);
+      const data = await response.json();
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      setMessage(text.trim());
+    } catch (err: any) {
+      setError(err.message || 'Error al generar el mensaje con Inteligencia Artificial.');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const handleSend = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!message.trim()) return setError('El mensaje no puede estar vacío.');
+    if (!lead.telefono) return setError('El lead no tiene un teléfono configurado.');
+
+    setSending(true);
+    setError('');
+    setSuccess(false);
+
+    try {
+      await sendWhatsAppTextMessage(lead.telefono, message);
+      setSuccess(true);
+      
+      if (lead.estado === 'Nuevo') {
+        await supabase.from('leads').update({ estado: 'Contactado' }).eq('id_lead', lead.id_lead);
+        onSent?.();
+      }
+
+      setTimeout(() => {
+        onClose();
+      }, 1500);
+    } catch (err: any) {
+      setError(err.message || 'Error al enviar el mensaje por WhatsApp. Asegúrate de tener la pasarela de OpenWA iniciada.');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  const inputCls = 'w-full px-3 py-2 text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent';
+  const labelCls = 'block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5';
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl border border-slate-100 overflow-hidden">
+        
+        {/* Header */}
+        <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-emerald-50/60">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 bg-emerald-100 rounded-lg flex items-center justify-center">
+              <MessageSquare className="w-4 h-4 text-emerald-600" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-800">Enviar WhatsApp</h3>
+              <p className="text-[10px] text-slate-400 font-medium">Lead: {lead.nombre} ({lead.telefono})</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSend} className="p-5 space-y-4">
+          {error && <div className="text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-100 rounded-xl px-3 py-2">{error}</div>}
+          {success && <div className="text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2">¡Mensaje enviado con éxito por WhatsApp!</div>}
+
+          {/* Plantillas y Botón de IA */}
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 bg-slate-50 border border-slate-100 rounded-xl p-3">
+            <div className="flex-1">
+              <label className={labelCls}>Usar Plantilla</label>
+              <select onChange={(e) => handleTemplateSelect(e.target.value)} className={inputCls} defaultValue="">
+                <option value="" disabled>Selecciona una plantilla...</option>
+                {TEMPLATES.map(t => (
+                  <option key={t.id} value={t.text}>{t.label}</option>
+                ))}
+              </select>
+            </div>
+            
+            <button
+              type="button"
+              onClick={handleGenerateAI}
+              disabled={generating}
+              className="flex items-center justify-center gap-1.5 px-3 py-2 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition-all h-8 sm:w-auto"
+            >
+              {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />}
+              {generating ? 'Escribiendo...' : 'Redactar con IA'}
+            </button>
+          </div>
+
+          {/* Mensaje */}
+          <div>
+            <label className={labelCls}>Mensaje de WhatsApp</label>
+            <textarea
+              required
+              rows={5}
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder="Escribe el mensaje aquí o utiliza el redactor de IA para crear uno personalizado..."
+              className="w-full px-3 py-2 text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent resize-none"
+            />
+          </div>
+
+          {/* Footer botones */}
+          <div className="pt-4 border-t border-slate-100 flex justify-end gap-2 -mx-5 -mb-5 p-5 bg-slate-50/30">
+            <button type="button" onClick={onClose} className="px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-colors">Cancelar</button>
+            <button
+              type="submit"
+              disabled={sending || success}
+              className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all disabled:opacity-60 shadow-md shadow-emerald-100"
+            >
+              {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MessageSquare className="w-3.5 h-3.5" />}
+              <span>{sending ? 'Enviando...' : 'Enviar Mensaje'}</span>
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 };

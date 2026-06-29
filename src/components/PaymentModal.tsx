@@ -174,10 +174,7 @@ const generarPDF = async (datos: {
        ALTERAR O ELIMINAR ESTE BLOQUE DE GENERACIÓN DE CÓDIGO QR. 
        ES LA PARTE CRÍTICA DEL COMPROBANTE NCF Y DEBE PERMANECER INTACTO.
        ────────────────────────────────────────────────────────────────────────── */
-    let origin = window.location.origin;
-    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
-      origin = 'https://programmes-fourth-dark-gravity.trycloudflare.com';
-    }
+    const origin = import.meta.env.VITE_PUBLIC_URL || window.location.origin;
     const qrData = `${origin}/?verificar_ncf=${encodeURIComponent(datos.ncf)}&total=${encodeURIComponent(totalUSD.toFixed(2))}&fecha=${encodeURIComponent(now)}&receptor=${encodeURIComponent(datos.razonSocial || 'Consumidor Final')}&concepto=${encodeURIComponent(datos.nombreCampana || 'Servicio de Marketing Digital')}&rnc_receptor=${encodeURIComponent(datos.rncCliente || '')}`
     const qrDataUrl = await QRCode.toDataURL(qrData, { 
       width: 120, margin: 1, color: { dark: '#2c3e2e', light: '#ffffff' } 

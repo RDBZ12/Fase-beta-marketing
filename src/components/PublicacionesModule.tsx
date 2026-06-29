@@ -5,8 +5,10 @@ import type { Publicacion, RedSocial, TipoContenido, Campaign } from '../types';
 import { getPostAnalytics, getAnalyticsByContent, hasAyrshareKey } from '../lib/ayrshare';
 import {
   Globe, Plus, Pencil, Trash2, X, Save, Search,
-  Loader2, Calendar, Image, AlignLeft, Send, TrendingUp, RefreshCw
+  Loader2, Calendar, Image, AlignLeft, Send, TrendingUp, RefreshCw,
+  MessageSquare
 } from 'lucide-react';
+import { sendWhatsAppTextMessage, sendWhatsAppImageMessage, getOpenWAGroups, getOpenWAContacts } from '../lib/whatsapp';
 
 const ESTADO_COLORS: Record<string, string> = {
   Programada: 'bg-blue-100 text-blue-700',
@@ -234,14 +236,13 @@ const PubModal: React.FC<ModalProps> = ({ isOpen, onClose, onSaved, pub, redes, 
     </div>
   );
 };
-
-// ─── Main ─────────────────────────────────────────────────────────────────────
 export const PublicacionesModule: React.FC = () => {
   const { isCommunityOrAbove, isMarketingOrAbove } = useUser();
   const [pubs, setPubs] = useState<Publicacion[]>([]);
   const [redes, setRedes] = useState<RedSocial[]>([]);
   const [tipos, setTipos] = useState<TipoContenido[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [sharingWhatsAppPub, setSharingWhatsAppPub] = useState<Publicacion | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterEstado, setFilterEstado] = useState('todos');
@@ -328,20 +329,17 @@ export const PublicacionesModule: React.FC = () => {
     let notFoundCount = 0;
 
     try {
-      // Obtener historial completo de Ayrshare una sola vez
       let history: any[] = [];
       if (hasAyrshareKey()) {
         try {
           const { getPostHistory: fetchHistory } = await import('../lib/ayrshare');
           history = await fetchHistory();
-        } catch (_e) { /* sin historial */ }
+        } catch (_e) { }
       }
 
       for (const pub of publicadas) {
         try {
           let instagramUrl: string | null = null;
-
-          // Buscar en historial de Ayrshare por similitud de texto
           if (history.length > 0) {
             const pText = pub.contenido.toLowerCase().trim();
             const searchStr = pText.substring(0, Math.min(30, pText.length));
@@ -352,7 +350,6 @@ export const PublicacionesModule: React.FC = () => {
             });
 
             if (match) {
-              // Guardar Ayrshare post ID y URL del post
               const instaPostId = match.postIds?.find((p: any) => p.platform === 'instagram');
               instagramUrl = instaPostId?.postUrl ?? null;
 
@@ -363,12 +360,8 @@ export const PublicacionesModule: React.FC = () => {
                 await supabase.from('publicaciones').update(updateData).eq('id_publicacion', pub.id_publicacion);
               }
 
-              // Intentar analíticas reales (requiere Premium — devuelve null si no)
               const analytics = await getPostAnalytics(match.id);
-
-              // @ts-ignore
-              if (analytics && analytics.source === 'ayrshare_real') {
-                // Solo guardar si son datos reales de la API
+              if (analytics && (analytics.source as string) === 'ayrshare_real') {
                 const newInts = [
                   { tipo_interaccion: 'like', cantidad: analytics.likes ?? 0, id_publicacion: pub.id_publicacion },
                   { tipo_interaccion: 'comentario', cantidad: analytics.comentarios ?? 0, id_publicacion: pub.id_publicacion },
@@ -385,21 +378,16 @@ export const PublicacionesModule: React.FC = () => {
             }
           }
         } catch (_pubErr) {
-          // Error en un post — continuar con el siguiente sin datos falsos
           notFoundCount++;
         }
-        // Evitar saturar la API de Ayrshare metiendo un delay de 1.5 segundos entre sincronizaciones
         await new Promise(resolve => setTimeout(resolve, 1500));
       }
 
       await fetchAll();
-
       const lines = [
         `✅ Sincronización completada`,
         `🔗 ${history.length} posts encontrados en Ayrshare`,
-        realCount > 0
-          ? `🟢 ${realCount} publicaciones con métricas reales`
-          : `⚠️ Analytics no disponibles en el plan actual (se requiere Premium)`,
+        realCount > 0 ? `🟢 ${realCount} publicaciones con métricas reales` : `⚠️ Analytics no disponibles en el plan actual (se requiere Premium)`,
         notFoundCount > 0 ? `ℹ️ ${notFoundCount} publicaciones sin coincidencia en Ayrshare` : '',
       ].filter(Boolean);
       alert(lines.join('\n'));
@@ -417,7 +405,6 @@ export const PublicacionesModule: React.FC = () => {
     fetchAll();
   };
 
-  // Obtener analíticas REALES — sin inventar datos
   const handleFetchAnalytics = async (pub: Publicacion) => {
     setFetchingAnalyticsId(pub.id_publicacion);
     try {
@@ -434,8 +421,7 @@ export const PublicacionesModule: React.FC = () => {
         }
       }
 
-      // Solo guardar si obtuvimos datos reales de la API
-      if (analytics && analytics.source === 'ayrshare_real') {
+      if (analytics && (analytics.source as string) === 'ayrshare_real') {
         const newInts = [
           { tipo_interaccion: 'like', cantidad: analytics.likes ?? 0, id_publicacion: pub.id_publicacion },
           { tipo_interaccion: 'comentario', cantidad: analytics.comentarios ?? 0, id_publicacion: pub.id_publicacion },
@@ -453,7 +439,7 @@ export const PublicacionesModule: React.FC = () => {
       }
 
       if (!analytics) {
-        alert('⚠️ No se encontraron métricas reales para esta publicación.\nVerifica que el post fue publicado a través de Ayrshare y que tienes plan Premium para analytics.');
+        alert('⚠️ No se encontraron métricas reales para esta publicación.');
       }
 
       fetchAll();
@@ -471,7 +457,6 @@ export const PublicacionesModule: React.FC = () => {
     try {
       let finalMediaUrl = pub.imagen_url;
 
-      // 1. Si la imagen es local, relativa o base64, subirla al bucket público 'img' para que sea accesible externamente
       const isLocalOrBase64 = finalMediaUrl && (
         finalMediaUrl.startsWith('data:image') ||
         finalMediaUrl.startsWith('/') ||
@@ -507,7 +492,6 @@ export const PublicacionesModule: React.FC = () => {
             throw new Error('Formato base64 de imagen inválido.');
           }
         } else {
-          // Descargar imagen local/relativa para subirla al bucket público
           const res = await fetch(finalMediaUrl);
           if (!res.ok) throw new Error('No se pudo descargar la imagen local: ' + finalMediaUrl);
           blob = await res.blob();
@@ -516,20 +500,15 @@ export const PublicacionesModule: React.FC = () => {
         }
 
         const fileName = `pub_${Date.now()}_${Math.random().toString(36).substring(7)}.${extension}`;
-        
-        // Subir al bucket
         const { error: uploadError } = await supabase.storage.from('img').upload(fileName, blob, { contentType });
         if (uploadError) throw new Error('Error al subir imagen al bucket: ' + uploadError.message);
 
-        // 2. Obtener la URL pública absoluta
         const { data: publicUrlData } = supabase.storage.from('img').getPublicUrl(fileName);
         finalMediaUrl = publicUrlData.publicUrl;
 
-        // Guardar la URL pública en la BD para limpiar el base64 o ruta local
         await supabase.from('publicaciones').update({ imagen_url: finalMediaUrl }).eq('id_publicacion', pub.id_publicacion);
       }
 
-      // Mapear nombre de red a formato esperado por Ayrshare
       let plat = 'facebook';
       const nred = pub.nombre_red?.toLowerCase() || '';
       if (nred.includes('insta')) plat = 'instagram';
@@ -538,7 +517,6 @@ export const PublicacionesModule: React.FC = () => {
       else if (nred.includes('tik')) plat = 'tiktok';
       else if (nred.includes('tele')) plat = 'telegram';
 
-      // 3. Invocar la Edge Function con la URL pública
       const { data, error } = await supabase.functions.invoke('publish_social', {
         body: {
           post: pub.contenido,
@@ -550,12 +528,11 @@ export const PublicacionesModule: React.FC = () => {
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
 
-      // Guardar postId de Ayrshare + cambiar estado a Publicada
       const updatePayload: any = { estado: 'Publicada' };
       if (data.postId) updatePayload.ayrshare_post_id = data.postId;
       await supabase.from('publicaciones').update(updatePayload).eq('id_publicacion', pub.id_publicacion);
 
-      alert(data.mock ? 'Simulación Exitosa: Para publicación real, configura AYRSHARE_API_KEY en Supabase.' : '¡Publicado con éxito en redes sociales!');
+      alert(data.mock ? 'Simulación Exitosa' : '¡Publicado con éxito!');
       fetchAll();
     } catch (err: any) {
       alert('Error publicando: ' + err.message);
@@ -600,7 +577,6 @@ export const PublicacionesModule: React.FC = () => {
         </div>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-4 gap-3">
         {statsCounts.map(s => (
           <div key={s.label} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 text-center">
@@ -610,7 +586,6 @@ export const PublicacionesModule: React.FC = () => {
         ))}
       </div>
 
-      {/* Filters */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
@@ -627,7 +602,6 @@ export const PublicacionesModule: React.FC = () => {
         </select>
       </div>
 
-      {/* Cards Grid */}
       {loading ? (
         <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 text-blue-500 animate-spin" /></div>
       ) : filtered.length === 0 ? (
@@ -651,53 +625,34 @@ export const PublicacionesModule: React.FC = () => {
                 </div>
                 <p className="text-[11px] text-slate-500 line-clamp-2">{p.contenido}</p>
 
-                {/* Panel de Analytics con link a Instagram */}
                 {p.estado === 'Publicada' && (
                   <div className="rounded-xl border border-slate-100 overflow-hidden">
                     <div className="flex items-center justify-between px-2.5 py-1 bg-gradient-to-r from-violet-50 to-blue-50 border-b border-slate-100">
                       <span className="text-[9px] font-black text-violet-600 uppercase tracking-wider">📊 Analytics</span>
                       <div className="flex items-center gap-1.5">
                         {(p as any).instagram_post_url && (
-                          <a
-                            href={(p as any).instagram_post_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-[8px] font-bold text-pink-500 bg-pink-50 px-1.5 py-0.5 rounded-full hover:bg-pink-100 transition-colors"
-                          >
-                            📸 Ver en Instagram
-                          </a>
+                          <a href={(p as any).instagram_post_url} target="_blank" rel="noopener noreferrer" className="text-[8px] font-bold text-pink-500 bg-pink-50 px-1.5 py-0.5 rounded-full hover:bg-pink-100 transition-colors">📸 Ver en Instagram</a>
                         )}
-                        <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full ${p.ayrshare_post_id
-                          ? 'text-emerald-600 bg-emerald-50'
-                          : 'text-slate-400 bg-slate-100'
-                          }`}>
+                        <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full ${p.ayrshare_post_id ? 'text-emerald-600 bg-emerald-50' : 'text-slate-400 bg-slate-100'}`}>
                           {p.ayrshare_post_id ? '🔗 Ayrshare' : 'Sin datos reales'}
                         </span>
                       </div>
                     </div>
                     <div className="grid grid-cols-4 gap-0 text-center">
                       <div className="py-2 px-1 border-r border-slate-100">
-                        <p className={`text-[14px] font-black ${p.likes != null ? 'text-rose-500' : 'text-slate-300'}`}>
-                          {p.likes != null ? p.likes.toLocaleString() : '—'}
-                        </p>
+                        <p className={`text-[14px] font-black ${p.likes != null ? 'text-rose-500' : 'text-slate-300'}`}>{p.likes != null ? p.likes.toLocaleString() : '—'}</p>
                         <p className="text-[8px] font-bold text-slate-400 mt-0.5">❤️ Likes</p>
                       </div>
                       <div className="py-2 px-1 border-r border-slate-100">
-                        <p className={`text-[14px] font-black ${p.comentarios != null ? 'text-blue-500' : 'text-slate-300'}`}>
-                          {p.comentarios != null ? p.comentarios.toLocaleString() : '—'}
-                        </p>
+                        <p className={`text-[14px] font-black ${p.comentarios != null ? 'text-blue-500' : 'text-slate-300'}`}>{p.comentarios != null ? p.comentarios.toLocaleString() : '—'}</p>
                         <p className="text-[8px] font-bold text-slate-400 mt-0.5">💬 Coment.</p>
                       </div>
                       <div className="py-2 px-1 border-r border-slate-100">
-                        <p className={`text-[14px] font-black ${p.compartidos != null ? 'text-emerald-500' : 'text-slate-300'}`}>
-                          {p.compartidos != null ? p.compartidos.toLocaleString() : '—'}
-                        </p>
+                        <p className={`text-[14px] font-black ${p.compartidos != null ? 'text-emerald-500' : 'text-slate-300'}`}>{p.compartidos != null ? p.compartidos.toLocaleString() : '—'}</p>
                         <p className="text-[8px] font-bold text-slate-400 mt-0.5">🔗 Compart.</p>
                       </div>
                       <div className="py-2 px-1">
-                        <p className={`text-[14px] font-black ${p.alcance != null ? 'text-amber-500' : 'text-slate-300'}`}>
-                          {p.alcance != null ? p.alcance.toLocaleString() : '—'}
-                        </p>
+                        <p className={`text-[14px] font-black ${p.alcance != null ? 'text-amber-500' : 'text-slate-300'}`}>{p.alcance != null ? p.alcance.toLocaleString() : '—'}</p>
                         <p className="text-[8px] font-bold text-slate-400 mt-0.5">👁️ Alcance</p>
                       </div>
                     </div>
@@ -722,13 +677,16 @@ export const PublicacionesModule: React.FC = () => {
                         <button
                           onClick={() => handleFetchAnalytics(p)}
                           disabled={fetchingAnalyticsId === p.id_publicacion}
-                          title={p.ayrshare_post_id ? 'Actualizar métricas reales de Ayrshare' : 'Actualizar métricas'}
+                          title={p.ayrshare_post_id ? 'Actualizar métricas reales' : 'Actualizar métricas'}
                           className="p-1.5 rounded-lg text-amber-500 hover:text-amber-600 hover:bg-amber-50 transition-colors disabled:opacity-50">
-                          {fetchingAnalyticsId === p.id_publicacion
-                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            : <TrendingUp className="w-3.5 h-3.5" />}
+                          {fetchingAnalyticsId === p.id_publicacion ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <TrendingUp className="w-3.5 h-3.5" />}
                         </button>
                       )}
+                      <button onClick={() => setSharingWhatsAppPub(p)}
+                        title="Compartir por WhatsApp"
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors">
+                        <MessageSquare className="w-3.5 h-3.5" />
+                      </button>
                       <button onClick={() => { setEditing(p); setIsModalOpen(true); }}
                         className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"><Pencil className="w-3.5 h-3.5" /></button>
                       {isMarketingOrAbove && (
@@ -747,6 +705,321 @@ export const PublicacionesModule: React.FC = () => {
       <PubModal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setEditing(null); }}
         onSaved={fetchAll} pub={editing} redes={redes} tipos={tipos} campaigns={campaigns}
         onPublishNow={handlePublishNow} />
+
+      {sharingWhatsAppPub && (
+        <ShareWhatsAppModal
+          isOpen={!!sharingWhatsAppPub}
+          onClose={() => setSharingWhatsAppPub(null)}
+          publication={sharingWhatsAppPub}
+        />
+      )}
+    </div>
+  );
+};
+
+interface ShareWhatsAppModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  publication: Publicacion;
+}
+
+const ShareWhatsAppModal: React.FC<ShareWhatsAppModalProps> = ({ isOpen, onClose, publication }) => {
+  const { profile } = useUser();
+  const [leads, setLeads] = useState<any[]>([]);
+  const [selectedLeadId, setSelectedLeadId] = useState('');
+  const [shareMode, setShareMode] = useState<'select' | 'manual'>('select');
+  const [manualPhone, setManualPhone] = useState('');
+  const [loadingLeads, setLoadingLeads] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [error, setError] = useState('');
+  
+  const [waChats, setWaChats] = useState<{ id: string; name: string; isGroup: boolean }[]>([]);
+  const [loadingWaChats, setLoadingWaChats] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchLeads();
+      fetchWaChats();
+    }
+  }, [isOpen]);
+
+  const fetchWaChats = async () => {
+    setLoadingWaChats(true);
+    try {
+      const clientSessionName = profile?.id_usuario 
+        ? (localStorage.getItem(`client_whatsapp_session_${profile.id_usuario}`) || undefined)
+        : undefined;
+
+      const [groups, contacts, leadsResult] = await Promise.all([
+        getOpenWAGroups(clientSessionName).catch(() => []),
+        getOpenWAContacts(clientSessionName).catch(() => []),
+        supabase.from('leads').select('nombre, telefono').not('telefono', 'is', null),
+      ]);
+
+      const leadsList = leadsResult.data || [];
+      const normalizePhone = (num: string) => num.replace(/[^0-9]/g, '');
+
+      const getContactName = (id: string, currentName?: string) => {
+        const cleanName = (currentName || '').trim();
+        const isNumericName = cleanName && /^[0-9+()-\s]+$/.test(cleanName);
+        if (cleanName && !isNumericName) {
+          return cleanName;
+        }
+
+        const chatPhone = id.split('@')[0];
+        const matchingLead = leadsList.find(lead => {
+          const leadPhone = normalizePhone(lead.telefono || '');
+          return leadPhone && (chatPhone.endsWith(leadPhone) || leadPhone.endsWith(chatPhone));
+        });
+
+        if (matchingLead) {
+          return matchingLead.nombre;
+        }
+
+        return cleanName || chatPhone;
+      };
+
+      const formattedGroups = (groups || [])
+        .filter(g => g.id !== 'status' && !g.id.includes('broadcast'))
+        .map(g => ({
+          id: g.id,
+          name: g.name || 'Grupo sin nombre',
+          isGroup: true
+        }));
+
+      const formattedContacts = (contacts || [])
+        .filter(c => c.id !== 'status' && !c.id.includes('broadcast'))
+        .map(c => {
+          const rawName = c.name || c.pushName || c.number || undefined;
+          return {
+            id: c.id,
+            name: getContactName(c.id, rawName),
+            isGroup: false
+          };
+        });
+
+      setWaChats([...formattedGroups, ...formattedContacts]);
+    } catch (err) {
+      console.warn("Could not fetch WA chats:", err);
+    } finally {
+      setLoadingWaChats(false);
+    }
+  };
+
+  const fetchLeads = async () => {
+    setLoadingLeads(true);
+    const { data } = await supabase
+      .from('leads')
+      .select('id_lead, nombre, telefono')
+      .not('telefono', 'is', null)
+      .order('nombre');
+    if (data) setLeads(data);
+    setLoadingLeads(false);
+  };
+
+  const handleShare = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    let targetPhone = '';
+    if (shareMode === 'select') {
+      if (!selectedLeadId) return setError('Por favor, selecciona un destinatario (Lead o Grupo).');
+      const lead = leads.find(l => l.id_lead === selectedLeadId);
+      if (!lead) return setError('Destinatario no encontrado.');
+      targetPhone = lead.telefono;
+    } else {
+      if (!manualPhone.trim()) return setError('Por favor, ingresa el número o ID de grupo manualmente.');
+      targetPhone = manualPhone.trim();
+    }
+
+    setSending(true);
+    setError('');
+    setSuccess(false);
+
+    const clientSessionName = profile?.id_usuario 
+      ? (localStorage.getItem(`client_whatsapp_session_${profile.id_usuario}`) || undefined)
+      : undefined;
+
+    try {
+      if (publication.imagen_url) {
+        const imgUrl = publication.imagen_url;
+        const response = await fetch(imgUrl);
+        const blob = await response.blob();
+        
+        const reader = new FileReader();
+        reader.readAsDataURL(blob);
+        await new Promise<void>((resolve, reject) => {
+          reader.onloadend = async () => {
+            try {
+              const base64data = reader.result as string;
+              await sendWhatsAppImageMessage(
+                targetPhone, 
+                base64data, 
+                publication.contenido || undefined,
+                clientSessionName
+              );
+              resolve();
+            } catch (err) {
+              reject(err);
+            }
+          };
+          reader.onerror = (e) => reject(e);
+        });
+      } else {
+        await sendWhatsAppTextMessage(targetPhone, publication.contenido || '', clientSessionName);
+      }
+
+      setSuccess(true);
+      setTimeout(() => {
+        onClose();
+      }, 1500);
+    } catch (err: any) {
+      setError(err.message || 'Error al compartir la publicación por WhatsApp.');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  const inputCls = 'w-full px-3 py-2 text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent';
+  const labelCls = 'block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5';
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl border border-slate-100 overflow-hidden">
+        <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-emerald-50/60">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 bg-emerald-100 rounded-lg flex items-center justify-center">
+              <MessageSquare className="w-4 h-4 text-emerald-600" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-800">Compartir por WhatsApp</h3>
+              <p className="text-[10px] text-slate-400 font-medium">Publicación: {publication.titulo}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <form onSubmit={handleShare} className="p-5 space-y-4">
+          {error && <div className="text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-100 rounded-xl px-3 py-2">{error}</div>}
+          {success && <div className="text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2">¡Publicación compartida con éxito!</div>}
+
+          {/* Modo de envío */}
+          <div className="flex gap-2 p-1 bg-slate-100 rounded-xl">
+            <button
+              type="button"
+              onClick={() => setShareMode('select')}
+              className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${
+                shareMode === 'select'
+                  ? 'bg-white text-slate-800 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              Seleccionar Lead/Grupo
+            </button>
+            <button
+              type="button"
+              onClick={() => setShareMode('manual')}
+              className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${
+                shareMode === 'manual'
+                  ? 'bg-white text-slate-800 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              Ingresar Número Manual
+            </button>
+          </div>
+
+          {shareMode === 'select' ? (
+            <div>
+              <label className={labelCls}>Destinatario (Lead o Grupo)</label>
+              {loadingLeads ? (
+                <div className="flex items-center gap-2 text-xs text-slate-400"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Cargando destinatarios...</div>
+              ) : (
+                <select required value={selectedLeadId} onChange={e => setSelectedLeadId(e.target.value)} className={inputCls}>
+                  <option value="">Seleccionar Lead o Grupo...</option>
+                  {leads.map(l => (
+                    <option key={l.id_lead} value={l.id_lead}>{l.nombre} ({l.telefono})</option>
+                  ))}
+                </select>
+              )}
+            </div>
+          ) : (
+            <div className="relative">
+              <label className={labelCls}>Número de Teléfono o ID de Grupo</label>
+              <input
+                type="text"
+                required
+                value={manualPhone}
+                onChange={e => {
+                  setManualPhone(e.target.value);
+                  setShowSuggestions(true);
+                }}
+                onFocus={() => setShowSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                placeholder="Busca por nombre de grupo/contacto o escribe el número..."
+                className={inputCls}
+              />
+              {loadingWaChats && (
+                <div className="absolute right-3 top-8 text-[10px] text-slate-400 flex items-center gap-1">
+                  <Loader2 className="w-3 h-3 animate-spin" /> Cargando chats...
+                </div>
+              )}
+              {showSuggestions && manualPhone.trim() && waChats.filter(chat => 
+                chat.name.toLowerCase().includes(manualPhone.toLowerCase()) || 
+                chat.id.toLowerCase().includes(manualPhone.toLowerCase())
+              ).length > 0 && (
+                <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-48 overflow-y-auto divide-y divide-slate-100">
+                  {waChats.filter(chat => 
+                    chat.name.toLowerCase().includes(manualPhone.toLowerCase()) || 
+                    chat.id.toLowerCase().includes(manualPhone.toLowerCase())
+                  ).slice(0, 5).map(chat => (
+                    <button
+                      key={chat.id}
+                      type="button"
+                      onClick={() => {
+                        setManualPhone(chat.id);
+                        setShowSuggestions(false);
+                      }}
+                      className="w-full text-left px-3 py-2 hover:bg-slate-50 transition-colors text-xs font-semibold flex items-center justify-between"
+                    >
+                      <span className="truncate flex items-center gap-1.5 text-slate-700">
+                        {chat.isGroup ? '👥' : '👤'} {chat.name}
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-mono">{chat.id.split('@')[0]}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <p className="text-[9px] text-slate-400 mt-1">
+                Escribe las primeras letras para buscar grupos/contactos de tu WhatsApp, o introduce el número/ID directamente.
+              </p>
+            </div>
+          )}
+
+          <div className="border border-slate-100 rounded-xl p-3 bg-slate-50/50 space-y-2">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Vista previa de WhatsApp</p>
+            {publication.imagen_url && (
+              <div className="h-28 rounded-lg overflow-hidden border border-slate-100 bg-white">
+                <img src={publication.imagen_url} alt="Media preview" className="w-full h-full object-cover" />
+              </div>
+            )}
+            <p className="text-xs font-medium text-slate-700 whitespace-pre-line line-clamp-4">{publication.contenido}</p>
+          </div>
+
+          <div className="pt-4 border-t border-slate-100 flex justify-end gap-2 -mx-5 -mb-5 p-5 bg-slate-50/30">
+            <button type="button" onClick={onClose} className="px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-colors">Cancelar</button>
+            <button type="submit" disabled={sending || success} className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all disabled:opacity-60 shadow-md shadow-emerald-100">
+              {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MessageSquare className="w-3.5 h-3.5" />}
+              <span>{sending ? 'Compartiendo...' : 'Compartir ahora'}</span>
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 };

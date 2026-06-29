@@ -165,4 +165,7 @@ export interface UserProfile {
   correo: string;
   id_rol: RolId;
   nombre_rol: RolNombre;
+  telefono?: string;
+  whatsapp_session_name?: string;
+  whatsapp_phone?: string;
 }
