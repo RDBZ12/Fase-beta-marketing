@@ -174,31 +174,44 @@ Genera la estrategia de marketing completa y estructurada como JSON. Asegúrate 
       const { data: newCamp, error } = await supabase.from('campaigns').insert([dbData]).select().single();
       if (error) throw error;
 
-      // Guardar LA única publicación generada
-      if (aiResults?.copys && aiResults.copys.length > 0) {
-        // Tomamos solo la primera para evitar agotar las cuotas de redes sociales/Ayrshare
-        let pubDateStr = formData.startDate;
-        if (formData.scheduledTime) {
-          pubDateStr += `T${formData.scheduledTime}:00`;
-        } else {
-          pubDateStr += `T12:00:00`; // Hora por defecto
-        }
+      // Calcular número de días entre startDate y endDate
+      const start = new Date(`${formData.startDate}T12:00:00`);
+      const end = new Date(`${formData.endDate}T12:00:00`);
+      const diffTime = Math.abs(end.getTime() - start.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 para incluir el primer día
 
-        const singlePub = {
-          titulo: `Post Generado AI - ${formData.socialNetwork}`,
-          contenido: aiResults.copys[0] + '\n\n' + (aiResults.hashtags || ''),
+      const numPosts = diffDays > 0 ? diffDays : 1;
+      const pubList = [];
+
+      // Obtener textos e imágenes disponibles
+      const copys = (aiResults?.copys && aiResults.copys.length > 0) ? aiResults.copys : ['Nueva campaña'];
+      const images = selectedImages.length > 0 ? selectedImages : 
+                     (aiResults?.image_prompts ? aiResults.image_prompts.map((p: string) => `https://image.pollinations.ai/prompt/${encodeURIComponent(p)}?width=800&height=800&nologo=true`) : [null]);
+
+      for (let i = 0; i < numPosts; i++) {
+        const pubDate = new Date(start.getTime());
+        pubDate.setDate(pubDate.getDate() + i);
+        
+        const dateStr = pubDate.toISOString().split('T')[0];
+        const timeStr = formData.scheduledTime ? `${formData.scheduledTime}:00` : '12:00:00';
+        
+        const texto = copys[i % copys.length];
+        const imagen = images[i % images.length];
+
+        pubList.push({
+          titulo: `Post ${i + 1} - ${formData.socialNetwork}`,
+          contenido: texto + '\n\n' + (aiResults?.hashtags || ''),
           estado: 'Borrador', 
           id_campana: newCamp.id,
-          fecha_publicacion: new Date(pubDateStr).toISOString(),
-          imagen_url: (aiResults.image_prompts && aiResults.image_prompts[0]) 
-            ? `https://image.pollinations.ai/prompt/${encodeURIComponent(aiResults.image_prompts[0])}?width=800&height=800&nologo=true`
-            : (selectedImages[0] || null)
-        };
-        const { error: pubError } = await supabase.from('publicaciones').insert([singlePub]);
-        if (pubError) console.error("Error al guardar publicación:", pubError);
+          fecha_publicacion: new Date(`${dateStr}T${timeStr}`).toISOString(),
+          imagen_url: imagen
+        });
       }
 
-      console.log("Campaña guardada:", newCamp);
+      const { error: pubError } = await supabase.from('publicaciones').insert(pubList);
+      if (pubError) console.error("Error al guardar publicaciones:", pubError);
+
+      console.log("Campaña guardada con", pubList.length, "publicaciones:", newCamp);
       
       setStep(4);
     } catch (err) {

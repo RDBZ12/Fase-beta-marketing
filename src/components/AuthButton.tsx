@@ -32,12 +32,29 @@ export default function AuthButton() {
       provider: 'google',
       options: {
         redirectTo: window.location.origin,
-        queryParams: { prompt: 'select_account' },
+        queryParams: { access_type: 'offline', prompt: 'consent' },
         scopes: 'openid profile email https://www.googleapis.com/auth/gmail.send',
       },
     })
     if (error) console.error('Error al iniciar sesión:', error.message)
   }
+
+  // Effect to capture the provider_refresh_token right after login
+  useEffect(() => {
+    if (user) {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session?.provider_refresh_token) {
+          // Guardar el refresh_token en los metadatos del usuario de forma segura
+          supabase.auth.updateUser({
+            data: { provider_refresh_token: session.provider_refresh_token }
+          }).then(({ error }) => {
+            if (error) console.error('Error guardando refresh_token:', error)
+            else console.log('Refresh token guardado exitosamente')
+          })
+        }
+      })
+    }
+  }, [user])
 
   const iniciarSesionConPassword = async () => {
     setErrorLogin('')

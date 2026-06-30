@@ -393,7 +393,8 @@ export function PaymentModal({ isOpen, onClose, campaign, session, onPagado }: P
       setMensaje(`Pago aprobado. Activando campaña...`)
       try {
         await supabase.from('campaigns').update({ estado: 'Activa' }).eq('id', campaign.id);
-        setMensaje(`¡Campaña activa y lista!`)
+        await supabase.from('publicaciones').update({ estado: 'Programada' }).eq('id_campana', campaign.id).eq('estado', 'Borrador');
+        setMensaje(`¡Campaña activa y publicaciones programadas!`)
       } catch (pubErr) {
         console.error("Error activando la campaña:", pubErr);
       }
