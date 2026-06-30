@@ -511,6 +511,13 @@ export const PublicacionesModule: React.FC = () => {
 
       let plat = 'facebook';
       const nred = pub.nombre_red?.toLowerCase() || '';
+      
+      if (nred.includes('what')) {
+        setSharingWhatsAppPub(pub);
+        setPublishingId(null);
+        return;
+      }
+      
       if (nred.includes('insta')) plat = 'instagram';
       else if (nred.includes('twit') || nred.includes('x')) plat = 'twitter';
       else if (nred.includes('link')) plat = 'linkedin';
@@ -682,11 +689,6 @@ export const PublicacionesModule: React.FC = () => {
                           {fetchingAnalyticsId === p.id_publicacion ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <TrendingUp className="w-3.5 h-3.5" />}
                         </button>
                       )}
-                      <button onClick={() => setSharingWhatsAppPub(p)}
-                        title="Compartir por WhatsApp"
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors">
-                        <MessageSquare className="w-3.5 h-3.5" />
-                      </button>
                       <button onClick={() => { setEditing(p); setIsModalOpen(true); }}
                         className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"><Pencil className="w-3.5 h-3.5" /></button>
                       {isMarketingOrAbove && (
@@ -925,12 +927,23 @@ const ShareWhatsAppModal: React.FC<ShareWhatsAppModalProps> = ({ isOpen, onClose
               type="button"
               onClick={() => setShareMode('manual')}
               className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${
-                shareMode === 'manual'
+                shareMode === 'manual' && manualPhone !== 'status@broadcast'
                   ? 'bg-white text-slate-800 shadow-sm'
                   : 'text-slate-500 hover:text-slate-800'
               }`}
             >
               Ingresar Número Manual
+            </button>
+            <button
+              type="button"
+              onClick={() => { setShareMode('manual'); setManualPhone('status@broadcast'); }}
+              className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${
+                shareMode === 'manual' && manualPhone === 'status@broadcast'
+                  ? 'bg-white text-slate-800 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              Mi Estatus
             </button>
           </div>
 

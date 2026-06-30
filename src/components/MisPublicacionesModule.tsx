@@ -229,8 +229,9 @@ REGLAS ESTRICTAS:
       }
     }
 
-    // 2. Enviar a Ayrshare (Edge Function)
+    // 2. Enviar a Ayrshare (Edge Function) (Solo si no es WhatsApp)
     let ayrshareId = null;
+    const isWhatsApp = selectedRedObj?.nombre_red.toLowerCase().includes('what');
     const isoDate = new Date(datetime).toISOString();
     
     // Ayrshare requiere que la programación sea de al menos 10-15 minutos en el futuro.
@@ -238,41 +239,43 @@ REGLAS ESTRICTAS:
     const diffMinutes = (new Date(datetime).getTime() - new Date().getTime()) / 60000;
     const isFutureEnough = diffMinutes >= 15;
     
-    try {
-      const { data: ayrData, error: ayrError } = await supabase.functions.invoke('publish_social', {
-        body: { 
-          post: formData.contenido, 
-          platforms: uniquePlats, 
-          mediaUrls: finalMediaUrl ? [finalMediaUrl] : [],
-          scheduleDate: isFutureEnough ? isoDate : undefined
-        }
-      });
-      if (!ayrError && ayrData && !ayrData.error) {
-        ayrshareId = ayrData.postId || ayrData.data?.id || null;
-      } else {
-        const errorRaw = ayrError?.message || ayrData?.error || 'Error desconocido';
-        console.warn("Ayrshare Edge Function warning:", errorRaw);
-        
-        let userFriendlyMsg = "Ocurrió un error al intentar publicar en las redes sociales.";
-        try {
-          const errorText = typeof errorRaw === 'string' ? errorRaw : JSON.stringify(errorRaw);
-          if (errorText.toLowerCase().includes('duplicate') || errorText.includes('"code":137')) {
-            userFriendlyMsg = "⚠️ Bloqueo por Spam: Ya publicaste este contenido hace poco. Modifica un poco el texto o cambia de red social para proteger tu cuenta.";
-          } else if (errorText.toLowerCase().includes('unauthorized')) {
-            userFriendlyMsg = "No se pudo conectar. Verifica que tus redes estén vinculadas correctamente.";
-          } else {
-            userFriendlyMsg = typeof errorRaw === 'string' ? errorRaw : "Error en el publicador.";
+    if (!isWhatsApp) {
+      try {
+        const { data: ayrData, error: ayrError } = await supabase.functions.invoke('publish_social', {
+          body: { 
+            post: formData.contenido, 
+            platforms: uniquePlats, 
+            mediaUrls: finalMediaUrl ? [finalMediaUrl] : [],
+            scheduleDate: isFutureEnough ? isoDate : undefined
           }
-        } catch(e) { userFriendlyMsg = String(errorRaw); }
+        });
+        if (!ayrError && ayrData && !ayrData.error) {
+          ayrshareId = ayrData.postId || ayrData.data?.id || null;
+        } else {
+          const errorRaw = ayrError?.message || ayrData?.error || 'Error desconocido';
+          console.warn("Ayrshare Edge Function warning:", errorRaw);
+          
+          let userFriendlyMsg = "Ocurrió un error al intentar publicar en las redes sociales.";
+          try {
+            const errorText = typeof errorRaw === 'string' ? errorRaw : JSON.stringify(errorRaw);
+            if (errorText.toLowerCase().includes('duplicate') || errorText.includes('"code":137')) {
+              userFriendlyMsg = "⚠️ Bloqueo por Spam: Ya publicaste este contenido hace poco. Modifica un poco el texto o cambia de red social para proteger tu cuenta.";
+            } else if (errorText.toLowerCase().includes('unauthorized')) {
+              userFriendlyMsg = "No se pudo conectar. Verifica que tus redes estén vinculadas correctamente.";
+            } else {
+              userFriendlyMsg = typeof errorRaw === 'string' ? errorRaw : "Error en el publicador.";
+            }
+          } catch(e) { userFriendlyMsg = String(errorRaw); }
 
-        showToast(userFriendlyMsg, 'error');
-        setIsSaving(false);
-        return; // Detener guardado si falla en Ayrshare
+          showToast(userFriendlyMsg, 'error');
+          setIsSaving(false);
+          return; // Detener guardado si falla en Ayrshare
+        }
+      } catch (edgeErr: any) {
+        console.warn("Error invocando publish_social:", edgeErr);
+        showToast("Error al conectar con el publicador de redes: " + edgeErr.message, 'error');
+        return;
       }
-    } catch (edgeErr: any) {
-      console.warn("Error invocando publish_social:", edgeErr);
-      showToast("Error al conectar con el publicador de redes: " + edgeErr.message, 'error');
-      return;
     }
 
     // 3. Guardar en Base de Datos
@@ -288,18 +291,29 @@ REGLAS ESTRICTAS:
 
     const nuevoEstado = isFutureEnough ? 'Programada' : 'Publicada';
 
+    actionError = null;
+    let savedPub = null;
+
     if (editingId) {
       payload.estado = nuevoEstado;
-      const { error } = await supabase.from('publicaciones').update(payload).eq('id_publicacion', editingId);
+      const { data, error } = await supabase.from('publicaciones').update(payload).eq('id_publicacion', editingId).select();
       actionError = error;
+      if (data && data[0]) savedPub = data[0];
     } else {
       payload.estado = nuevoEstado;
-      const { error } = await supabase.from('publicaciones').insert([payload]);
+      const { data, error } = await supabase.from('publicaciones').insert([payload]).select();
       actionError = error;
+      if (data && data[0]) savedPub = data[0];
     }
 
     if (!actionError) {
       showToast(editingId ? "Publicación actualizada exitosamente." : "Publicación programada exitosamente.", 'success');
+      
+      const selectedRedObj = redes.find(r => String(r.id_red) === formData.id_red);
+      if (selectedRedObj?.nombre_red.toLowerCase().includes('what') && savedPub) {
+        setSharingWhatsAppPub(savedPub as any);
+      }
+
       setIsCreating(false);
       setEditingId(null);
       fetchPublicaciones();
@@ -337,6 +351,15 @@ REGLAS ESTRICTAS:
     let plat = 'instagram';
     if (selectedRedObj) {
       const nred = selectedRedObj.nombre_red.toLowerCase();
+      if (nred.includes('what')) {
+        // Lógica especial para WhatsApp: abrir modal directamente
+        setSharingWhatsAppPub(replicateTargetPub);
+        setReplicateTargetPub(null);
+        setSelectedRedId('');
+        setIsReplicating(false);
+        return;
+      }
+      
       if (nred.includes('tele')) plat = 'telegram';
       else if (nred.includes('face')) plat = 'facebook';
       else if (nred.includes('twit') || nred.includes('x')) plat = 'twitter';
@@ -672,14 +695,6 @@ REGLAS ESTRICTAS:
                         <Share2 className="w-3.5 h-3.5" />
                         <span className="text-[10px] font-bold uppercase tracking-wider max-w-0 overflow-hidden group-hover/replicate:max-w-xs transition-all duration-300 ease-in-out whitespace-nowrap">Subir a otra red</span>
                       </button>
-                      <button 
-                        onClick={() => setSharingWhatsAppPub(pub)}
-                        className="bg-white/90 backdrop-blur-md px-2 py-1.5 rounded-md text-slate-600 hover:text-emerald-600 transition-colors shadow-sm flex items-center gap-1 group/wa"
-                        title="Compartir por WhatsApp"
-                      >
-                        <MessageSquare className="w-3.5 h-3.5" />
-                        <span className="text-[10px] font-bold uppercase tracking-wider max-w-0 overflow-hidden group-hover/wa:max-w-xs transition-all duration-300 ease-in-out whitespace-nowrap">Compartir</span>
-                      </button>
                     </div>
                     <div className="absolute top-3 right-3 bg-black/60 backdrop-blur-md px-2 py-1 rounded-md flex items-center gap-1">
                       <Calendar className="w-3 h-3 text-violet-400" />
@@ -888,13 +903,17 @@ const ShareWhatsAppModal: React.FC<ShareWhatsAppModalProps> = ({ isOpen, onClose
       };
 
       // 3. Resolver nombre para todos los chats para que el buscador funcione
-      const resolvedChats = (chatsData || []).map((chat: any) => ({
-        id: chat.id,
-        name: resolveDisplayName(chat),
-        isGroup: chat.isGroup,
-        lastMessage: chat.lastMessage,
-        timestamp: chat.timestamp,
-      }));
+      const statusObj = { id: 'status@broadcast', name: 'Mi Estatus (WhatsApp)', isGroup: false, lastMessage: null, timestamp: Date.now() };
+      const resolvedChats = [
+        statusObj,
+        ...(chatsData || []).map((chat: any) => ({
+          id: chat.id,
+          name: resolveDisplayName(chat),
+          isGroup: chat.isGroup,
+          lastMessage: chat.lastMessage,
+          timestamp: chat.timestamp,
+        }))
+      ];
 
       // 4. Agregar contactos que NO tienen chat reciente para que el buscador los encuentre (solo en Full Load)
       if (isFullLoad) {
