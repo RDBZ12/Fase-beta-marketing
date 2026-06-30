@@ -38,7 +38,9 @@ export const MisPublicacionesModule: React.FC<MisPublicacionesModuleProps> = ({ 
     fecha_publicacion: initialDateTime.date,
     hora_publicacion: initialDateTime.time,
     imagen_url: '',
-    id_red: ''
+    imagen_url: '',
+    id_red: '',
+    isScheduled: true // dummy flag to force recalculation down in render
   });
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -93,16 +95,10 @@ export const MisPublicacionesModule: React.FC<MisPublicacionesModuleProps> = ({ 
     if (data) {
       const now = new Date();
       const updatedData = data.map(pub => {
-        const mapped = {
+        return {
           ...pub,
           nombre_red: pub.id_red ? ((pub as any).redes_sociales?.nombre_red || 'Instagram') : 'Todas las redes'
         };
-        if (mapped.estado === 'Programada' && new Date(mapped.fecha_publicacion) <= now) {
-          // Disparar actualización en BD en segundo plano
-          supabase.from('publicaciones').update({ estado: 'Publicada' }).eq('id_publicacion', mapped.id_publicacion).then();
-          return { ...mapped, estado: 'Publicada' };
-        }
-        return mapped;
       });
 
       setPublicaciones(updatedData);
@@ -226,50 +222,51 @@ REGLAS ESTRICTAS:
       }
     }
 
-    // 2. Enviar a Ayrshare (Edge Function)
+    // 2. Enviar a Ayrshare (Edge Function) SOLO si es publicación inmediata
     let ayrshareId = null;
     const isoDate = new Date(datetime).toISOString();
     
-    // Ayrshare requiere que la programación sea de al menos 10-15 minutos en el futuro.
-    // Si la diferencia es menor a 15 minutos, lo publicamos inmediatamente (omitiendo scheduleDate)
     const diffMinutes = (new Date(datetime).getTime() - new Date().getTime()) / 60000;
-    const isFutureEnough = diffMinutes >= 15;
+    // Consideramos "Programada" cualquier fecha que esté al menos 1 minuto en el futuro
+    const isScheduled = diffMinutes > 1; 
     
-    try {
-      const { data: ayrData, error: ayrError } = await supabase.functions.invoke('publish_social', {
-        body: { 
-          post: formData.contenido, 
-          platforms: uniquePlats, 
-          mediaUrls: finalMediaUrl ? [finalMediaUrl] : [],
-          scheduleDate: isFutureEnough ? isoDate : undefined
-        }
-      });
-      if (!ayrError && ayrData && !ayrData.error) {
-        ayrshareId = ayrData.postId || ayrData.data?.id || null;
-      } else {
-        const errorRaw = ayrError?.message || ayrData?.error || 'Error desconocido';
-        console.warn("Ayrshare Edge Function warning:", errorRaw);
-        
-        let userFriendlyMsg = "Ocurrió un error al intentar publicar en las redes sociales.";
-        try {
-          const errorText = typeof errorRaw === 'string' ? errorRaw : JSON.stringify(errorRaw);
-          if (errorText.toLowerCase().includes('duplicate') || errorText.includes('"code":137')) {
-            userFriendlyMsg = "⚠️ Bloqueo por Spam: Ya publicaste este contenido hace poco. Modifica un poco el texto o cambia de red social para proteger tu cuenta.";
-          } else if (errorText.toLowerCase().includes('unauthorized')) {
-            userFriendlyMsg = "No se pudo conectar. Verifica que tus redes estén vinculadas correctamente.";
-          } else {
-            userFriendlyMsg = typeof errorRaw === 'string' ? errorRaw : "Error en el publicador.";
+    if (!isScheduled) {
+      try {
+        const { data: ayrData, error: ayrError } = await supabase.functions.invoke('publish_social', {
+          body: { 
+            post: formData.contenido, 
+            platforms: uniquePlats, 
+            mediaUrls: finalMediaUrl ? [finalMediaUrl] : [],
           }
-        } catch(e) { userFriendlyMsg = String(errorRaw); }
+        });
+        if (!ayrError && ayrData && !ayrData.error) {
+          ayrshareId = ayrData.postId || ayrData.data?.id || null;
+        } else {
+          const errorRaw = ayrError?.message || ayrData?.error || 'Error desconocido';
+          console.warn("Ayrshare Edge Function warning:", errorRaw);
+          
+          let userFriendlyMsg = "Ocurrió un error al intentar publicar en las redes sociales.";
+          try {
+            const errorText = typeof errorRaw === 'string' ? errorRaw : JSON.stringify(errorRaw);
+            if (errorText.toLowerCase().includes('duplicate') || errorText.includes('"code":137')) {
+              userFriendlyMsg = "⚠️ Bloqueo por Spam: Ya publicaste este contenido hace poco.";
+            } else if (errorText.toLowerCase().includes('unauthorized')) {
+              userFriendlyMsg = "No se pudo conectar. Verifica que tus redes estén vinculadas correctamente.";
+            } else {
+              userFriendlyMsg = typeof errorRaw === 'string' ? errorRaw : "Error en el publicador.";
+            }
+          } catch(e) { userFriendlyMsg = String(errorRaw); }
 
-        showToast(userFriendlyMsg, 'error');
+          showToast(userFriendlyMsg, 'error');
+          setIsSaving(false);
+          return;
+        }
+      } catch (edgeErr: any) {
+        console.warn("Error invocando publish_social:", edgeErr);
+        showToast("Error al conectar con el publicador de redes: " + edgeErr.message, 'error');
         setIsSaving(false);
-        return; // Detener guardado si falla en Ayrshare
+        return;
       }
-    } catch (edgeErr: any) {
-      console.warn("Error invocando publish_social:", edgeErr);
-      showToast("Error al conectar con el publicador de redes: " + edgeErr.message, 'error');
-      return;
     }
 
     // 3. Guardar en Base de Datos
@@ -283,7 +280,7 @@ REGLAS ESTRICTAS:
     };
     if (ayrshareId) payload.ayrshare_post_id = ayrshareId;
 
-    const nuevoEstado = isFutureEnough ? 'Programada' : 'Publicada';
+    const nuevoEstado = isScheduled ? 'Programada' : 'Publicada';
 
     if (editingId) {
       payload.estado = nuevoEstado;
@@ -569,13 +566,13 @@ REGLAS ESTRICTAS:
           <div className="pt-6 border-t border-slate-200 flex justify-end gap-3">
              <button onClick={() => { setIsCreating(false); setEditingId(null); }} className="px-6 py-2.5 rounded-xl font-medium text-slate-500 hover:text-slate-900 transition-colors">Cancelar</button>
              <button 
-               onClick={handleSave}
-               disabled={isSaving}
-               className={`px-8 py-2.5 bg-violet-600 text-white rounded-xl font-bold shadow-lg shadow-violet-500/20 transition-colors ${isSaving ? 'opacity-70 cursor-not-allowed' : 'hover:bg-violet-500'}`}>
+                 onClick={handleSave}
+                 disabled={isSaving}
+                 className={`px-8 py-2.5 bg-violet-600 text-white rounded-xl font-bold shadow-lg shadow-violet-500/20 transition-colors ${isSaving ? 'opacity-70 cursor-not-allowed' : 'hover:bg-violet-500'}`}>
                {isSaving ? 'Procesando...' : (
                  editingId 
                    ? 'Actualizar Publicación' 
-                   : (new Date(`${formData.fecha_publicacion}T${formData.hora_publicacion || '12:00'}:00`).getTime() - new Date().getTime()) / 60000 < 15 
+                   : (new Date(`${formData.fecha_publicacion}T${formData.hora_publicacion || '12:00'}:00`).getTime() - new Date().getTime()) / 60000 <= 1 
                      ? 'Publicar Ahora' 
                      : 'Programar Publicación'
                )}
