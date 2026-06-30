@@ -14,7 +14,7 @@ export interface Pago {
   itbis?: number; total_con_itbis?: number; ncf?: string;
   estado_dgii: string; metodo_pago: string;
   rnc_cedula?: string; razon_social?: string; fecha: string;
-  nombre_campana?: string;
+  nombre_campana?: string; url_dgii?: string;
 }
 
 const ESTADO_COLORS: Record<string, string> = {
@@ -689,6 +689,7 @@ export const PagosModule: React.FC = () => {
                             razon_social: p.razon_social,
                             nombre_campana: p.nombre_campana,
                             fecha:        p.fecha,
+                            url_dgii:     (p as any).url_dgii,
                           }, p.ncf || '');
                           const win = window.open('', '_blank');
                           if (win) { 
