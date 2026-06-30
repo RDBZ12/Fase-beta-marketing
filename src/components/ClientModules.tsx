@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { CreditCard, Download, ExternalLink, BarChart3, Users, MousePointerClick, User, Shield, CheckCircle2, Save, Loader2, Search } from 'lucide-react';
+import { CreditCard, Download, ExternalLink, BarChart3, Users, MousePointerClick, User, Shield, CheckCircle2, Save, Loader2, Search, Play, Square, RefreshCw, MessageSquare, AlertCircle } from 'lucide-react';
 import { useUser } from '../context/UserContext';
 import { supabase } from '../supabaseClient';
 import type { Campaign } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { generateReceiptHTML } from './PagosModule';
+import { getOpenWASessions, createOpenWASession, startOpenWASession, stopOpenWASession, getOpenWAQRCode } from '../lib/whatsapp';
 
 // ==========================================
 // MÓDULO DE PAGOS DEL CLIENTE
@@ -456,36 +457,77 @@ export const ClientPerfilModule = () => {
   const { profile } = useUser();
   const [empresa, setEmpresa] = useState('');
   const [rnc, setRnc] = useState('');
+  const [whatsappSessionName, setWhatsappSessionName] = useState('');
+  const [whatsappPhone, setWhatsappPhone] = useState('');
+  const [currentSession, setCurrentSession] = useState<any | null>(null);
+  const [qrCodeData, setQrCodeData] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
   const [error, setError] = useState('');
+
+  const fetchSessionStatus = async () => {
+    if (!whatsappSessionName) return;
+    try {
+      const list = await getOpenWASessions();
+      const session = list.find(s => s.name === whatsappSessionName);
+      setCurrentSession(session || null);
+      
+      if (session && session.status === 'qr_ready') {
+        const qr = await getOpenWAQRCode(whatsappSessionName);
+        setQrCodeData(qr);
+      } else {
+        setQrCodeData(null);
+      }
+    } catch (err: any) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    if (whatsappSessionName) {
+      fetchSessionStatus();
+      const timer = setInterval(() => {
+        fetchSessionStatus();
+      }, 5000);
+      return () => clearInterval(timer);
+    }
+  }, [whatsappSessionName]);
 
   useEffect(() => {
     const loadProfile = async () => {
       if (!profile?.id_usuario) return;
 
-      // 1. Cargar desde localStorage primero para velocidad e inmediatez
       const cachedEmpresa = localStorage.getItem(`client_empresa_${profile.id_usuario}`) || '';
       const cachedRnc = localStorage.getItem(`client_rnc_${profile.id_usuario}`) || '';
+      const cachedSessionName = localStorage.getItem(`client_whatsapp_session_${profile.id_usuario}`) || `cli-session-${profile.id_usuario.substring(0, 8)}`;
+      const cachedWhatsappPhone = localStorage.getItem(`client_whatsapp_phone_${profile.id_usuario}`) || '';
+      
       setEmpresa(cachedEmpresa);
       setRnc(cachedRnc);
+      setWhatsappSessionName(cachedSessionName);
+      setWhatsappPhone(cachedWhatsappPhone);
 
-      // 2. Cargar desde Supabase clientes_portal
       try {
         const { data, error } = await supabase
           .from('clientes_portal')
-          .select('rnc, empresa')
+          .select('rnc, empresa, whatsapp_session_name, whatsapp_phone')
           .eq('auth_user_id', profile.id_usuario)
           .maybeSingle();
 
         if (data && !error) {
           setEmpresa(data.empresa || cachedEmpresa);
           setRnc(data.rnc || cachedRnc);
+          setWhatsappSessionName(data.whatsapp_session_name || cachedSessionName);
+          setWhatsappPhone(data.whatsapp_phone || cachedWhatsappPhone);
+          
           if (data.empresa) localStorage.setItem(`client_empresa_${profile.id_usuario}`, data.empresa);
           if (data.rnc) localStorage.setItem(`client_rnc_${profile.id_usuario}`, data.rnc);
+          if (data.whatsapp_session_name) localStorage.setItem(`client_whatsapp_session_${profile.id_usuario}`, data.whatsapp_session_name);
+          if (data.whatsapp_phone) localStorage.setItem(`client_whatsapp_phone_${profile.id_usuario}`, data.whatsapp_phone);
         }
       } catch (err) {
-        console.warn("Table clientes_portal not found, using localStorage fallback.");
+        console.warn("Table clientes_portal not found or columns missing, using localStorage fallback.");
       }
     };
     loadProfile();
@@ -497,12 +539,20 @@ export const ClientPerfilModule = () => {
     setMsg('');
     setError('');
 
-    // 1. Guardar siempre en localStorage (inmediato y garantizado)
     localStorage.setItem(`client_empresa_${profile.id_usuario}`, empresa);
     localStorage.setItem(`client_rnc_${profile.id_usuario}`, rnc);
+    localStorage.setItem(`client_whatsapp_session_${profile.id_usuario}`, whatsappSessionName);
+    localStorage.setItem(`client_whatsapp_phone_${profile.id_usuario}`, whatsappPhone);
 
-    // 2. Intentar guardar en Supabase clientes_portal
     try {
+      const payload: any = { 
+        empresa, 
+        rnc,
+        whatsapp_session_name: whatsappSessionName,
+        whatsapp_phone: whatsappPhone,
+        updated_at: new Date().toISOString() 
+      };
+      
       const { data: existing } = await supabase
         .from('clientes_portal')
         .select('id_cliente')
@@ -513,7 +563,7 @@ export const ClientPerfilModule = () => {
       if (existing) {
         result = await supabase
           .from('clientes_portal')
-          .update({ empresa, rnc, updated_at: new Date().toISOString() })
+          .update(payload)
           .eq('auth_user_id', profile.id_usuario);
       } else {
         result = await supabase
@@ -523,23 +573,69 @@ export const ClientPerfilModule = () => {
             nombre: profile.nombre || 'Cliente',
             apellido: profile.apellido || '',
             email: profile.correo || '',
-            empresa,
-            rnc,
+            ...payload
           });
       }
 
       if (result.error) {
         console.warn("DB Save failed, using localStorage fallback only:", result.error.message);
-        setMsg('¡Datos de facturación guardados con éxito!');
+        setMsg('¡Configuración guardada localmente con éxito!');
       } else {
-        setMsg('¡Datos de facturación guardados con éxito!');
+        setMsg('¡Perfil y datos de facturación guardados con éxito!');
       }
     } catch (err: any) {
       console.error(err);
-      setMsg('¡Datos de facturación guardados con éxito!');
+      setMsg('¡Configuración guardada localmente con éxito!');
     } finally {
       setSaving(false);
       window.dispatchEvent(new Event('client-profile-updated'));
+    }
+  };
+
+  const handlePhoneChange = (val: string) => {
+    let digits = val.replace(/[^0-9]/g, '');
+    if (digits.length === 10 && (digits.startsWith('809') || digits.startsWith('829') || digits.startsWith('849'))) {
+      digits = '1' + digits;
+    }
+    setWhatsappPhone(digits);
+  };
+
+  const handleCreateAndStart = async () => {
+    if (!whatsappSessionName) return;
+    setActionLoading(true);
+    setError('');
+    try {
+      const list = await getOpenWASessions();
+      let session = list.find(s => s.name === whatsappSessionName);
+      if (!session) {
+        session = await createOpenWASession(whatsappSessionName);
+      }
+      if (session.status !== 'ready' && session.status !== 'qr_ready') {
+        await startOpenWASession(session.id);
+      }
+      await fetchSessionStatus();
+    } catch (err: any) {
+      setError(err.message || 'Error al iniciar la sesión de WhatsApp.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleStop = async () => {
+    if (!whatsappSessionName) return;
+    setActionLoading(true);
+    setError('');
+    try {
+      const list = await getOpenWASessions();
+      const session = list.find(s => s.name === whatsappSessionName);
+      if (session) {
+        await stopOpenWASession(session.id);
+      }
+      await fetchSessionStatus();
+    } catch (err: any) {
+      setError(err.message || 'Error al detener la sesión de WhatsApp.');
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -609,6 +705,142 @@ export const ClientPerfilModule = () => {
             </button>
           </div>
         </div>
+
+        <hr className="border-slate-100" />
+
+        <div>
+          <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+            <MessageSquare className="w-5 h-5 text-emerald-500" />
+            Configuración de WhatsApp Web (OpenWA)
+          </h3>
+          <p className="text-xs text-slate-500 mb-4">
+            Vincule su propio número de WhatsApp para que los mensajes de marketing y alertas se envíen desde su cuenta personal de forma nativa.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <div>
+              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                Número de Teléfono Vinculado (con Código de País)
+              </label>
+              <input
+                type="text"
+                value={whatsappPhone}
+                onChange={e => handlePhoneChange(e.target.value)}
+                placeholder="Ej. 18095551234"
+                className="w-full px-4 py-2.5 text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                Nombre de Sesión asignado
+              </label>
+              <input
+                type="text"
+                disabled
+                value={whatsappSessionName}
+                className="w-full px-4 py-2.5 text-xs font-mono font-semibold text-slate-400 bg-slate-100 border border-slate-200 rounded-xl focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Estado de Conexión</p>
+              <div className="flex items-center gap-2 mt-1">
+                {currentSession ? (
+                  <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded ${
+                    currentSession.status === 'ready' ? 'text-emerald-500 bg-emerald-100' :
+                    currentSession.status === 'qr_ready' ? 'text-amber-500 bg-amber-100' :
+                    'text-slate-500 bg-slate-100'
+                  }`}>
+                    {currentSession.status === 'ready' ? 'Conectado' :
+                     currentSession.status === 'qr_ready' ? 'Esperando QR' :
+                     currentSession.status}
+                  </span>
+                ) : (
+                  <span className="bg-slate-100 text-slate-500 text-[10px] px-2 py-1 rounded font-bold uppercase tracking-wider">No Creada</span>
+                )}
+              </div>
+              {currentSession?.phone && (
+                <p className="text-xs text-slate-500 mt-2 font-medium">
+                  Dispositivo activo: <strong className="text-slate-700">+{currentSession.phone}</strong>
+                </p>
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {(!currentSession || currentSession.status === 'disconnected' || currentSession.status === 'created' || currentSession.status === 'failed') ? (
+                <button
+                  onClick={handleCreateAndStart}
+                  disabled={actionLoading}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white text-xs font-bold rounded-xl transition-colors shadow-sm"
+                >
+                  {actionLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
+                  {currentSession ? 'Iniciar Conexión' : 'Vincular Dispositivo'}
+                </button>
+              ) : (
+                <button
+                  onClick={handleStop}
+                  disabled={actionLoading}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-rose-600 hover:bg-rose-700 disabled:bg-slate-300 text-white text-xs font-bold rounded-xl transition-colors shadow-sm"
+                >
+                  {actionLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Square className="w-3.5 h-3.5" />}
+                  Desconectar WhatsApp
+                </button>
+              )}
+
+              {whatsappSessionName && (
+                <button
+                  onClick={fetchSessionStatus}
+                  disabled={actionLoading}
+                  className="flex items-center justify-center p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors"
+                  title="Actualizar estado"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${actionLoading ? 'animate-spin' : ''}`} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {currentSession?.status === 'qr_ready' && (
+            <div className="bg-amber-50 border border-amber-100 text-amber-800 rounded-2xl p-5 text-xs space-y-4 mt-4 flex flex-col md:flex-row items-center gap-6">
+              <div className="flex-1 space-y-2">
+                <p className="font-bold flex items-center gap-1.5 text-sm"><AlertCircle className="w-4 h-4 text-amber-500" /> Vinculación de WhatsApp requerida</p>
+                <p>Por favor, escanea el código QR de la derecha utilizando tu teléfono móvil para activar la conexión de envíos:</p>
+                <ol className="list-decimal list-inside space-y-1.5 ml-1 text-slate-600 font-semibold">
+                  <li>Abre WhatsApp en tu teléfono.</li>
+                  <li>Ve a **Dispositivos Vinculados** → **Vincular un dispositivo**.</li>
+                  <li>Apunta tu cámara hacia el código QR de la derecha.</li>
+                </ol>
+                <p className="text-[10px] text-amber-600 font-bold">El estado se actualizará automáticamente a "Conectado" en esta pantalla una vez completado.</p>
+              </div>
+              <div className="w-44 h-44 bg-white border border-slate-200 rounded-xl p-2.5 flex items-center justify-center shrink-0 shadow-sm relative overflow-hidden">
+                {qrCodeData ? (
+                  <img src={qrCodeData} alt="WhatsApp QR Code" className="w-full h-full object-contain" />
+                ) : (
+                  <div className="flex flex-col items-center justify-center text-center text-slate-400 gap-1.5 p-3">
+                    <Loader2 className="w-5 h-5 animate-spin text-slate-300" />
+                    <span className="text-[10px]">Cargando QR...</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-end mt-4">
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex items-center gap-2 px-5 py-2.5 bg-violet-600 hover:bg-violet-500 text-white rounded-xl text-xs font-bold transition-all shadow-[0_0_15px_rgba(124,58,237,0.2)]"
+            >
+              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+              <span>{saving ? 'Guardando...' : 'Guardar Configuración de WhatsApp'}</span>
+            </button>
+          </div>
+        </div>
+
+        <hr className="border-slate-100" />
+
 
         <div>
           <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
