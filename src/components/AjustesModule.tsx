@@ -1,16 +1,36 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { useUser } from '../context/UserContext';
-import { Settings, User, Shield, Globe, KeyRound, Save, Loader2, CheckCircle } from 'lucide-react';
+import { 
+  Settings, User, Shield, Globe, KeyRound, Save, Loader2, CheckCircle,
+  MessageSquare, AlertCircle, RefreshCw, Play, Square, ExternalLink
+} from 'lucide-react';
+import {
+  getOpenWASettings,
+  saveOpenWASettings,
+  getOpenWASessions,
+  createOpenWASession,
+  startOpenWASession,
+  stopOpenWASession
+} from '../lib/whatsapp';
+import type { OpenWASession } from '../lib/whatsapp';
 
 export const AjustesModule: React.FC = () => {
   const { profile, refetch, isAdmin } = useUser();
   const [nombre, setNombre]       = useState(profile?.nombre ?? '');
   const [apellido, setApellido]   = useState(profile?.apellido ?? '');
-  const [telefono, setTelefono]   = useState('');
+  const [telefono, setTelefono]   = useState(profile?.telefono ?? '');
   const [saving, setSaving]       = useState(false);
   const [saved, setSaved]         = useState(false);
   const [activeSection, setActiveSection] = useState<'perfil' | 'seguridad' | 'redes' | 'api'>('perfil');
+
+  useEffect(() => {
+    if (profile) {
+      setNombre(profile.nombre ?? '');
+      setApellido(profile.apellido ?? '');
+      setTelefono(profile.telefono ?? '');
+    }
+  }, [profile]);
 
   const handleSavePerfil = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -151,12 +171,18 @@ export const AjustesModule: React.FC = () => {
 
           {/* Social Networks */}
           {activeSection === 'redes' && (
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-4">
-              <div>
-                <h3 className="text-sm font-bold text-slate-800">Redes Sociales</h3>
-                <p className="text-xs text-slate-400 mt-0.5">Plataformas configuradas en el sistema</p>
+            <div className="space-y-5">
+              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-4">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800">Redes Sociales</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">Plataformas configuradas en el sistema</p>
+                </div>
+                <RedesSocialesConfig />
               </div>
-              <RedesSocialesConfig />
+
+              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-4">
+                <WhatsAppGatewayConfig />
+              </div>
             </div>
           )}
 
@@ -238,3 +264,247 @@ const RedesSocialesConfig: React.FC = () => {
     </div>
   );
 };
+
+// ─── Componente de Ajustes de WhatsApp / OpenWA ───────────────────────────────
+const WhatsAppGatewayConfig: React.FC = () => {
+  const settings = getOpenWASettings();
+  const [apiUrl, setApiUrl] = useState(settings.apiUrl);
+  const [apiKey, setApiKey] = useState(settings.apiKey);
+  const [sessionName, setSessionName] = useState(settings.sessionName);
+  
+  const [, setSessions] = useState<OpenWASession[]>([]);
+  const [currentSession, setCurrentSession] = useState<OpenWASession | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [actionLoading, setActionLoading] = useState(false);
+
+  const fetchSessionStatus = async () => {
+    setChecking(true);
+    setErrorMsg('');
+    try {
+      const list = await getOpenWASessions();
+      setSessions(list);
+      const found = list.find(s => s.name === sessionName);
+      setCurrentSession(found || null);
+    } catch (err: any) {
+      setErrorMsg(err.message || 'No se pudo conectar al servidor OpenWA. Asegúrate de que esté corriendo en el puerto configurado.');
+      setCurrentSession(null);
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSessionStatus();
+  }, [sessionName]);
+
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    saveOpenWASettings(apiUrl, apiKey, sessionName);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+    setSaving(false);
+    fetchSessionStatus();
+  };
+
+  const handleCreateAndStart = async () => {
+    setActionLoading(true);
+    setErrorMsg('');
+    try {
+      let targetSession = currentSession;
+      if (!targetSession) {
+        targetSession = await createOpenWASession(sessionName);
+      }
+      await startOpenWASession(targetSession.id);
+      await fetchSessionStatus();
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Error al iniciar la sesión.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleStop = async () => {
+    if (!currentSession) return;
+    setActionLoading(true);
+    setErrorMsg('');
+    try {
+      await stopOpenWASession(currentSession.id);
+      await fetchSessionStatus();
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Error al detener la sesión.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const getStatusBadge = (status: OpenWASession['status']) => {
+    switch (status) {
+      case 'ready':
+        return <span className="bg-emerald-100 text-emerald-700 text-xs px-2.5 py-1 rounded-full font-bold">Conectado (Listo)</span>;
+      case 'qr_ready':
+        return <span className="bg-amber-100 text-amber-700 text-xs px-2.5 py-1 rounded-full font-bold animate-pulse">Esperando QR (Escanea en Dashboard)</span>;
+      case 'initializing':
+      case 'authenticating':
+        return <span className="bg-blue-100 text-blue-700 text-xs px-2.5 py-1 rounded-full font-bold animate-pulse">Iniciando...</span>;
+      case 'disconnected':
+        return <span className="bg-slate-100 text-slate-600 text-xs px-2.5 py-1 rounded-full font-bold">Desconectado</span>;
+      case 'failed':
+        return <span className="bg-rose-100 text-rose-700 text-xs px-2.5 py-1 rounded-full font-bold font-mono">Fallo en Conexión</span>;
+      default:
+        return <span className="bg-slate-100 text-slate-600 text-xs px-2.5 py-1 rounded-full font-bold font-mono">Creado (Detenido)</span>;
+    }
+  };
+
+  const inputCls = 'w-full px-3 py-2 text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500';
+  const labelCls = 'block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5';
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 bg-emerald-100 rounded-lg flex items-center justify-center">
+            <MessageSquare className="w-4 h-4 text-emerald-600" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-slate-800">Pasarela de WhatsApp (OpenWA)</h3>
+            <p className="text-xs text-slate-400 mt-0.5">Controla y monitorea tu automatización de WhatsApp.</p>
+          </div>
+        </div>
+        <button
+          onClick={fetchSessionStatus}
+          disabled={checking}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-semibold border border-slate-200 rounded-xl transition-colors disabled:opacity-50"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${checking ? 'animate-spin' : ''}`} />
+          Comprobar Estado
+        </button>
+      </div>
+
+      {errorMsg && (
+        <div className="bg-rose-50 border border-rose-100 rounded-xl p-4 flex gap-3 text-xs text-rose-600">
+          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+          <div>{errorMsg}</div>
+        </div>
+      )}
+
+      {/* Info de Estado */}
+      <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Estado de la Sesión</p>
+          <div className="flex items-center gap-2 mt-1">
+            <p className="text-xs font-black font-mono text-slate-700">[{sessionName}]</p>
+            {currentSession ? getStatusBadge(currentSession.status) : <span className="bg-slate-100 text-slate-500 text-xs px-2.5 py-1 rounded-full font-bold">No creada</span>}
+          </div>
+          {currentSession?.phone && (
+            <p className="text-xs text-slate-500 mt-2 font-medium">
+              Vinculado a: <strong className="text-slate-700">+{currentSession.phone}</strong>
+            </p>
+          )}
+        </div>
+
+        {/* Acciones */}
+        <div className="flex flex-wrap gap-2">
+          {(!currentSession || currentSession.status === 'disconnected' || currentSession.status === 'created' || currentSession.status === 'failed') ? (
+            <button
+              onClick={handleCreateAndStart}
+              disabled={actionLoading}
+              className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white text-xs font-bold rounded-xl shadow-sm transition-colors"
+            >
+              {actionLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
+              {currentSession ? 'Iniciar Sesión' : 'Crear e Iniciar'}
+            </button>
+          ) : (
+            <button
+              onClick={handleStop}
+              disabled={actionLoading}
+              className="flex items-center gap-1.5 px-4 py-2 bg-rose-600 hover:bg-rose-700 disabled:bg-slate-300 text-white text-xs font-bold rounded-xl shadow-sm transition-colors"
+            >
+              {actionLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Square className="w-3.5 h-3.5" />}
+              Detener Sesión
+            </button>
+          )}
+          
+          <a
+            href="http://localhost:2886"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl shadow-sm transition-colors"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+            Abrir Dashboard QR
+          </a>
+        </div>
+      </div>
+
+      {currentSession?.status === 'qr_ready' && (
+        <div className="bg-amber-50 border border-amber-100 text-amber-800 rounded-xl p-4 text-xs space-y-2">
+          <p className="font-bold">⚠️ Vinculación requerida:</p>
+          <p>Tu sesión de WhatsApp está lista para vincularse pero aún no tiene una cuenta asociada. Por favor, realiza lo siguiente:</p>
+          <ol className="list-decimal list-inside space-y-1 ml-1">
+            <li>Haz clic en el botón de arriba **"Abrir Dashboard QR"** o visita <a href="http://localhost:2886" target="_blank" rel="noopener noreferrer" className="underline font-bold">http://localhost:2886</a>.</li>
+            <li>En esa página, escanea el código QR utilizando tu teléfono móvil (ve a WhatsApp → Dispositivos Vinculados → Vincular Dispositivo).</li>
+            <li>Una vez escaneado, el estado aquí cambiará a **Conectado**.</li>
+          </ol>
+        </div>
+      )}
+
+      {/* Formulario */}
+      <form onSubmit={handleSave} className="space-y-4 pt-2 border-t border-slate-100">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className={labelCls}>URL de API de OpenWA</label>
+            <input
+              type="url"
+              required
+              value={apiUrl}
+              onChange={e => setApiUrl(e.target.value)}
+              placeholder="http://localhost:2785/api"
+              className={inputCls}
+            />
+          </div>
+          <div>
+            <label className={labelCls}>Nombre de Sesión</label>
+            <input
+              type="text"
+              required
+              value={sessionName}
+              onChange={e => setSessionName(e.target.value.replace(/[^a-zA-Z0-9-]/g, ''))}
+              placeholder="marketing-bot"
+              className={inputCls}
+            />
+          </div>
+        </div>
+        <div>
+          <label className={labelCls}>Clave de API de OpenWA (X-API-Key)</label>
+          <input
+            type="password"
+            value={apiKey}
+            onChange={e => setApiKey(e.target.value)}
+            placeholder="Introduce tu X-API-Key (Dejar vacío si no usas contraseña)"
+            className={inputCls}
+          />
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            type="submit"
+            disabled={saving}
+            className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white text-xs font-bold rounded-xl transition-colors shadow-sm"
+          >
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            Guardar Configuración
+          </button>
+          {saved && (
+            <span className="text-xs font-bold text-emerald-600 flex items-center gap-1">
+              <CheckCircle className="w-4 h-4" /> Configuración Guardada
+            </span>
+          )}
+        </div>
+      </form>
+    </div>
+  );
+};
+

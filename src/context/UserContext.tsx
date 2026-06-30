@@ -34,11 +34,28 @@ export const UserProvider: React.FC<Props> = ({ children, userId }) => {
   const fetchProfile = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      let data: any = null;
+      let error: any = null;
+      
+      const res = await supabase
         .from('usuarios')
-        .select('id_usuario, nombre, apellido, correo, id_rol, roles(nombre_rol)')
+        .select('id_usuario, nombre, apellido, correo, id_rol, roles(nombre_rol), telefono, whatsapp_session_name, whatsapp_phone')
         .eq('id_usuario', userId)
         .single();
+        
+      if (res.error && res.error.message.includes('column')) {
+        // Fallback without whatsapp columns
+        const fallback = await supabase
+          .from('usuarios')
+          .select('id_usuario, nombre, apellido, correo, id_rol, roles(nombre_rol)')
+          .eq('id_usuario', userId)
+          .single();
+        data = fallback.data;
+        error = fallback.error;
+      } else {
+        data = res.data;
+        error = res.error;
+      }
 
       if (error || !data) {
         // Si no hay perfil aún (ej: login con Google nuevo), por defecto es Cliente (rol 5)
@@ -49,6 +66,9 @@ export const UserProvider: React.FC<Props> = ({ children, userId }) => {
           correo: '',
           id_rol: 5 as RolId,
           nombre_rol: 'Cliente' as RolNombre,
+          telefono: '',
+          whatsapp_session_name: '',
+          whatsapp_phone: '',
         });
       } else {
         const rolesData = (data as any).roles;
@@ -59,6 +79,9 @@ export const UserProvider: React.FC<Props> = ({ children, userId }) => {
           correo: data.correo,
           id_rol: data.id_rol as RolId,
           nombre_rol: (rolesData?.nombre_rol ?? 'Cliente') as RolNombre,
+          telefono: data.telefono || '',
+          whatsapp_session_name: data.whatsapp_session_name || '',
+          whatsapp_phone: data.whatsapp_phone || '',
         });
       }
     } catch {
