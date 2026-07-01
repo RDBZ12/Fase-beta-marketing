@@ -18,7 +18,7 @@ const ESTADO_COLORS: Record<string, string> = {
   'Pendiente Aprobacion': 'bg-amber-100 text-amber-700',
 };
 
-// ─── Modal ────────────────────────────────────────────────────────────────────
+// ─── Modal ─
 interface ModalProps {
   isOpen: boolean; onClose: () => void; onSaved: () => void;
   pub?: Publicacion | null;
