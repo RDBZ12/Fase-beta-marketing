@@ -33,6 +33,7 @@ export default function AuthButton() {
       options: {
         redirectTo: window.location.origin,
         queryParams: { prompt: 'select_account' },
+        scopes: 'openid profile email https://www.googleapis.com/auth/gmail.send',
       },
     })
     if (error) console.error('Error al iniciar sesión:', error.message)

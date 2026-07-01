@@ -243,24 +243,47 @@ export const UsuariosModule: React.FC = () => {
   const [search, setSearch] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<Usuario | null>(null);
+  const [page, setPage] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+  const pageSize = 10;
 
   const fetchAll = async () => {
     setLoading(true);
-    const [{ data: usrs }, { data: rls }] = await Promise.all([
-      supabase.from('usuarios').select('*, roles(nombre_rol)').order('nombre'),
-      supabase.from('roles').select('*').order('id_rol'),
-    ]);
-    if (usrs) {
+    
+    // Optimización: Filtros del lado del servidor
+    let query = supabase
+      .from('usuarios')
+      .select('id_usuario, nombre, apellido, correo, telefono, id_rol, estado, roles!inner(nombre_rol)', { count: 'exact' });
+
+    if (search) {
+      query = query.or(`nombre.ilike.%${search}%,apellido.ilike.%${search}%,correo.ilike.%${search}%`);
+    }
+
+    // Optimización: Paginación estricta
+    const { data: usrs, count, error: usrsErr } = await query
+      .order('nombre')
+      .range(page * pageSize, (page + 1) * pageSize - 1);
+
+    const { data: rls } = await supabase.from('roles').select('id_rol, nombre_rol, descripcion').order('id_rol');
+
+    if (usrs && !usrsErr) {
       setUsuarios(usrs.map((u: any) => ({
         ...u,
         nombre_rol: u.roles?.nombre_rol,
       })));
+      if (count !== null) setTotalCount(count);
     }
     if (rls) setRoles(rls as Rol[]);
     setLoading(false);
   };
 
-  useEffect(() => { fetchAll(); }, []);
+  // Optimización: Debounce para evitar peticiones por cada tecla pulsada
+  useEffect(() => { 
+    const delayDebounceFn = setTimeout(() => {
+      fetchAll();
+    }, 500);
+    return () => clearTimeout(delayDebounceFn);
+  }, [search, page]);
 
   const handleDelete = async (id: string) => {
     if (!confirm('¿Eliminar este usuario? Esta acción no se puede deshacer.')) return;
@@ -268,9 +291,7 @@ export const UsuariosModule: React.FC = () => {
     fetchAll();
   };
 
-  const filtered = usuarios.filter(u =>
-    `${u.nombre} ${u.apellido} ${u.correo}`.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = usuarios; // El filtrado ya se hace en el backend
 
   if (!isAdmin) {
     return (
@@ -382,6 +403,29 @@ export const UsuariosModule: React.FC = () => {
             </table>
           </div>
         )}
+      </div>
+
+      {/* Pagination Controls */}
+      <div className="flex justify-between items-center px-4 py-3 bg-white border border-slate-100 rounded-2xl shadow-sm mt-4">
+        <span className="text-xs text-slate-500">
+          Mostrando {usuarios.length > 0 ? page * pageSize + 1 : 0} a {Math.min((page + 1) * pageSize, totalCount)} de {totalCount}
+        </span>
+        <div className="flex gap-2">
+          <button 
+            disabled={page === 0} 
+            onClick={() => setPage(p => p - 1)}
+            className="px-3 py-1 text-xs font-bold text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 disabled:opacity-50"
+          >
+            Anterior
+          </button>
+          <button 
+            disabled={(page + 1) * pageSize >= totalCount} 
+            onClick={() => setPage(p => p + 1)}
+            className="px-3 py-1 text-xs font-bold text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 disabled:opacity-50"
+          >
+            Siguiente
+          </button>
+        </div>
       </div>
 
       <UsuarioModal

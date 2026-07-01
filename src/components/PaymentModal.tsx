@@ -25,6 +25,7 @@ const generarPDF = async (datos: {
   total: number
   paypalOrderId: string
   fecha?: string
+  url_dgii?: string
 }) => {
   const doc   = new jsPDF({ unit: 'mm', format: 'a4' })
   const W     = 210  // page width
@@ -385,6 +386,7 @@ export function PaymentModal({ isOpen, onClose, campaign, session, onPagado }: P
         total:        data.pago.total_con_itbis,
         paypalOrderId,
         fecha:        data.pago.fecha,
+        url_dgii:     data.url_dgii,
       })
 
       // ── ACTIVAR CAMPAÑA ────────────────────────────────────

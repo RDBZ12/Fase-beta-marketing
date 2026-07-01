@@ -40,10 +40,6 @@ async function capturePayPalOrder(orderId: string, accessToken: string): Promise
   return json
 }
 
-function generarNCF(secuencial: number): string {
-  return `E32${String(secuencial).padStart(10, '0')}`
-}
-
 // ── Handler ───────────────────────────────────────────────────────────────────
 
 serve(async (req) => {
@@ -108,11 +104,7 @@ serve(async (req) => {
     }
 
     // ── 4. Generar NCF Vía API ECF ─────────────────────────────────────────
-    const { count } = await supabase
-      .from('pagos')
-      .select('*', { count: 'exact', head: true })
-
-    let ncf = generarNCF((count ?? 0) + 1) // Fallback simulado
+    let ncf = 'Pendiente DGII'
 
     // Conversión de USD a DOP (tasa fija aproximada de 59.00)
     const TASA_CAMBIO = 59.00
@@ -122,6 +114,8 @@ serve(async (req) => {
     const itbis  = montoCapturadoDOP - monto
     const total  = montoCapturadoDOP
 
+    let ecfResponseData = null;
+
     try {
       const ecfApiKey = Deno.env.get('ECF_API_KEY')
       if (ecfApiKey) {
@@ -129,7 +123,6 @@ serve(async (req) => {
           "ECF": {
             "Encabezado": {
               "IdDoc": {
-                "eNCF": ncf,
                 "TipoeCF": "32",
                 "TipoPago": "1",
                 "TipoIngresos": "01",
@@ -143,19 +136,6 @@ serve(async (req) => {
                 },
                 "IndicadorMontoGravado": "0",
                 "IndicadorEnvioDiferido": "1"
-              },
-              "Emisor": {
-                "RNCEmisor": "132907401",
-                "CorreoEmisor": "utesa@utesa.edu.com",
-                "FechaEmision": new Date().toLocaleDateString('es-DO', {day:'2-digit',month:'2-digit',year:'numeric'}).replace(/\//g, '-'),
-                "DireccionEmisor": "Santiago",
-                "NombreComercial": "UTESA",
-                "RazonSocialEmisor": "UTESA",
-                "TablaTelefonoEmisor": {
-                  "TelefonoEmisor": [
-                    "829-282-7556"
-                  ]
-                }
               },
               "Totales": {
                 "ITBIS1": "18",
@@ -180,8 +160,7 @@ serve(async (req) => {
                 "IndicadorFacturacion": "1",
                 "IndicadorBienoServicio": "1"
               }
-            },
-            "FechaHoraFirma": new Date().toLocaleString('es-DO', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'}).replace(/\//g, '-')
+            }
           }
         }
         
@@ -196,6 +175,7 @@ serve(async (req) => {
         
         if (ecfRes.ok) {
           const ecfData = await ecfRes.json()
+          ecfResponseData = ecfData;
           if (ecfData.encf) ncf = ecfData.encf
         } else {
           console.error("Error API ECF:", await ecfRes.text())
@@ -214,6 +194,7 @@ serve(async (req) => {
     if (updateErr) throw new Error(`Error actualizando campaña: ${updateErr.message}`)
 
     // ── 6. Insertar registro de pago ──────────────────────────────────────
+    const dgiiUrl = ecfResponseData?.dgiiUrl ?? null;
     const { data: nuevoPago, error: insertErr } = await supabase
       .from('pagos')
       .insert({
@@ -226,6 +207,7 @@ serve(async (req) => {
         rnc_cedula:      rnc_cedula ?? null,
         razon_social:    razon_social ?? null,
         tipo_comprobante: 'Factura de Consumo',
+        url_dgii:        dgiiUrl,
       })
       .select()
       .single()
@@ -239,6 +221,8 @@ serve(async (req) => {
         ncf,
         pago: nuevoPago,
         monto_cobrado: total,
+        dgii_response: ecfResponseData,
+        url_dgii: dgiiUrl
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )

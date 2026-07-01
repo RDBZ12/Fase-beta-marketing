@@ -26,8 +26,11 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onCancel, onFini
     description: '',
     audience: '',
     objective: '',
+    objective: '',
     startDate: getLocalDateString(),
-    endDate: ''
+    endDate: '',
+    scheduledTime: '',
+    socialNetwork: 'instagram'
   });
 
   const [aiResults, setAiResults] = useState<any>(null);
@@ -174,12 +177,19 @@ Genera la estrategia de marketing completa y estructurada como JSON. Asegúrate 
       // Guardar LA única publicación generada
       if (aiResults?.copys && aiResults.copys.length > 0) {
         // Tomamos solo la primera para evitar agotar las cuotas de redes sociales/Ayrshare
+        let pubDateStr = formData.startDate;
+        if (formData.scheduledTime) {
+          pubDateStr += `T${formData.scheduledTime}:00`;
+        } else {
+          pubDateStr += `T12:00:00`; // Hora por defecto
+        }
+
         const singlePub = {
-          titulo: `Post Generado AI`,
+          titulo: `Post Generado AI - ${formData.socialNetwork}`,
           contenido: aiResults.copys[0] + '\n\n' + (aiResults.hashtags || ''),
-          estado: 'Borrador', // Regla de negocio: No se programa hasta el pago
+          estado: 'Borrador', 
           id_campana: newCamp.id,
-          fecha_publicacion: new Date(Date.now() + 86400000).toISOString(),
+          fecha_publicacion: new Date(pubDateStr).toISOString(),
           imagen_url: (aiResults.image_prompts && aiResults.image_prompts[0]) 
             ? `https://image.pollinations.ai/prompt/${encodeURIComponent(aiResults.image_prompts[0])}?width=800&height=800&nologo=true`
             : (selectedImages[0] || null)
@@ -315,6 +325,30 @@ Genera la estrategia de marketing completa y estructurada como JSON. Asegúrate 
                   value={formData.endDate}
                   min={formData.startDate || getLocalDateString()}
                   onChange={e => setFormData({...formData, endDate: e.target.value})}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">Red Social (Destino)</label>
+                <select 
+                  value={formData.socialNetwork}
+                  onChange={e => setFormData({...formData, socialNetwork: e.target.value})}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 appearance-none">
+                  <option value="instagram">Instagram</option>
+                  <option value="facebook">Facebook</option>
+                  <option value="twitter">X (Twitter)</option>
+                  <option value="linkedin">LinkedIn</option>
+                  <option value="telegram">Telegram</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">Hora Programada (Opcional)</label>
+                <input 
+                  type="time" 
+                  value={formData.scheduledTime}
+                  onChange={e => setFormData({...formData, scheduledTime: e.target.value})}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
               </div>
             </div>

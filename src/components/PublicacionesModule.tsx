@@ -15,6 +15,7 @@ const ESTADO_COLORS: Record<string, string> = {
   Publicada: 'bg-emerald-100 text-emerald-700',
   Borrador: 'bg-slate-100 text-slate-600',
   Cancelada: 'bg-rose-100 text-rose-500',
+  'Pendiente Aprobacion': 'bg-amber-100 text-amber-700',
 };
 
 // ─── Modal ────────────────────────────────────────────────────────────────────
@@ -22,7 +23,7 @@ interface ModalProps {
   isOpen: boolean; onClose: () => void; onSaved: () => void;
   pub?: Publicacion | null;
   redes: RedSocial[]; tipos: TipoContenido[]; campaigns: Campaign[];
-  onPublishNow: (pub: Publicacion, bypassConfirm?: boolean) => Promise<void>;
+  onPublishNow: (pub: Publicacion, bypassConfirm?: boolean, isScheduling?: boolean) => Promise<void>;
 }
 
 const getLocalISOString = (dateObj: Date): string => {
@@ -126,7 +127,9 @@ const PubModal: React.FC<ModalProps> = ({ isOpen, onClose, onSaved, pub, redes, 
       }
       onSaved(); onClose();
       if (estado === 'Publicada' && savedPub) {
-        onPublishNow(savedPub, true);
+        onPublishNow(savedPub, true, false);
+      } else if (estado === 'Programada' && savedPub) {
+        onPublishNow(savedPub, true, true);
       }
     } catch (err: any) { setError(err.message || 'Error al guardar.'); }
     finally { setSaving(false); }
@@ -186,7 +189,7 @@ const PubModal: React.FC<ModalProps> = ({ isOpen, onClose, onSaved, pub, redes, 
             <div>
               <label className={lbl}>Estado</label>
               <select value={estado} onChange={e => setEstado(e.target.value as Publicacion['estado'])} className={cls}>
-                {['Borrador', 'Programada', 'Publicada', 'Cancelada'].map(s => <option key={s} value={s}>{s}</option>)}
+                {['Borrador', 'Programada', 'Publicada', 'Cancelada', 'Pendiente Aprobacion'].map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
           </div>
@@ -252,37 +255,78 @@ export const PublicacionesModule: React.FC = () => {
   const [publishingId, setPublishingId] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [fetchingAnalyticsId, setFetchingAnalyticsId] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+  const [stats, setStats] = useState<Record<string, number>>({});
+  const pageSize = 12;
 
   const fetchAll = async () => {
     setLoading(true);
-    const [{ data: ps }, { data: rs }, { data: ts }, { data: cs }, { data: ints }] = await Promise.all([
-      supabase.from('publicaciones').select('*, redes_sociales(nombre_red), tipos_contenido(nombre_tipo), campaigns(nombre_campana)').order('fecha_publicacion', { ascending: false }),
-      supabase.from('redes_sociales').select('*').eq('estado', 'activo'),
-      supabase.from('tipos_contenido').select('*'),
+    
+    // 1. Query publicaciones con paginación y filtros en backend
+    let pubQuery = supabase
+      .from('publicaciones')
+      .select('id_publicacion, titulo, contenido, fecha_publicacion, estado, id_red, id_tipo_contenido, id_campana, imagen_url, ayrshare_post_id, instagram_post_url, redes_sociales(nombre_red), tipos_contenido(nombre_tipo), campaigns(nombre_campana)', { count: 'exact' });
+
+    if (search) {
+      pubQuery = pubQuery.or(`titulo.ilike.%${search}%,contenido.ilike.%${search}%`);
+    }
+    if (filterEstado !== 'todos') {
+      pubQuery = pubQuery.eq('estado', filterEstado);
+    }
+    if (filterRed !== 'todos') {
+      pubQuery = pubQuery.eq('id_red', parseInt(filterRed));
+    }
+
+    const { data: ps, count } = await pubQuery
+      .order('fecha_publicacion', { ascending: false })
+      .range(page * pageSize, (page + 1) * pageSize - 1);
+
+    if (count !== null) setTotalCount(count);
+
+    // 2. Fetch solo catálogos necesarios y estadisticas cacheadas
+    const [{ data: rs }, { data: ts }, { data: cs }, { data: statsData }] = await Promise.all([
+      supabase.from('redes_sociales').select('id_red, nombre_red, estado').eq('estado', 'activo'),
+      supabase.from('tipos_contenido').select('id_tipo_contenido, nombre_tipo'),
       supabase.from('campaigns').select('id, nombre_campana, estado'),
-      supabase.from('interacciones').select('*'),
+      supabase.from('publicaciones_stats').select('estado, cantidad'),
     ]);
 
-    const interactions = ints || [];
+    if (statsData) {
+      const newStats: Record<string, number> = {};
+      statsData.forEach((s: any) => { newStats[s.estado] = Number(s.cantidad); });
+      setStats(newStats);
+    }
 
-    if (ps) setPubs(ps.map((p: any) => {
-      const pubInts = interactions.filter((i: any) => i.id_publicacion === p.id_publicacion);
-      const likes = pubInts.filter((i: any) => i.tipo_interaccion === 'like').reduce((acc: number, cur: any) => acc + cur.cantidad, 0);
-      const comentarios = pubInts.filter((i: any) => i.tipo_interaccion === 'comentario').reduce((acc: number, cur: any) => acc + cur.cantidad, 0);
-      const compartidos = pubInts.filter((i: any) => i.tipo_interaccion === 'compartido').reduce((acc: number, cur: any) => acc + cur.cantidad, 0);
-      const alcance = pubInts.filter((i: any) => i.tipo_interaccion === 'alcance' || i.tipo_interaccion === 'impresion').reduce((acc: number, cur: any) => acc + cur.cantidad, 0);
+    // 3. OPTIMIZACIÓN CRÍTICA: Solo traer interacciones de los posts visibles
+    let interactions: any[] = [];
+    if (ps && ps.length > 0) {
+      const pubIds = ps.map((p: any) => p.id_publicacion);
+      const { data: ints } = await supabase
+        .from('interacciones')
+        .select('id_publicacion, tipo_interaccion, cantidad')
+        .in('id_publicacion', pubIds);
+      interactions = ints || [];
+    }
 
-      return {
-        ...p,
-        nombre_red: p.redes_sociales?.nombre_red,
-        nombre_tipo: p.tipos_contenido?.nombre_tipo,
-        nombre_campana: p.campaigns?.nombre_campana,
-        likes,
-        comentarios,
-        compartidos,
-        alcance,
-      };
-    }));
+    if (ps) {
+      setPubs(ps.map((p: any) => {
+        const pubInts = interactions.filter((i: any) => i.id_publicacion === p.id_publicacion);
+        const likes = pubInts.filter((i: any) => i.tipo_interaccion === 'like').reduce((acc: number, cur: any) => acc + cur.cantidad, 0);
+        const comentarios = pubInts.filter((i: any) => i.tipo_interaccion === 'comentario').reduce((acc: number, cur: any) => acc + cur.cantidad, 0);
+        const compartidos = pubInts.filter((i: any) => i.tipo_interaccion === 'compartido').reduce((acc: number, cur: any) => acc + cur.cantidad, 0);
+        const alcance = pubInts.filter((i: any) => i.tipo_interaccion === 'alcance' || i.tipo_interaccion === 'impresion').reduce((acc: number, cur: any) => acc + cur.cantidad, 0);
+
+        return {
+          ...p,
+          nombre_red: p.redes_sociales?.nombre_red,
+          nombre_tipo: p.tipos_contenido?.nombre_tipo,
+          nombre_campana: p.campaigns?.nombre_campana,
+          likes, comentarios, compartidos, alcance,
+        };
+      }));
+    }
+    
     if (rs) setRedes(rs as RedSocial[]);
     if (ts) setTipos(ts as TipoContenido[]);
     if (cs) setCampaigns(cs.map((c: any) => ({ id: c.id, name: c.nombre_campana, channel: 'Multi', status: c.estado, leads: 0, ctr: 0, reach: '0', startDate: '' })));
@@ -290,31 +334,14 @@ export const PublicacionesModule: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchAll();
+    const delayDebounceFn = setTimeout(() => {
+      fetchAll();
+    }, 500);
 
-    const channelInts = supabase
-      .channel('realtime-interacciones')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'interacciones' },
-        () => { fetchAll(); }
-      )
-      .subscribe();
+    return () => clearTimeout(delayDebounceFn);
+  }, [search, filterEstado, filterRed, page]);
 
-    const channelPubs = supabase
-      .channel('realtime-publicaciones')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'publicaciones' },
-        () => { fetchAll(); }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channelInts);
-      supabase.removeChannel(channelPubs);
-    };
-  }, []);
+  // Se han eliminado los listeners de Realtime problemáticos que causaban bucles de Egress
 
   const handleSyncMetrics = async () => {
     const publicadas = pubs.filter(p => p.estado === 'Publicada');
@@ -450,8 +477,8 @@ export const PublicacionesModule: React.FC = () => {
     }
   };
 
-  const handlePublishNow = async (pub: Publicacion, bypassConfirm = false) => {
-    if (!bypassConfirm && !confirm('¿Estás seguro de que quieres lanzar esta publicación a las redes reales ahora mismo?')) return;
+  const handlePublishNow = async (pub: Publicacion, bypassConfirm = false, isScheduling = false) => {
+    if (!bypassConfirm && !isScheduling && !confirm('¿Estás seguro de que quieres lanzar esta publicación a las redes reales ahora mismo?')) return;
 
     setPublishingId(pub.id_publicacion);
     try {
@@ -548,14 +575,9 @@ export const PublicacionesModule: React.FC = () => {
     }
   };
 
-  const filtered = pubs.filter(p => {
-    const ms = `${p.titulo} ${p.contenido}`.toLowerCase().includes(search.toLowerCase());
-    const me = filterEstado === 'todos' || p.estado === filterEstado;
-    const mr = filterRed === 'todos' || String(p.id_red) === filterRed;
-    return ms && me && mr;
-  });
+  const filtered = pubs; // El filtrado ahora ocurre del lado del servidor
 
-  const statsCounts = ['Programada', 'Publicada', 'Borrador', 'Cancelada'].map(e => ({ label: e, count: pubs.filter(p => p.estado === e).length }));
+  const statsCounts = ['Programada', 'Publicada', 'Borrador', 'Cancelada', 'Pendiente Aprobacion'].map(e => ({ label: e, count: stats[e] || 0 }));
   const cls = 'px-3 py-2 text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent';
 
   return (
@@ -605,7 +627,7 @@ export const PublicacionesModule: React.FC = () => {
         </select>
         <select value={filterEstado} onChange={e => setFilterEstado(e.target.value)} className={cls}>
           <option value="todos">Todos los estados</option>
-          {['Borrador', 'Programada', 'Publicada', 'Cancelada'].map(s => <option key={s} value={s}>{s}</option>)}
+          {['Borrador', 'Programada', 'Publicada', 'Cancelada', 'Pendiente Aprobacion'].map(s => <option key={s} value={s}>{s}</option>)}
         </select>
       </div>
 
@@ -703,6 +725,29 @@ export const PublicacionesModule: React.FC = () => {
           ))}
         </div>
       )}
+
+      {/* Pagination Controls */}
+      <div className="flex justify-between items-center px-4 py-3 bg-white border border-slate-100 rounded-2xl shadow-sm">
+        <span className="text-xs text-slate-500">
+          Mostrando {pubs.length > 0 ? page * pageSize + 1 : 0} a {Math.min((page + 1) * pageSize, totalCount)} de {totalCount} publicaciones
+        </span>
+        <div className="flex gap-2">
+          <button 
+            disabled={page === 0} 
+            onClick={() => setPage(p => p - 1)}
+            className="px-3 py-1 text-xs font-bold text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 disabled:opacity-50 transition-colors"
+          >
+            Anterior
+          </button>
+          <button 
+            disabled={(page + 1) * pageSize >= totalCount} 
+            onClick={() => setPage(p => p + 1)}
+            className="px-3 py-1 text-xs font-bold text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 disabled:opacity-50 transition-colors"
+          >
+            Siguiente
+          </button>
+        </div>
+      </div>
 
       <PubModal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setEditing(null); }}
         onSaved={fetchAll} pub={editing} redes={redes} tipos={tipos} campaigns={campaigns}

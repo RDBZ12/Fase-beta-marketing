@@ -89,7 +89,7 @@ export interface Publicacion {
   titulo: string;
   contenido: string;
   fecha_publicacion: string;
-  estado: 'Programada' | 'Publicada' | 'Borrador' | 'Cancelada';
+  estado: 'Programada' | 'Publicada' | 'Borrador' | 'Cancelada' | 'Pendiente Aprobacion';
   id_campana?: string;
   id_red?: number;
   id_tipo_contenido?: number;
@@ -154,6 +154,7 @@ export interface Pago {
   tipo_comprobante?: string;
   fecha: string;
   nombre_campana?: string;
+  url_dgii?: string;
 }
 
 // ─── User Context ─────────────────────────────────────────────────────────────
