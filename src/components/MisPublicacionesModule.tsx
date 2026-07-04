@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Image as ImageIcon, Calendar, Sparkles, UploadCloud, AlertCircle, PlusCircle, Edit2, Share2, MessageSquare, Loader2, Search, X } from 'lucide-react';
+import { Image as ImageIcon, Calendar, Sparkles, UploadCloud, AlertCircle, PlusCircle, Edit2, Share2, MessageSquare, Loader2, Search, X, Trash2 } from 'lucide-react';
 import { sendWhatsAppTextMessage, sendWhatsAppImageMessage, getOpenWAChats, getOpenWAContacts, getOpenWASessions, getOpenWASettings } from '../lib/whatsapp';
 import { supabase } from '../supabaseClient';
 import type { Campaign } from '../types';
@@ -427,6 +427,78 @@ REGLAS ESTRICTAS:
     }
   };
 
+  const [isQuickPublishing, setIsQuickPublishing] = useState<string | null>(null);
+
+  const handleQuickPublish = async (pub: any) => {
+    setIsQuickPublishing(pub.id_publicacion);
+    
+    let plat = 'instagram';
+    if (pub.id_red) {
+      const redObj = redes.find(r => String(r.id_red) === String(pub.id_red));
+      if (redObj) {
+        const nred = redObj.nombre_red.toLowerCase();
+        if (nred.includes('tele')) plat = 'telegram';
+        else if (nred.includes('face')) plat = 'facebook';
+        else if (nred.includes('twit') || nred.includes('x')) plat = 'twitter';
+        else if (nred.includes('link')) plat = 'linkedin';
+        else if (nred.includes('tik')) plat = 'tiktok';
+        else if (nred.includes('you')) plat = 'youtube';
+      }
+    }
+
+    try {
+      const { data: ayrData, error: ayrError } = await supabase.functions.invoke('publish_social', {
+        body: { 
+          post: pub.contenido, 
+          platforms: [plat], 
+          mediaUrls: pub.imagen_url ? [pub.imagen_url] : [],
+        }
+      });
+
+      if (!ayrError && ayrData && !ayrData.error) {
+        const ayrshareId = ayrData.postId || ayrData.data?.id || null;
+        const payload: any = { estado: 'Publicada' };
+        if (ayrshareId) payload.ayrshare_post_id = ayrshareId;
+
+        const { error } = await supabase.from('publicaciones').update(payload).eq('id_publicacion', pub.id_publicacion);
+        if (!error) {
+          showToast("Publicación subida exitosamente.", 'success');
+          fetchPublicaciones();
+        } else {
+          showToast("Error actualizando estado: " + error.message, 'error');
+        }
+      } else {
+        const errorRaw = ayrError?.message || ayrData?.error || 'Error desconocido';
+        let userFriendlyMsg = "Error al publicar.";
+        try {
+          const errorText = typeof errorRaw === 'string' ? errorRaw : JSON.stringify(errorRaw);
+          if (errorText.toLowerCase().includes('duplicate') || errorText.includes('"code":137')) {
+            userFriendlyMsg = "⚠️ Bloqueo por Spam: Ya publicaste este contenido hace poco.";
+          } else if (errorText.toLowerCase().includes('unauthorized')) {
+            userFriendlyMsg = "Cuenta desvinculada. Verifica tu conexión.";
+          }
+        } catch(e) {}
+        showToast(userFriendlyMsg, 'error');
+      }
+    } catch (err: any) {
+      showToast("Error de conexión: " + err.message, 'error');
+    } finally {
+      setIsQuickPublishing(null);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('¿Estás seguro de que deseas eliminar esta publicación?')) return;
+    
+    const { error } = await supabase.from('publicaciones').delete().eq('id_publicacion', id);
+    if (!error) {
+      showToast('Publicación eliminada exitosamente.', 'success');
+      fetchPublicaciones();
+    } else {
+      showToast('Error al eliminar: ' + error.message, 'error');
+    }
+  };
+
   if (isCreating) {
     return (
       <div className="max-w-3xl mx-auto bg-white border border-slate-200 rounded-3xl p-8 backdrop-blur-xl shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-500 relative">
@@ -687,13 +759,31 @@ REGLAS ESTRICTAS:
                           <span className="text-[10px] font-bold uppercase tracking-wider max-w-0 overflow-hidden group-hover/edit:max-w-xs transition-all duration-300 ease-in-out whitespace-nowrap">Editar</span>
                         </button>
                       )}
+                      {pub.estado === 'Publicada' && (
+                        <button 
+                          onClick={() => { setReplicateTargetPub(pub); setSelectedRedId(''); }}
+                          className="bg-white/90 backdrop-blur-md px-2 py-1.5 rounded-md text-slate-600 hover:text-violet-600 transition-colors shadow-sm flex items-center gap-1 group/replicate"
+                          title="Subir a otra red social"
+                        >
+                          <Share2 className="w-3.5 h-3.5" />
+                          <span className="text-[10px] font-bold uppercase tracking-wider max-w-0 overflow-hidden group-hover/replicate:max-w-xs transition-all duration-300 ease-in-out whitespace-nowrap">Subir a otra red</span>
+                        </button>
+                      )}
                       <button 
-                        onClick={() => { setReplicateTargetPub(pub); setSelectedRedId(''); }}
-                        className="bg-white/90 backdrop-blur-md px-2 py-1.5 rounded-md text-slate-600 hover:text-violet-600 transition-colors shadow-sm flex items-center gap-1 group/replicate"
-                        title="Subir a otra red social"
+                        onClick={() => setSharingWhatsAppPub(pub)}
+                        className="bg-white/90 backdrop-blur-md px-2 py-1.5 rounded-md text-slate-600 hover:text-emerald-600 transition-colors shadow-sm flex items-center gap-1 group/wa"
+                        title="Compartir por WhatsApp"
                       >
-                        <Share2 className="w-3.5 h-3.5" />
-                        <span className="text-[10px] font-bold uppercase tracking-wider max-w-0 overflow-hidden group-hover/replicate:max-w-xs transition-all duration-300 ease-in-out whitespace-nowrap">Subir a otra red</span>
+                        <MessageSquare className="w-3.5 h-3.5" />
+                        <span className="text-[10px] font-bold uppercase tracking-wider max-w-0 overflow-hidden group-hover/wa:max-w-xs transition-all duration-300 ease-in-out whitespace-nowrap">Compartir</span>
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(pub.id_publicacion)}
+                        className="bg-white/90 backdrop-blur-md px-2 py-1.5 rounded-md text-slate-600 hover:text-pink-600 transition-colors shadow-sm flex items-center gap-1 group/delete"
+                        title="Eliminar publicación"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span className="text-[10px] font-bold uppercase tracking-wider max-w-0 overflow-hidden group-hover/delete:max-w-xs transition-all duration-300 ease-in-out whitespace-nowrap">Eliminar</span>
                       </button>
                     </div>
                     <div className="absolute top-3 right-3 bg-black/60 backdrop-blur-md px-2 py-1 rounded-md flex items-center gap-1">

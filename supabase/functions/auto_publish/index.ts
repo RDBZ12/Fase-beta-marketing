@@ -157,8 +157,9 @@ serve(async (req) => {
       } catch (e: any) {
         console.error(`Error publishing ${pub.id_publicacion}:`, e);
         errors.push({ id: pub.id_publicacion, error: e.message });
-        // Marcar como 'Fallida' para evitar que intente publicarse en bucle infinito cada minuto
-        await supabase.from('publicaciones').update({ estado: 'Fallida' }).eq('id_publicacion', pub.id_publicacion);
+        // Marcar como 'Cancelada' para evitar que intente publicarse en bucle infinito cada minuto
+        // Nota: 'Cancelada' está permitido por el CHECK constraint de la base de datos
+        await supabase.from('publicaciones').update({ estado: 'Cancelada' }).eq('id_publicacion', pub.id_publicacion);
       }
     }
 

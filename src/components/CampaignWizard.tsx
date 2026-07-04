@@ -134,7 +134,14 @@ Genera la estrategia de marketing completa y estructurada como JSON. Asegúrate 
       const data = await response!.json();
       const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '{}';
       
-      const cleanJson = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+      let cleanJson = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+      
+      const startIndex = cleanJson.indexOf('{');
+      const endIndex = cleanJson.lastIndexOf('}');
+      if (startIndex !== -1 && endIndex !== -1 && endIndex >= startIndex) {
+        cleanJson = cleanJson.substring(startIndex, endIndex + 1);
+      }
+      
       const parsed = JSON.parse(cleanJson);
       
       setAiResults(parsed);
