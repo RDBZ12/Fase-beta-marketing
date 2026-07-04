@@ -22,10 +22,11 @@ const menuItems = [
   { id: 'usuarios',       label: 'Usuarios',       icon: UserCog },
   { id: 'ajustes',        label: 'Ajustes',        icon: Settings },
   { id: 'portal-cliente', label: 'Portal Cliente', icon: Eye },
+  { id: 'consultas', label: 'Consultas', icon: FileText },
 ];
 
 const permisosRol: Record<number, string[]> = {
-  1: ['dashboard', 'campanas', 'publicaciones', 'analytics', 'audiencia', 'clientes', 'pagos', 'usuarios', 'ajustes', 'portal-cliente'],
+  1: ['dashboard', 'campanas', 'publicaciones', 'analytics', 'audiencia', 'clientes', 'pagos', 'usuarios', 'ajustes', 'portal-cliente', 'consultas'],
   2: ['dashboard', 'campanas', 'analytics'],
   3: ['dashboard', 'campanas', 'analytics', 'audiencia'],
   4: ['dashboard', 'campanas', 'portal-cliente'],

@@ -41,9 +41,7 @@ export const MisPublicacionesModule: React.FC<MisPublicacionesModuleProps> = ({ 
     fecha_publicacion: initialDateTime.date,
     hora_publicacion: initialDateTime.time,
     imagen_url: '',
-    imagen_url: '',
-    id_red: '',
-    isScheduled: true // dummy flag to force recalculation down in render
+    id_red: ''
   });
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -98,10 +96,16 @@ export const MisPublicacionesModule: React.FC<MisPublicacionesModuleProps> = ({ 
     if (data) {
       const now = new Date();
       const updatedData = data.map(pub => {
-        return {
+        const mapped = {
           ...pub,
           nombre_red: pub.id_red ? ((pub as any).redes_sociales?.nombre_red || 'Instagram') : 'Todas las redes'
         };
+        if (mapped.estado === 'Programada' && new Date(mapped.fecha_publicacion) <= now) {
+          // Disparar actualización en BD en segundo plano
+          supabase.from('publicaciones').update({ estado: 'Publicada' }).eq('id_publicacion', mapped.id_publicacion).then();
+          return { ...mapped, estado: 'Publicada' };
+        }
+        return mapped;
       });
 
       setPublicaciones(updatedData);
@@ -225,21 +229,24 @@ REGLAS ESTRICTAS:
       }
     }
 
-    // 2. Enviar a Ayrshare (Edge Function) SOLO si es publicación inmediata
+    // 2. Enviar a Ayrshare (Edge Function) (Solo si no es WhatsApp)
     let ayrshareId = null;
+    const isWhatsApp = selectedRedObj?.nombre_red.toLowerCase().includes('what');
     const isoDate = new Date(datetime).toISOString();
     
+    // Ayrshare requiere que la programación sea de al menos 10-15 minutos en el futuro.
+    // Si la diferencia es menor a 15 minutos, lo publicamos inmediatamente (omitiendo scheduleDate)
     const diffMinutes = (new Date(datetime).getTime() - new Date().getTime()) / 60000;
-    // Consideramos "Programada" cualquier fecha que esté al menos 1 minuto en el futuro
-    const isScheduled = diffMinutes > 1; 
+    const isFutureEnough = diffMinutes >= 15;
     
-    if (!isScheduled) {
+    if (!isWhatsApp) {
       try {
         const { data: ayrData, error: ayrError } = await supabase.functions.invoke('publish_social', {
           body: { 
             post: formData.contenido, 
             platforms: uniquePlats, 
             mediaUrls: finalMediaUrl ? [finalMediaUrl] : [],
+            scheduleDate: isFutureEnough ? isoDate : undefined
           }
         });
         if (!ayrError && ayrData && !ayrData.error) {
@@ -252,7 +259,7 @@ REGLAS ESTRICTAS:
           try {
             const errorText = typeof errorRaw === 'string' ? errorRaw : JSON.stringify(errorRaw);
             if (errorText.toLowerCase().includes('duplicate') || errorText.includes('"code":137')) {
-              userFriendlyMsg = "⚠️ Bloqueo por Spam: Ya publicaste este contenido hace poco.";
+              userFriendlyMsg = "⚠️ Bloqueo por Spam: Ya publicaste este contenido hace poco. Modifica un poco el texto o cambia de red social para proteger tu cuenta.";
             } else if (errorText.toLowerCase().includes('unauthorized')) {
               userFriendlyMsg = "No se pudo conectar. Verifica que tus redes estén vinculadas correctamente.";
             } else {
@@ -262,12 +269,11 @@ REGLAS ESTRICTAS:
 
           showToast(userFriendlyMsg, 'error');
           setIsSaving(false);
-          return;
+          return; // Detener guardado si falla en Ayrshare
         }
       } catch (edgeErr: any) {
         console.warn("Error invocando publish_social:", edgeErr);
         showToast("Error al conectar con el publicador de redes: " + edgeErr.message, 'error');
-        setIsSaving(false);
         return;
       }
     }
@@ -283,20 +289,31 @@ REGLAS ESTRICTAS:
     };
     if (ayrshareId) payload.ayrshare_post_id = ayrshareId;
 
-    const nuevoEstado = isScheduled ? 'Programada' : 'Publicada';
+    const nuevoEstado = isFutureEnough ? 'Programada' : 'Publicada';
+
+    actionError = null;
+    let savedPub = null;
 
     if (editingId) {
       payload.estado = nuevoEstado;
-      const { error } = await supabase.from('publicaciones').update(payload).eq('id_publicacion', editingId);
+      const { data, error } = await supabase.from('publicaciones').update(payload).eq('id_publicacion', editingId).select();
       actionError = error;
+      if (data && data[0]) savedPub = data[0];
     } else {
       payload.estado = nuevoEstado;
-      const { error } = await supabase.from('publicaciones').insert([payload]);
+      const { data, error } = await supabase.from('publicaciones').insert([payload]).select();
       actionError = error;
+      if (data && data[0]) savedPub = data[0];
     }
 
     if (!actionError) {
       showToast(editingId ? "Publicación actualizada exitosamente." : "Publicación programada exitosamente.", 'success');
+      
+      const selectedRedObj = redes.find(r => String(r.id_red) === formData.id_red);
+      if (selectedRedObj?.nombre_red.toLowerCase().includes('what') && savedPub) {
+        setSharingWhatsAppPub(savedPub as any);
+      }
+
       setIsCreating(false);
       setEditingId(null);
       fetchPublicaciones();
@@ -334,6 +351,15 @@ REGLAS ESTRICTAS:
     let plat = 'instagram';
     if (selectedRedObj) {
       const nred = selectedRedObj.nombre_red.toLowerCase();
+      if (nred.includes('what')) {
+        // Lógica especial para WhatsApp: abrir modal directamente
+        setSharingWhatsAppPub(replicateTargetPub);
+        setReplicateTargetPub(null);
+        setSelectedRedId('');
+        setIsReplicating(false);
+        return;
+      }
+      
       if (nred.includes('tele')) plat = 'telegram';
       else if (nred.includes('face')) plat = 'facebook';
       else if (nred.includes('twit') || nred.includes('x')) plat = 'twitter';
@@ -569,13 +595,13 @@ REGLAS ESTRICTAS:
           <div className="pt-6 border-t border-slate-200 flex justify-end gap-3">
              <button onClick={() => { setIsCreating(false); setEditingId(null); }} className="px-6 py-2.5 rounded-xl font-medium text-slate-500 hover:text-slate-900 transition-colors">Cancelar</button>
              <button 
-                 onClick={handleSave}
-                 disabled={isSaving}
-                 className={`px-8 py-2.5 bg-violet-600 text-white rounded-xl font-bold shadow-lg shadow-violet-500/20 transition-colors ${isSaving ? 'opacity-70 cursor-not-allowed' : 'hover:bg-violet-500'}`}>
+               onClick={handleSave}
+               disabled={isSaving}
+               className={`px-8 py-2.5 bg-violet-600 text-white rounded-xl font-bold shadow-lg shadow-violet-500/20 transition-colors ${isSaving ? 'opacity-70 cursor-not-allowed' : 'hover:bg-violet-500'}`}>
                {isSaving ? 'Procesando...' : (
                  editingId 
                    ? 'Actualizar Publicación' 
-                   : (new Date(`${formData.fecha_publicacion}T${formData.hora_publicacion || '12:00'}:00`).getTime() - new Date().getTime()) / 60000 <= 1 
+                   : (new Date(`${formData.fecha_publicacion}T${formData.hora_publicacion || '12:00'}:00`).getTime() - new Date().getTime()) / 60000 < 15 
                      ? 'Publicar Ahora' 
                      : 'Programar Publicación'
                )}
@@ -668,14 +694,6 @@ REGLAS ESTRICTAS:
                       >
                         <Share2 className="w-3.5 h-3.5" />
                         <span className="text-[10px] font-bold uppercase tracking-wider max-w-0 overflow-hidden group-hover/replicate:max-w-xs transition-all duration-300 ease-in-out whitespace-nowrap">Subir a otra red</span>
-                      </button>
-                      <button 
-                        onClick={() => setSharingWhatsAppPub(pub)}
-                        className="bg-white/90 backdrop-blur-md px-2 py-1.5 rounded-md text-slate-600 hover:text-emerald-600 transition-colors shadow-sm flex items-center gap-1 group/wa"
-                        title="Compartir por WhatsApp"
-                      >
-                        <MessageSquare className="w-3.5 h-3.5" />
-                        <span className="text-[10px] font-bold uppercase tracking-wider max-w-0 overflow-hidden group-hover/wa:max-w-xs transition-all duration-300 ease-in-out whitespace-nowrap">Compartir</span>
                       </button>
                     </div>
                     <div className="absolute top-3 right-3 bg-black/60 backdrop-blur-md px-2 py-1 rounded-md flex items-center gap-1">
@@ -885,13 +903,17 @@ const ShareWhatsAppModal: React.FC<ShareWhatsAppModalProps> = ({ isOpen, onClose
       };
 
       // 3. Resolver nombre para todos los chats para que el buscador funcione
-      const resolvedChats = (chatsData || []).map((chat: any) => ({
-        id: chat.id,
-        name: resolveDisplayName(chat),
-        isGroup: chat.isGroup,
-        lastMessage: chat.lastMessage,
-        timestamp: chat.timestamp,
-      }));
+      const statusObj = { id: 'status@broadcast', name: 'Mi Estatus (WhatsApp)', isGroup: false, lastMessage: null, timestamp: Date.now() };
+      const resolvedChats = [
+        statusObj,
+        ...(chatsData || []).map((chat: any) => ({
+          id: chat.id,
+          name: resolveDisplayName(chat),
+          isGroup: chat.isGroup,
+          lastMessage: chat.lastMessage,
+          timestamp: chat.timestamp,
+        }))
+      ];
 
       // 4. Agregar contactos que NO tienen chat reciente para que el buscador los encuentre (solo en Full Load)
       if (isFullLoad) {
