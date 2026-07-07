@@ -17,7 +17,7 @@ export const TableInteracciones: React.FC = () => {
     if (params.sortBy) {
       query = query.order(params.sortBy, { ascending: !params.sortDesc });
     } else {
-      query = query.order('created_at', { ascending: false });
+      query = query.order('fecha', { ascending: false });
     }
 
     query = query.range(params.pageIndex * params.pageSize, (params.pageIndex + 1) * params.pageSize - 1);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { DataTable, type Column, type FetchDataParams } from '../DataTable';
 import { SidePanel } from '../SidePanel';
 import { supabase } from '../../../supabaseClient';
@@ -45,18 +45,17 @@ export const TableContenidoIA: React.FC = () => {
     }
   ];
 
-  const fetchContenidoIA = async (params: FetchDataParams) => {
+  const fetchContenidoIA = useCallback(async (params: FetchDataParams) => {
     let query = supabase
       .from('contenido_ia')
       .select('*', { count: 'exact' });
 
-    if (params.globalFilter) {
-      query = query.or(`tema.ilike.%${params.globalFilter}%,respuesta_ia.ilike.%${params.globalFilter}%,canal.ilike.%${params.globalFilter}%`);
+    if (params.searchTerm) {
+      query = query.or(`tema.ilike.%${params.searchTerm}%,respuesta_ia.ilike.%${params.searchTerm}%,canal.ilike.%${params.searchTerm}%`);
     }
 
-    if (params.sorting?.length) {
-      const sort = params.sorting[0];
-      query = query.order(sort.id, { ascending: !sort.desc });
+    if (params.sortBy) {
+      query = query.order(params.sortBy, { ascending: !params.sortDesc });
     } else {
       query = query.order('fecha', { ascending: false });
     }
@@ -70,9 +69,9 @@ export const TableContenidoIA: React.FC = () => {
 
     return {
       data: data as ContenidoIA[],
-      pageCount: count ? Math.ceil(count / params.pageSize) : 0,
+      count: count || 0,
     };
-  };
+  }, []);
 
   return (
     <div className="flex w-full gap-6 h-[calc(100vh-220px)]">

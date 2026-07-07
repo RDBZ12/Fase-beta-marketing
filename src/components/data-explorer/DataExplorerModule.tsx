@@ -14,14 +14,14 @@ import { TablePublicaciones } from './tables/TablePublicaciones';
 import { TableContenidoIA } from './tables/TableContenidoIA';
 
 const queriesData = [
-  { id: 'clientes', title: 'Clientes', icon: Users, color: '#ffffff', bg: 'bg-white/20', gradient: 'bg-gradient-to-br from-blue-500 to-blue-700', shadow: 'hover:shadow-blue-500/40', table: 'usuarios' },
-  { id: 'campanas', title: 'Campañas', icon: Megaphone, color: '#ffffff', bg: 'bg-white/20', gradient: 'bg-gradient-to-br from-purple-500 to-purple-700', shadow: 'hover:shadow-purple-500/40', table: 'campaigns' },
-  { id: 'leads', title: 'Leads', icon: FileText, color: '#ffffff', bg: 'bg-white/20', gradient: 'bg-gradient-to-br from-emerald-400 to-emerald-600', shadow: 'hover:shadow-emerald-500/40', table: 'leads' },
-  { id: 'pagos', title: 'Pagos', icon: DollarSign, color: '#ffffff', bg: 'bg-white/20', gradient: 'bg-gradient-to-br from-amber-400 to-amber-600', shadow: 'hover:shadow-amber-500/40', table: 'pagos' },
-  { id: 'chatbot', title: 'Historial Chatbot', icon: Bot, color: '#ffffff', bg: 'bg-white/20', gradient: 'bg-gradient-to-br from-pink-500 to-pink-700', shadow: 'hover:shadow-pink-500/40', table: 'chatbot_historial' },
-  { id: 'interacciones', title: 'Interacciones', icon: BarChart3, color: '#ffffff', bg: 'bg-white/20', gradient: 'bg-gradient-to-br from-orange-400 to-orange-600', shadow: 'hover:shadow-orange-500/40', table: 'interacciones' },
-  { id: 'publicaciones', title: 'Publicaciones', icon: TrendingUp, color: '#ffffff', bg: 'bg-white/20', gradient: 'bg-gradient-to-br from-cyan-400 to-cyan-600', shadow: 'hover:shadow-cyan-500/40', table: 'publicaciones' },
-  { id: 'contenido_ia', title: 'Contenido IA', icon: Bot, color: '#ffffff', bg: 'bg-white/20', gradient: 'bg-gradient-to-br from-indigo-500 to-indigo-700', shadow: 'hover:shadow-indigo-500/40', table: 'contenido_ia' },
+  { id: 'clientes', title: 'Clientes', icon: Users, iconColor: 'text-blue-600', bg: 'bg-blue-50', headerBg: 'bg-gradient-to-r from-blue-600 to-blue-800 shadow-blue-500/30', border: 'border-blue-700', table: 'usuarios' },
+  { id: 'campanas', title: 'Campañas', icon: Megaphone, iconColor: 'text-purple-600', bg: 'bg-purple-50', headerBg: 'bg-gradient-to-r from-purple-600 to-purple-800 shadow-purple-500/30', border: 'border-purple-700', table: 'campaigns' },
+  { id: 'leads', title: 'Leads', icon: FileText, iconColor: 'text-emerald-600', bg: 'bg-emerald-50', headerBg: 'bg-gradient-to-r from-emerald-500 to-emerald-700 shadow-emerald-500/30', border: 'border-emerald-600', table: 'leads' },
+  { id: 'pagos', title: 'Pagos', icon: DollarSign, iconColor: 'text-amber-600', bg: 'bg-amber-50', headerBg: 'bg-gradient-to-r from-amber-500 to-amber-700 shadow-amber-500/30', border: 'border-amber-600', table: 'pagos' },
+  { id: 'chatbot', title: 'Historial Chatbot', icon: Bot, iconColor: 'text-pink-600', bg: 'bg-pink-50', headerBg: 'bg-gradient-to-r from-pink-500 to-pink-700 shadow-pink-500/30', border: 'border-pink-600', table: 'chatbot_historial' },
+  { id: 'interacciones', title: 'Interacciones', icon: BarChart3, iconColor: 'text-orange-600', bg: 'bg-orange-50', headerBg: 'bg-gradient-to-r from-orange-500 to-orange-700 shadow-orange-500/30', border: 'border-orange-600', table: 'interacciones' },
+  { id: 'publicaciones', title: 'Publicaciones', icon: TrendingUp, iconColor: 'text-cyan-600', bg: 'bg-cyan-50', headerBg: 'bg-gradient-to-r from-cyan-500 to-cyan-700 shadow-cyan-500/30', border: 'border-cyan-600', table: 'publicaciones' },
+  { id: 'contenido_ia', title: 'Contenido IA', icon: Bot, iconColor: 'text-indigo-600', bg: 'bg-indigo-50', headerBg: 'bg-gradient-to-r from-indigo-600 to-indigo-800 shadow-indigo-500/30', border: 'border-indigo-700', table: 'contenido_ia' },
 ];
 
 export const DataExplorerModule: React.FC = () => {
@@ -50,26 +50,29 @@ export const DataExplorerModule: React.FC = () => {
     const activeData = queriesData.find(q => q.id === activeModule);
     const Icon = activeData?.icon || Database;
     return (
-      <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 animate-in slide-in-from-right-8 fade-in duration-500">
-        <button 
-          onClick={() => setActiveModule(null)} 
-          className="flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-slate-800 transition-colors bg-white hover:bg-slate-50 px-4 py-2 rounded-xl border border-slate-200 shadow-sm w-fit"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Volver al Explorador
-        </button>
+      <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-4 animate-in slide-in-from-right-8 fade-in duration-500">
         
-        <div className={`flex items-center gap-5 p-8 rounded-3xl border border-white/20 shadow-xl overflow-hidden relative ${activeData?.gradient || 'bg-slate-800'}`}>
+        <div className={`flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 rounded-2xl border ${activeData?.border || 'border-slate-800'} shadow-lg relative overflow-hidden ${activeData?.headerBg || 'bg-slate-800'}`}>
           <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3"></div>
           <div className="absolute bottom-0 left-0 w-64 h-64 bg-black/10 rounded-full blur-3xl translate-y-1/3 -translate-x-1/4"></div>
 
-          <div className={`relative z-10 w-16 h-16 rounded-2xl flex items-center justify-center bg-white/20 shadow-inner backdrop-blur-md border border-white/20`}>
-            <Icon className="w-8 h-8 text-white" />
+          <div className="flex items-center gap-4 relative z-10">
+            <div className={`w-12 h-12 bg-white/20 backdrop-blur-md rounded-xl flex items-center justify-center shadow-inner border border-white/20`}>
+              <Icon className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-white tracking-tight">Explorador de {activeData?.title}</h1>
+              <p className="text-sm font-medium text-white/80 mt-0.5">Vista detallada y análisis de registros.</p>
+            </div>
           </div>
-          <div className="relative z-10">
-            <h1 className="text-3xl font-black text-white tracking-tight">Explorador de {activeData?.title}</h1>
-            <p className="text-base font-medium text-white/80 mt-1">Vista detallada y análisis de registros.</p>
-          </div>
+          
+          <button 
+            onClick={() => setActiveModule(null)} 
+            className="flex items-center justify-center gap-2 text-sm font-bold text-white hover:text-white transition-colors bg-white/10 hover:bg-white/20 backdrop-blur-md px-4 py-2 rounded-xl border border-white/20 shadow-sm w-full md:w-auto relative z-10"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Volver al menú
+          </button>
         </div>
         
         <div className="w-full relative z-10">
@@ -88,20 +91,21 @@ export const DataExplorerModule: React.FC = () => {
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in zoom-in-95 duration-300">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-blue-950 via-slate-900 to-slate-800 p-8 rounded-3xl shadow-xl overflow-hidden relative">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3"></div>
-        <div className="absolute bottom-0 left-0 w-64 h-64 bg-purple-500/10 rounded-full blur-3xl translate-y-1/3 -translate-x-1/4"></div>
-        
-        <div className="relative z-10">
-          <h1 className="text-3xl font-black text-white tracking-tight flex items-center gap-3">
-            <Database className="w-8 h-8 text-blue-400" />
+      <div className="flex flex-col mb-8">
+        <div className="flex items-center gap-3 mb-2">
+          <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
+            <Database className="w-5 h-5 text-blue-600" />
+          </div>
+          <h1 className="text-2xl font-bold text-slate-800 tracking-tight">
             Explorador de Datos
           </h1>
-          <p className="text-blue-100/80 font-medium mt-2 text-base max-w-xl">Navega y analiza toda la información del sistema en tiempo real. Selecciona un módulo para visualizar los detalles estructurados.</p>
         </div>
+        <p className="text-slate-500 text-sm max-w-2xl">
+          Navega y analiza toda la información del sistema. Selecciona un módulo para visualizar los detalles estructurados.
+        </p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {queriesData.map((query) => {
           const Icon = query.icon;
           const count = counts[query.id];
@@ -110,32 +114,27 @@ export const DataExplorerModule: React.FC = () => {
             <button
               key={query.id}
               onClick={() => setActiveModule(query.id)}
-              className={`group text-left relative p-7 ${query.gradient} rounded-3xl transition-all duration-300 hover:shadow-2xl hover:-translate-y-2 overflow-hidden border border-white/20 ${query.shadow}`}
+              className="group text-left relative p-6 bg-white rounded-2xl border border-slate-200 transition-all duration-200 hover:border-blue-300 hover:shadow-md hover:-translate-y-1"
             >
-              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300"></div>
-              <div className="absolute -right-6 -top-6 w-32 h-32 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700"></div>
-              
-              <div className="absolute top-0 right-0 p-5 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-x-2 -translate-y-2 group-hover:translate-x-0 group-hover:translate-y-0">
-                <ArrowUpRight className="w-6 h-6 text-white" />
+              <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                <ArrowUpRight className="w-5 h-5 text-slate-400" />
               </div>
               
-              <div className={`relative mb-6 inline-flex w-14 h-14 rounded-2xl items-center justify-center ${query.bg} shadow-inner backdrop-blur-md border border-white/20`}>
-                <Icon className="w-7 h-7 text-white" />
+              <div className={`mb-4 w-12 h-12 rounded-xl flex items-center justify-center ${query.bg} group-hover:scale-110 transition-transform duration-300`}>
+                <Icon className={`w-6 h-6 ${query.iconColor}`} />
               </div>
               
-              <h3 className="relative text-xl font-black text-white mb-2 tracking-tight">
+              <h3 className="text-lg font-bold text-slate-800 mb-1">
                 {query.title}
               </h3>
               
-              <div className="relative flex items-center gap-2">
-                <div className="text-sm font-bold text-white bg-white/20 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/20 group-hover:bg-white/30 transition-colors">
-                  {loading ? (
-                    <div className="h-4 w-16 bg-white/30 rounded animate-pulse inline-block" />
-                  ) : (
-                    <span className="text-white drop-shadow-md">{count?.toLocaleString() || 0}</span>
-                  )}
-                  <span className="ml-1.5 text-white/80 font-semibold">registros</span>
-                </div>
+              <div className="flex items-center text-sm">
+                {loading ? (
+                  <div className="h-4 w-12 bg-slate-100 rounded animate-pulse" />
+                ) : (
+                  <span className="font-bold text-slate-700">{count?.toLocaleString() || 0}</span>
+                )}
+                <span className="ml-1.5 text-slate-500 font-medium">registros</span>
               </div>
             </button>
           );

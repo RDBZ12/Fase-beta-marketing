@@ -93,7 +93,27 @@ export const TableClientes: React.FC = () => {
     const { data, count, error } = await query;
     if (error) throw error;
     
-    return { data: data as Usuario[], count: count || 0 };
+    let finalData = data as Usuario[];
+    
+    if (finalData.length > 0) {
+      const userIds = finalData.map(u => u.id_usuario);
+      const { data: portalData } = await supabase
+        .from('clientes_portal')
+        .select('auth_user_id, whatsapp_phone')
+        .in('auth_user_id', userIds);
+        
+      if (portalData) {
+        finalData = finalData.map(u => {
+          const portal = portalData.find(p => p.auth_user_id === u.id_usuario);
+          return {
+            ...u,
+            whatsapp_phone: u.whatsapp_phone || portal?.whatsapp_phone
+          };
+        });
+      }
+    }
+    
+    return { data: finalData, count: count || 0 };
   }, [profile, estadoFilter]);
 
   const columns: Column<Usuario>[] = [
@@ -116,7 +136,7 @@ export const TableClientes: React.FC = () => {
     {
       header: 'Teléfono',
       accessorKey: 'telefono',
-      cell: (item) => <span className="text-slate-600">{item.telefono || 'N/A'}</span>
+      cell: (item) => <span className="text-slate-600">{item.telefono || item.whatsapp_phone || 'N/A'}</span>
     },
     {
       header: 'Rol',

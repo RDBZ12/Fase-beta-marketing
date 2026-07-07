@@ -11,13 +11,13 @@ export const TableChatbot: React.FC = () => {
     let query = supabase.from('chatbot_historial').select('*', { count: 'exact' });
 
     if (params.searchTerm) {
-      query = query.or(`mensaje.ilike.%${params.searchTerm}%,mensaje_usuario.ilike.%${params.searchTerm}%,respuesta.ilike.%${params.searchTerm}%,respuesta_bot.ilike.%${params.searchTerm}%`);
+      query = query.or(`pregunta.ilike.%${params.searchTerm}%,respuesta.ilike.%${params.searchTerm}%`);
     }
 
     if (params.sortBy) {
       query = query.order(params.sortBy, { ascending: !params.sortDesc });
     } else {
-      query = query.order('created_at', { ascending: false });
+      query = query.order('fecha', { ascending: false });
     }
 
     query = query.range(params.pageIndex * params.pageSize, (params.pageIndex + 1) * params.pageSize - 1);
@@ -41,13 +41,13 @@ export const TableChatbot: React.FC = () => {
     },
     {
       header: 'Mensaje Usuario',
-      accessorKey: 'mensaje',
-      cell: (item) => <div className="font-medium text-slate-800 max-w-xs truncate">{item.mensaje || item.mensaje_usuario || '...'}</div>
+      accessorKey: 'pregunta',
+      cell: (item) => <div className="font-medium text-slate-800 max-w-xs truncate">{item.pregunta || item.mensaje_usuario || '...'}</div>
     },
     {
       header: 'Respuesta Bot',
       accessorKey: 'respuesta',
-      cell: (item) => <div className="text-sm text-slate-600 max-w-sm truncate">{item.respuesta || item.respuesta_bot || '...'}</div>
+      cell: (item) => <div className="text-sm text-slate-600 max-w-sm truncate">{item.respuesta || '...'}</div>
     }
   ];
 
@@ -78,7 +78,7 @@ export const TableChatbot: React.FC = () => {
                   </div>
                   <div className="bg-blue-600 text-white p-4 rounded-2xl rounded-tr-sm shadow-sm">
                     <p className="text-sm font-medium whitespace-pre-wrap leading-relaxed">
-                      {selectedItem.mensaje || selectedItem.mensaje_usuario || 'N/A'}
+                      {selectedItem.pregunta || selectedItem.mensaje_usuario || 'N/A'}
                     </p>
                   </div>
                 </div>
@@ -92,7 +92,7 @@ export const TableChatbot: React.FC = () => {
                   </div>
                   <div className="bg-white border border-slate-200 text-slate-700 p-4 rounded-2xl rounded-tl-sm shadow-sm">
                     <p className="text-sm whitespace-pre-wrap leading-relaxed">
-                      {selectedItem.respuesta || selectedItem.respuesta_bot || 'N/A'}
+                      {selectedItem.respuesta || 'N/A'}
                     </p>
                   </div>
                 </div>
