@@ -1,0 +1,64 @@
+import React, { useEffect } from 'react';
+import { X } from 'lucide-react';
+
+interface SidePanelProps {
+  isOpen: boolean;
+  onClose: () => void;
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+}
+
+export const SidePanel: React.FC<SidePanelProps> = ({
+  isOpen,
+  onClose,
+  title,
+  subtitle,
+  children
+}) => {
+  // Prevent body scroll when open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  return (
+    <>
+      {/* Overlay */}
+      <div 
+        className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-40 transition-opacity"
+        onClick={onClose}
+      />
+      
+      {/* Panel */}
+      <div className="fixed inset-y-0 right-0 w-full md:w-[500px] lg:w-[600px] bg-white shadow-[0_0_50px_-12px_rgba(0,0,0,0.25)] z-50 transform transition-transform duration-300 ease-in-out flex flex-col animate-in slide-in-from-right">
+        {/* Header */}
+        <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-gradient-to-br from-white to-slate-50 sticky top-0 z-10">
+          <div>
+            <h2 className="text-xl font-bold text-slate-800 tracking-tight">{title}</h2>
+            {subtitle && <p className="text-sm font-medium text-slate-500 mt-0.5">{subtitle}</p>}
+          </div>
+          <button 
+            onClick={onClose}
+            className="p-2 rounded-full hover:bg-slate-100 text-slate-500 transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-8 bg-slate-50/80 backdrop-blur-xl">
+          {children}
+        </div>
+      </div>
+    </>
+  );
+};
