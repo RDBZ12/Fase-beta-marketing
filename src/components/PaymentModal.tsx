@@ -176,7 +176,7 @@ const generarPDF = async (datos: {
        ES LA PARTE CRÍTICA DEL COMPROBANTE NCF Y DEBE PERMANECER INTACTO.
        ────────────────────────────────────────────────────────────────────────── */
     const origin = import.meta.env.VITE_PUBLIC_URL || window.location.origin;
-    const qrData = datos.url_dgii || `${origin}/?verificar_ncf=${encodeURIComponent(datos.ncf)}&total=${encodeURIComponent(totalUSD.toFixed(2))}&fecha=${encodeURIComponent(now)}&receptor=${encodeURIComponent(datos.razonSocial || 'Consumidor Final')}&concepto=${encodeURIComponent(datos.nombreCampana || 'Servicio de Marketing Digital')}&rnc_receptor=${encodeURIComponent(datos.rncCliente || '')}`
+    const qrData = `${origin}/?verificar_ncf=${encodeURIComponent(datos.ncf)}&total=${encodeURIComponent(totalUSD.toFixed(2))}&fecha=${encodeURIComponent(now)}&receptor=${encodeURIComponent(datos.razonSocial || 'Consumidor Final')}&concepto=${encodeURIComponent(datos.nombreCampana || 'Servicio de Marketing Digital')}&rnc_receptor=${encodeURIComponent(datos.rncCliente || '')}`
     const qrDataUrl = await QRCode.toDataURL(qrData, { 
       width: 120, margin: 1, color: { dark: '#2c3e2e', light: '#ffffff' } 
     })
@@ -393,8 +393,7 @@ export function PaymentModal({ isOpen, onClose, campaign, session, onPagado }: P
       setMensaje(`Pago aprobado. Activando campaña...`)
       try {
         await supabase.from('campaigns').update({ estado: 'Activa' }).eq('id', campaign.id);
-        await supabase.from('publicaciones').update({ estado: 'Programada' }).eq('id_campana', campaign.id).eq('estado', 'Borrador');
-        setMensaje(`¡Campaña activa y publicaciones programadas!`)
+        setMensaje(`¡Campaña activa y lista!`)
       } catch (pubErr) {
         console.error("Error activando la campaña:", pubErr);
       }

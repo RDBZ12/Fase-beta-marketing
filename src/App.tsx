@@ -21,7 +21,9 @@ import { PagosModule } from './components/PagosModule';
 import { AjustesModule } from './components/AjustesModule';
 import { CampanasModule } from './components/CampanasModule';
 import { ChatbotWidget } from './components/ChatbotWidget';
-import { ConsultasModule } from './components/ConsultasModule';
+import { DataExplorerModule } from './components/data-explorer/DataExplorerModule';
+import { CentroReportes } from './components/reportes/CentroReportes';
+import { CentroReportesCliente } from './components/reportes/CentroReportesCliente';
 import { UserProvider } from './context/UserContext';
 import type { Campaign, Metric } from './types';
 import { ShieldCheck } from 'lucide-react';
@@ -43,7 +45,7 @@ function mapCampaign(item: any): Campaign {
     descripcion: item.descripcion,
     objetivo:    item.objetivo,
     presupuesto: item.presupuesto,
-    idCliente:   item.id_usuario || item.usuario_id || item.id_cliente,
+    id_cliente:   item.id_usuario || item.usuario_id || item.id_cliente,
     creatorName: item.creatorName,
     creatorRole: item.creatorRole,
   };
@@ -188,7 +190,8 @@ function AppLayout({
         {activeTab === 'analytics'       && <AnalyticsModule />}
         {activeTab === 'pagos'           && <PagosModule />}
         {activeTab === 'ajustes'         && <AjustesModule />}
-        {activeTab === 'consultas'       && <ConsultasModule />}
+        {activeTab === 'consultas'       && <DataExplorerModule />}
+        {activeTab === 'reportes'        && <CentroReportes />}
 
         {activeTab === 'campanas' && (
           <CampanasModule
@@ -517,11 +520,15 @@ export default function App() {
   if (!session) return <AuthButton />;
 
   if (tipoUsuario === 'cliente') {
-    const clientCampaigns = campaigns.filter(c => c.idCliente === session.user.id);
+    const clientCampaigns = campaigns.filter(c => c.id_cliente === session.user.id);
     return (
       <>
         <UserProvider userId={session.user.id}>
-          <ClientPortal campaigns={clientCampaigns} onPagarCampaign={(c) => setPaymentCampaign(c)} refreshCampaigns={fetchCampaigns} />
+          <ClientPortal 
+            campaigns={clientCampaigns} 
+            onPagarCampaign={(c) => setPaymentCampaign(c)} 
+            refreshCampaigns={fetchCampaigns} 
+          />
         </UserProvider>
         <PaymentModal
           isOpen={!!paymentCampaign}

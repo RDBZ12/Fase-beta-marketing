@@ -17,7 +17,8 @@ export interface Campaign {
   presupuesto?: number;
   fechaInicio?: string;
   fechaFin?: string;
-  idCliente?: string;
+  id_cliente?: string;
+  id_usuario?: string;
   creatorName?: string;
   creatorRole?: string;
 }
@@ -47,6 +48,7 @@ export interface Usuario {
   apellido: string;
   correo: string;
   telefono?: string;
+  whatsapp_phone?: string;
   estado: 'activo' | 'inactivo';
   id_rol: RolId;
   nombre_rol?: RolNombre;

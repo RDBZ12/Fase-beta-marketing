@@ -551,29 +551,22 @@ export const PublicacionesModule: React.FC = () => {
       else if (nred.includes('tik')) plat = 'tiktok';
       else if (nred.includes('tele')) plat = 'telegram';
 
-      // 3. Invocar la Edge Function con la URL pública
-      const payload: any = {
-        post: pub.contenido,
-        platforms: [plat],
-        mediaUrls: finalMediaUrl ? [finalMediaUrl] : []
-      };
-      
-      if (isScheduling && pub.fecha_publicacion) {
-        // Ayrshare expects UTC ISO 8601 format like "2021-07-22T14:30:00Z"
-        payload.scheduleDate = new Date(pub.fecha_publicacion).toISOString();
-      }
-
-      const { data, error } = await supabase.functions.invoke('publish_social', { body: payload });
+      const { data, error } = await supabase.functions.invoke('publish_social', {
+        body: {
+          post: pub.contenido,
+          platforms: [plat],
+          mediaUrls: finalMediaUrl ? [finalMediaUrl] : []
+        }
+      });
 
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
 
-      // Guardar postId de Ayrshare + cambiar estado a Publicada o Programada
-      const updatePayload: any = { estado: isScheduling ? 'Programada' : 'Publicada' };
+      const updatePayload: any = { estado: 'Publicada' };
       if (data.postId) updatePayload.ayrshare_post_id = data.postId;
       await supabase.from('publicaciones').update(updatePayload).eq('id_publicacion', pub.id_publicacion);
 
-      alert(data.mock ? 'Simulación Exitosa: Para publicación real, configura AYRSHARE_API_KEY en Supabase.' : (isScheduling ? '¡Programado con éxito en Ayrshare!' : '¡Publicado con éxito en redes sociales!'));
+      alert(data.mock ? 'Simulación Exitosa' : '¡Publicado con éxito!');
       fetchAll();
     } catch (err: any) {
       alert('Error publicando: ' + err.message);

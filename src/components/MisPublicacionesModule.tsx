@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Image as ImageIcon, Calendar, Sparkles, UploadCloud, AlertCircle, PlusCircle, Edit2, Share2, MessageSquare, Loader2, Search, X, Trash2 } from 'lucide-react';
+import { Image as ImageIcon, Calendar, Sparkles, UploadCloud, AlertCircle, PlusCircle, Edit2, Share2, MessageSquare, Loader2, Search, X } from 'lucide-react';
 import { sendWhatsAppTextMessage, sendWhatsAppImageMessage, getOpenWAChats, getOpenWAContacts, getOpenWASessions, getOpenWASettings } from '../lib/whatsapp';
 import { supabase } from '../supabaseClient';
 import type { Campaign } from '../types';
@@ -44,6 +44,8 @@ export const MisPublicacionesModule: React.FC<MisPublicacionesModuleProps> = ({ 
     id_red: ''
   });
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+  const [isGeneratingImageAI, setIsGeneratingImageAI] = useState(false);
+  const [isDateTimeModified, setIsDateTimeModified] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -57,6 +59,27 @@ export const MisPublicacionesModule: React.FC<MisPublicacionesModuleProps> = ({ 
     setToast({ message, type });
     setTimeout(() => setToast(null), 4000);
   };
+
+  // Actualiza la hora automáticamente cada minuto si el usuario no la ha modificado
+  useEffect(() => {
+    if (isDateTimeModified || !isCreating || editingId) return;
+
+    const interval = setInterval(() => {
+      setFormData(prev => {
+        const { date, time } = getInitialDateTime();
+        if (prev.fecha_publicacion !== date || prev.hora_publicacion !== time) {
+          return {
+            ...prev,
+            fecha_publicacion: date,
+            hora_publicacion: time
+          };
+        }
+        return prev;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isDateTimeModified, isCreating, editingId]);
 
   useEffect(() => {
     const fetchRedes = async () => {
@@ -142,10 +165,56 @@ REGLAS ESTRICTAS:
       const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
       setFormData(prev => ({ ...prev, contenido: text }));
       showToast("¡Texto generado exitosamente con IA!", 'success');
-    } catch (err) {
-      showToast("Error al generar texto con IA.", 'error');
+    } catch (error) {
+      console.error(error);
+      showToast("Hubo un error al generar el contenido.", 'error');
     } finally {
       setIsGeneratingAI(false);
+    }
+  };
+
+  const handleGenerateImageAI = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!formData.titulo) {
+      showToast("Por favor ingresa un título o tema para generar la imagen.", 'error');
+      return;
+    }
+    setIsGeneratingImageAI(true);
+    
+    try {
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+      const prompt = `Eres el mejor estratega de contenido y tendencia en marketing en cualquier red social de meta para traer personas.
+Crea un prompt en INGLES muy detallado para generar una imagen impactante que acompañe este texto.
+Título: "${formData.titulo}".
+Contenido: "${formData.contenido}".
+El prompt debe ser solo el texto en ingles, descriptivo, visual, sin explicaciones ni introducciones.`;
+      
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.7, maxOutputTokens: 200 }
+        })
+      });
+
+      if (!response.ok) throw new Error("Error en la IA");
+      const data = await response.json();
+      const englishPrompt = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      
+      if (englishPrompt) {
+        // Usamos Pollinations AI para generar la imagen gratis
+        const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(englishPrompt.trim())}?width=1080&height=1080&nologo=true`;
+        setFormData(prev => ({ ...prev, imagen_url: imageUrl }));
+        showToast("Imagen generada con éxito.", 'success');
+      } else {
+        showToast("No se pudo generar el prompt para la imagen.", 'error');
+      }
+    } catch (error) {
+      console.error(error);
+      showToast("Hubo un error al generar la imagen.", 'error');
+    } finally {
+      setIsGeneratingImageAI(false);
     }
   };
 
@@ -427,78 +496,6 @@ REGLAS ESTRICTAS:
     }
   };
 
-  const [isQuickPublishing, setIsQuickPublishing] = useState<string | null>(null);
-
-  const handleQuickPublish = async (pub: any) => {
-    setIsQuickPublishing(pub.id_publicacion);
-    
-    let plat = 'instagram';
-    if (pub.id_red) {
-      const redObj = redes.find(r => String(r.id_red) === String(pub.id_red));
-      if (redObj) {
-        const nred = redObj.nombre_red.toLowerCase();
-        if (nred.includes('tele')) plat = 'telegram';
-        else if (nred.includes('face')) plat = 'facebook';
-        else if (nred.includes('twit') || nred.includes('x')) plat = 'twitter';
-        else if (nred.includes('link')) plat = 'linkedin';
-        else if (nred.includes('tik')) plat = 'tiktok';
-        else if (nred.includes('you')) plat = 'youtube';
-      }
-    }
-
-    try {
-      const { data: ayrData, error: ayrError } = await supabase.functions.invoke('publish_social', {
-        body: { 
-          post: pub.contenido, 
-          platforms: [plat], 
-          mediaUrls: pub.imagen_url ? [pub.imagen_url] : [],
-        }
-      });
-
-      if (!ayrError && ayrData && !ayrData.error) {
-        const ayrshareId = ayrData.postId || ayrData.data?.id || null;
-        const payload: any = { estado: 'Publicada' };
-        if (ayrshareId) payload.ayrshare_post_id = ayrshareId;
-
-        const { error } = await supabase.from('publicaciones').update(payload).eq('id_publicacion', pub.id_publicacion);
-        if (!error) {
-          showToast("Publicación subida exitosamente.", 'success');
-          fetchPublicaciones();
-        } else {
-          showToast("Error actualizando estado: " + error.message, 'error');
-        }
-      } else {
-        const errorRaw = ayrError?.message || ayrData?.error || 'Error desconocido';
-        let userFriendlyMsg = "Error al publicar.";
-        try {
-          const errorText = typeof errorRaw === 'string' ? errorRaw : JSON.stringify(errorRaw);
-          if (errorText.toLowerCase().includes('duplicate') || errorText.includes('"code":137')) {
-            userFriendlyMsg = "⚠️ Bloqueo por Spam: Ya publicaste este contenido hace poco.";
-          } else if (errorText.toLowerCase().includes('unauthorized')) {
-            userFriendlyMsg = "Cuenta desvinculada. Verifica tu conexión.";
-          }
-        } catch(e) {}
-        showToast(userFriendlyMsg, 'error');
-      }
-    } catch (err: any) {
-      showToast("Error de conexión: " + err.message, 'error');
-    } finally {
-      setIsQuickPublishing(null);
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('¿Estás seguro de que deseas eliminar esta publicación?')) return;
-    
-    const { error } = await supabase.from('publicaciones').delete().eq('id_publicacion', id);
-    if (!error) {
-      showToast('Publicación eliminada exitosamente.', 'success');
-      fetchPublicaciones();
-    } else {
-      showToast('Error al eliminar: ' + error.message, 'error');
-    }
-  };
-
   if (isCreating) {
     return (
       <div className="max-w-3xl mx-auto bg-white border border-slate-200 rounded-3xl p-8 backdrop-blur-xl shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-500 relative">
@@ -618,7 +615,10 @@ REGLAS ESTRICTAS:
                 type="date" 
                 min={getLocalDateString()}
                 value={formData.fecha_publicacion}
-                onChange={e => setFormData({...formData, fecha_publicacion: e.target.value})}
+                onChange={e => {
+                  setFormData({...formData, fecha_publicacion: e.target.value});
+                  setIsDateTimeModified(true);
+                }}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:border-violet-500 [color-scheme:dark]" />
             </div>
             <div>
@@ -626,23 +626,52 @@ REGLAS ESTRICTAS:
               <input 
                 type="time" 
                 value={formData.hora_publicacion}
-                onChange={e => setFormData({...formData, hora_publicacion: e.target.value})}
+                onChange={e => {
+                  setFormData({...formData, hora_publicacion: e.target.value});
+                  setIsDateTimeModified(true);
+                }}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:border-violet-500 [color-scheme:dark]" />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Multimedia (Imagen/Video)</label>
+            <div className="flex items-center gap-4 mb-2">
+              <button 
+                type="button"
+                onClick={handleGenerateImageAI}
+                disabled={isGeneratingImageAI}
+                className="flex items-center gap-1.5 text-xs font-bold text-pink-500 bg-pink-500/10 px-3 py-1.5 rounded-lg hover:bg-pink-500/20 transition-colors disabled:opacity-50"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                {isGeneratingImageAI ? 'Generando Imagen...' : 'Generar Imagen con IA'}
+              </button>
+              <label className="block text-sm font-medium text-slate-700">Multimedia (Imagen/Video) o subir desde PC</label>
+            </div>
+            
             <label className="block border-2 border-dashed border-slate-200 rounded-xl p-8 text-center hover:bg-slate-50 transition-colors cursor-pointer group relative overflow-hidden">
               {formData.imagen_url ? (
                 <div className="flex flex-col items-center">
                   <img src={formData.imagen_url} alt="Preview" className="max-h-32 rounded-lg object-contain mb-3" />
-                  <p className="text-sm font-medium text-violet-600">Haz clic para cambiar la imagen</p>
+                  <div className="flex gap-2 mb-3">
+                    <p className="text-sm font-medium text-violet-600">Haz clic para cambiar la imagen</p>
+                    {formData.imagen_url.startsWith('http') && (
+                      <a 
+                        href={formData.imagen_url} 
+                        download="generada.jpg" 
+                        target="_blank" 
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-sm font-medium text-pink-600 hover:underline flex items-center gap-1"
+                      >
+                        (Descargar a PC)
+                      </a>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <>
                   <UploadCloud className="w-10 h-10 text-slate-500 mx-auto mb-3 group-hover:text-violet-500 transition-colors" />
-                  <p className="text-sm font-medium text-slate-700">Haz clic para subir un archivo multimedia</p>
+                  <p className="text-sm font-medium text-slate-700">Haz clic para subir un archivo multimedia desde tu PC</p>
                   <p className="text-xs text-slate-500 mt-1">Soporta JPG, PNG hasta 5MB.</p>
                 </>
               )}
@@ -718,6 +747,7 @@ REGLAS ESTRICTAS:
               imagen_url: '',
               id_red: String(defaultIg)
             });
+            setIsDateTimeModified(false);
             setEditingId(null);
             setIsCreating(true);
           }}
@@ -759,31 +789,13 @@ REGLAS ESTRICTAS:
                           <span className="text-[10px] font-bold uppercase tracking-wider max-w-0 overflow-hidden group-hover/edit:max-w-xs transition-all duration-300 ease-in-out whitespace-nowrap">Editar</span>
                         </button>
                       )}
-                      {pub.estado === 'Publicada' && (
-                        <button 
-                          onClick={() => { setReplicateTargetPub(pub); setSelectedRedId(''); }}
-                          className="bg-white/90 backdrop-blur-md px-2 py-1.5 rounded-md text-slate-600 hover:text-violet-600 transition-colors shadow-sm flex items-center gap-1 group/replicate"
-                          title="Subir a otra red social"
-                        >
-                          <Share2 className="w-3.5 h-3.5" />
-                          <span className="text-[10px] font-bold uppercase tracking-wider max-w-0 overflow-hidden group-hover/replicate:max-w-xs transition-all duration-300 ease-in-out whitespace-nowrap">Subir a otra red</span>
-                        </button>
-                      )}
                       <button 
-                        onClick={() => setSharingWhatsAppPub(pub)}
-                        className="bg-white/90 backdrop-blur-md px-2 py-1.5 rounded-md text-slate-600 hover:text-emerald-600 transition-colors shadow-sm flex items-center gap-1 group/wa"
-                        title="Compartir por WhatsApp"
+                        onClick={() => { setReplicateTargetPub(pub); setSelectedRedId(''); }}
+                        className="bg-white/90 backdrop-blur-md px-2 py-1.5 rounded-md text-slate-600 hover:text-violet-600 transition-colors shadow-sm flex items-center gap-1 group/replicate"
+                        title="Subir a otra red social"
                       >
-                        <MessageSquare className="w-3.5 h-3.5" />
-                        <span className="text-[10px] font-bold uppercase tracking-wider max-w-0 overflow-hidden group-hover/wa:max-w-xs transition-all duration-300 ease-in-out whitespace-nowrap">Compartir</span>
-                      </button>
-                      <button 
-                        onClick={() => handleDelete(pub.id_publicacion)}
-                        className="bg-white/90 backdrop-blur-md px-2 py-1.5 rounded-md text-slate-600 hover:text-pink-600 transition-colors shadow-sm flex items-center gap-1 group/delete"
-                        title="Eliminar publicación"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        <span className="text-[10px] font-bold uppercase tracking-wider max-w-0 overflow-hidden group-hover/delete:max-w-xs transition-all duration-300 ease-in-out whitespace-nowrap">Eliminar</span>
+                        <Share2 className="w-3.5 h-3.5" />
+                        <span className="text-[10px] font-bold uppercase tracking-wider max-w-0 overflow-hidden group-hover/replicate:max-w-xs transition-all duration-300 ease-in-out whitespace-nowrap">Subir a otra red</span>
                       </button>
                     </div>
                     <div className="absolute top-3 right-3 bg-black/60 backdrop-blur-md px-2 py-1 rounded-md flex items-center gap-1">

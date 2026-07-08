@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   LayoutDashboard, Megaphone, BarChart3, Users, Settings, Zap, Eye,
-  UserCog, FileText, CreditCard, Globe,
+  UserCog, FileText, CreditCard, Globe, Compass
 } from 'lucide-react';
 import { useUser } from '../context/UserContext';
 
@@ -22,15 +22,16 @@ const menuItems = [
   { id: 'usuarios',       label: 'Usuarios',       icon: UserCog },
   { id: 'ajustes',        label: 'Ajustes',        icon: Settings },
   { id: 'portal-cliente', label: 'Portal Cliente', icon: Eye },
-  { id: 'consultas', label: 'Consultas', icon: FileText },
+  { id: 'consultas',      label: 'Explorador de Datos', icon: Compass },
+  { id: 'reportes',       label: 'Reportes',       icon: FileText },
 ];
 
 const permisosRol: Record<number, string[]> = {
-  1: ['dashboard', 'campanas', 'publicaciones', 'analytics', 'audiencia', 'clientes', 'pagos', 'usuarios', 'ajustes', 'portal-cliente', 'consultas'],
+  1: ['dashboard', 'campanas', 'publicaciones', 'analytics', 'audiencia', 'clientes', 'pagos', 'usuarios', 'ajustes', 'portal-cliente', 'consultas', 'reportes'],
   2: ['dashboard', 'campanas', 'analytics'],
   3: ['dashboard', 'campanas', 'analytics', 'audiencia'],
-  4: ['dashboard', 'campanas', 'portal-cliente'],
-  5: ['dashboard', 'campanas', 'audiencia', 'clientes', 'portal-cliente'],
+  4: ['dashboard', 'campanas', 'portal-cliente', 'reportes'],
+  5: ['dashboard', 'campanas', 'audiencia', 'clientes', 'portal-cliente', 'reportes'],
 };
 
 export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, rolUsuario }) => {

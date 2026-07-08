@@ -67,7 +67,7 @@ export async function generateReceiptHTML(pago: Partial<Pago>, ncf: string): Pro
        ────────────────────────────────────────────────────────────────────────── */
     const receptor = pago.razon_social || 'Consumidor Final';
     const origin = import.meta.env.VITE_PUBLIC_URL || window.location.origin;
-    const qrData = (pago as any).url_dgii || `${origin}/?verificar_ncf=${encodeURIComponent(ncf)}&total=${encodeURIComponent(totalUSD.toFixed(2))}&fecha=${encodeURIComponent(now)}&receptor=${encodeURIComponent(receptor)}&concepto=${encodeURIComponent(pago.nombre_campana || 'Servicio de Marketing Digital')}&rnc_receptor=${encodeURIComponent(pago.rnc_cedula || '')}`;
+    const qrData  = `${origin}/?verificar_ncf=${encodeURIComponent(ncf)}&total=${encodeURIComponent(totalUSD.toFixed(2))}&fecha=${encodeURIComponent(now)}&receptor=${encodeURIComponent(receptor)}&concepto=${encodeURIComponent(pago.nombre_campana || 'Servicio de Marketing Digital')}&rnc_receptor=${encodeURIComponent(pago.rnc_cedula || '')}`;
     const qrDataUrl = await QRCode.toDataURL(qrData, { 
       width: 120, 
       margin: 1,
