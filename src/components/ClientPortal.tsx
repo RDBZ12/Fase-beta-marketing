@@ -17,7 +17,8 @@ import {
   Target,
   DollarSign,
   TrendingUp,
-  Search
+  Search,
+  FileText
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import React, { useState, useEffect } from 'react';
@@ -26,6 +27,7 @@ import type { Campaign } from '../types';
 import { CampaignWizard } from './CampaignWizard';
 import { MisPublicacionesModule } from './MisPublicacionesModule';
 import { ClientPagosModule, ClientEstadisticasModule, ClientPerfilModule } from './ClientModules';
+import { CentroReportesCliente } from './reportes/CentroReportesCliente';
 import { ChatbotWidget } from './ChatbotWidget';
 
 interface ClientPortalProps {
@@ -56,6 +58,7 @@ export const ClientPortal: React.FC<ClientPortalProps> = ({ campaigns, onPagarCa
     { id: 'mis-publicaciones', label: 'Mis Publicaciones', icon: LayoutDashboard },
     { id: 'pagos', label: 'Pagos', icon: CreditCard },
     { id: 'estadisticas', label: 'Estadísticas', icon: BarChart3 },
+    { id: 'reportes', label: 'Reportes', icon: FileText },
     { id: 'perfil', label: 'Mi Perfil', icon: Settings },
   ];
 
@@ -165,6 +168,7 @@ export const ClientPortal: React.FC<ClientPortalProps> = ({ campaigns, onPagarCa
           
           {activeTab === 'mis-publicaciones' && <MisPublicacionesModule campaigns={campaigns} />}
           {activeTab === 'estadisticas' && <ClientEstadisticasModule campaigns={campaigns} />}
+          {activeTab === 'reportes' && <CentroReportesCliente />}
           {activeTab === 'pagos' && <ClientPagosModule campaigns={campaigns} />}
           {activeTab === 'perfil' && <ClientPerfilModule />}
         </div>

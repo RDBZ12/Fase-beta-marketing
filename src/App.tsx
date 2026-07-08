@@ -22,6 +22,8 @@ import { AjustesModule } from './components/AjustesModule';
 import { CampanasModule } from './components/CampanasModule';
 import { ChatbotWidget } from './components/ChatbotWidget';
 import { DataExplorerModule } from './components/data-explorer/DataExplorerModule';
+import { CentroReportes } from './components/reportes/CentroReportes';
+import { CentroReportesCliente } from './components/reportes/CentroReportesCliente';
 import { UserProvider } from './context/UserContext';
 import type { Campaign, Metric } from './types';
 import { ShieldCheck } from 'lucide-react';
@@ -189,6 +191,7 @@ function AppLayout({
         {activeTab === 'pagos'           && <PagosModule />}
         {activeTab === 'ajustes'         && <AjustesModule />}
         {activeTab === 'consultas'       && <DataExplorerModule />}
+        {activeTab === 'reportes'        && <CentroReportes />}
 
         {activeTab === 'campanas' && (
           <CampanasModule
