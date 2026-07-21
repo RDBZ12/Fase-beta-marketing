@@ -13,7 +13,7 @@ import { ClientGallery } from './components/ClientGallery';
 import { ClientPortal } from './components/ClientPortal';
 import { PaymentModal } from './components/PaymentModal';
 import { UsuariosModule } from './components/UsuariosModule';
-import { ClientesModule } from './components/ClientesModule';
+
 import { LeadsModule } from './components/LeadsModule';
 import { PublicacionesModule } from './components/PublicacionesModule';
 import { AnalyticsModule } from './components/AnalyticsModule';
@@ -23,7 +23,10 @@ import { CampanasModule } from './components/CampanasModule';
 import { ChatbotWidget } from './components/ChatbotWidget';
 import { DataExplorerModule } from './components/data-explorer/DataExplorerModule';
 import { CentroReportes } from './components/reportes/CentroReportes';
-import { CentroReportesCliente } from './components/reportes/CentroReportesCliente';
+import { AdminCampanasModule } from './components/admin/AdminCampanasModule';
+import { AdminDashboardModule } from './components/admin/AdminDashboardModule';
+import { ClientesModule } from './components/admin/ClientesModule';
+
 import { UserProvider } from './context/UserContext';
 import type { Campaign, Metric } from './types';
 import { ShieldCheck } from 'lucide-react';
@@ -45,11 +48,58 @@ function mapCampaign(item: any): Campaign {
     descripcion: item.descripcion,
     objetivo:    item.objetivo,
     presupuesto: item.presupuesto,
-    id_cliente:   item.id_usuario || item.usuario_id || item.id_cliente,
+    id_cliente:  item.id_cliente,
+    id_usuario:  item.id_usuario || item.usuario_id,
     creatorName: item.creatorName,
     creatorRole: item.creatorRole,
+    estado_moderacion: item.estado_moderacion,
   };
 }
+
+const GlobalErrorPopup = () => {
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isHiding, setIsHiding] = useState(false);
+
+  useEffect(() => {
+    const handleOpenWAError = (e: any) => {
+      setErrorMsg(e.detail);
+      setIsHiding(false);
+      
+      setTimeout(() => {
+        setIsHiding(true);
+        setTimeout(() => {
+          setErrorMsg(null);
+          setIsHiding(false);
+        }, 400); 
+      }, 8000);
+    };
+
+    window.addEventListener('openwa-error', handleOpenWAError);
+    return () => window.removeEventListener('openwa-error', handleOpenWAError);
+  }, []);
+
+  if (!errorMsg) return null;
+
+  return (
+    <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[9999] max-w-lg w-[90%] ${isHiding ? 'animate-slide-up-fade' : 'animate-bounce-down'}`}>
+      <div className="bg-rose-600 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-start gap-4">
+        <div className="bg-white/20 p-2 rounded-full shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+        </div>
+        <div>
+          <h3 className="font-bold text-lg mb-1">¡Atención!</h3>
+          <p className="text-sm text-white/90 leading-relaxed">{errorMsg}</p>
+        </div>
+        <button 
+          onClick={() => setIsHiding(true)}
+          className="ml-auto text-white/70 hover:text-white p-1 hover:bg-white/10 rounded-lg transition-colors"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+      </div>
+    </div>
+  );
+};
 
 interface AppLayoutProps {
   campaigns: Campaign[];
@@ -133,6 +183,7 @@ function AppLayout({
 
   return (
     <div className="flex min-h-screen bg-slate-50">
+      <GlobalErrorPopup />
       {isSidebarOpen && (
         <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} rolUsuario={rolUsuario} />
       )}
@@ -150,7 +201,9 @@ function AppLayout({
           />
         )}
 
-        {activeTab === 'dashboard' && (
+        {activeTab === 'dashboard' && rolUsuario === 1 ? (
+          <AdminDashboardModule />
+        ) : activeTab === 'dashboard' && (
           <>
             <MetricCards metrics={metrics} />
             <div className="flex flex-col lg:flex-row gap-6">
@@ -179,19 +232,15 @@ function AppLayout({
           </>
         )}
 
-        {activeTab === 'portal-cliente' && (
-          <ClientGallery campaigns={campaigns} onBackToDashboard={() => setActiveTab('dashboard')} />
-        )}
         {activeTab === 'perfil'          && <AuthButton />}
         {activeTab === 'usuarios'        && <UsuariosModule />}
         {activeTab === 'clientes'        && <ClientesModule />}
-        {activeTab === 'audiencia'       && <LeadsModule />}
-        {activeTab === 'publicaciones'   && <PublicacionesModule />}
-        {activeTab === 'analytics'       && <AnalyticsModule />}
+        {activeTab === 'leads'           && <LeadsModule />}
         {activeTab === 'pagos'           && <PagosModule />}
         {activeTab === 'ajustes'         && <AjustesModule />}
         {activeTab === 'consultas'       && <DataExplorerModule />}
         {activeTab === 'reportes'        && <CentroReportes />}
+        {activeTab === 'admin_campanas'  && <AdminCampanasModule campaigns={campaigns} fetchCampaigns={fetchCampaigns} />}
 
         {activeTab === 'campanas' && (
           <CampanasModule
@@ -225,6 +274,8 @@ export default function App() {
   const [rolUsuario, setRolUsuario] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState('');
   const [paymentCampaign, setPaymentCampaign] = useState<Campaign | null>(null);
+  const [validatingCampaign, setValidatingCampaign] = useState<Campaign | null>(null);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string[]> | null>(null);
   const [totalInteractions, setTotalInteractions] = useState(0);
   const [verificationData, setVerificationData] = useState<{
     ncf: string;
@@ -290,14 +341,30 @@ export default function App() {
   const fetchCampaigns = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('campaigns').select('*').order('created_at', { ascending: false });
-      if (error) {
-        const { data: legacy } = await supabase.from('tobacco_products').select('*').order('created_at', { ascending: false });
-        if (legacy) setCampaigns(legacy.map(mapCampaign));
-      } else if (data) {
+      let combinedData: any[] = [];
+      const { data: sessionData } = await supabase.auth.getSession();
+      const userId = sessionData?.session?.user?.id;
+      
+      // Determine if user is admin based on internal role mapping logic (or just rely on RLS/limit)
+      // To prevent massive egress for admins, we limit the global app state to 150 recent campaigns.
+      // The AdminCampanasModule handles its own deep pagination.
+      let query = supabase.from('campaigns').select('*').order('created_at', { ascending: false });
+      
+      // For general app state, limit to 200 to prevent crash/egress on large databases
+      query = query.limit(200);
+
+      const { data: campsData, error: campsError } = await query;
+      
+      if (campsData) combinedData = [...combinedData, ...campsData];
+
+      const { data: legacyData } = await supabase
+        .from('tobacco_products').select('*').order('created_at', { ascending: false });
+      
+      if (legacyData) combinedData = [...combinedData, ...legacyData];
+
+      if (combinedData.length > 0) {
         // 1. Obtener todos los IDs de creadores
-        const creatorIds = [...new Set(data.map(c => c.id_usuario || c.id_cliente).filter(Boolean))];
+        const creatorIds = [...new Set(combinedData.map(c => c.id_usuario || c.id_cliente).filter(Boolean))];
         
         let usersMap: Record<string, { name: string, role: string }> = {};
 
@@ -343,7 +410,7 @@ export default function App() {
         }
 
         // 4. Mapear campañas y adjuntar los nombres/roles
-        const mappedCampaigns = data.map(c => {
+        const mappedCampaigns = combinedData.map(c => {
           const creatorId = c.id_usuario || c.id_cliente;
           const creatorInfo = creatorId && usersMap[creatorId] ? usersMap[creatorId] : { name: 'Desconocido', role: 'N/A' };
           
@@ -355,14 +422,66 @@ export default function App() {
         });
 
         setCampaigns(mappedCampaigns);
+      } else {
+        setCampaigns([]);
       }
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
   };
 
+  const handleInitiatePayment = async (campaign: Campaign) => {
+    setValidatingCampaign(campaign);
+    setValidationErrors(null);
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+
+      const res = await fetch(`${supabaseUrl}/functions/v1/validate_content`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${currentSession?.access_token ?? supabaseKey}`,
+          'apikey': supabaseKey,
+        },
+        body: JSON.stringify({ campana_id: campaign.id }),
+      });
+
+      const data = await res.json();
+
+      if (data.ok && data.valido) {
+        setValidatingCampaign(null);
+        setPaymentCampaign(campaign);
+      } else {
+        setValidationErrors(data.detalles || { "Error": [data.error || "Contenido rechazado."] });
+      }
+    } catch (err: any) {
+      setValidationErrors({ "Error": [err.message || "Error de conexión con el validador."] });
+    }
+  };
+
   useEffect(() => {
     fetchCampaigns();
     fetchInteractions();
+
+    const subscription = supabase
+      .channel('campaigns_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'campaigns'
+        },
+        () => {
+          fetchCampaigns();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
@@ -379,6 +498,51 @@ export default function App() {
       });
     }
   }, []);
+
+  const renderValidationModal = () => {
+    if (!validatingCampaign && !validationErrors) return null;
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+        <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl overflow-hidden p-6">
+          {!validationErrors ? (
+            <div className="flex flex-col items-center py-8 gap-4">
+              <div className="w-10 h-10 border-4 border-violet-600 border-t-transparent rounded-full animate-spin" />
+              <h3 className="text-lg font-bold text-slate-800">Validando contenido...</h3>
+              <p className="text-sm text-slate-500 text-center">Revisando especificaciones técnicas y políticas de IA antes del pago.</p>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-4">
+              <div className="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center">
+                <ShieldCheck className="w-8 h-8 text-rose-600" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-800">Contenido Rechazado</h3>
+              <p className="text-sm text-slate-500 text-center mb-2">No puedes pagar esta campaña porque el contenido no cumple con nuestras políticas o especificaciones técnicas.</p>
+              
+              <div className="w-full bg-rose-50 border border-rose-100 rounded-xl p-4 max-h-48 overflow-y-auto text-sm text-rose-700">
+                {Object.entries(validationErrors).map(([pubId, errs]) => (
+                  <div key={pubId} className="mb-2 last:mb-0">
+                    <p className="font-bold text-xs uppercase tracking-wider mb-1">Errores encontrados:</p>
+                    <ul className="list-disc pl-4 space-y-1">
+                      {errs.map((e, idx) => (
+                        <li key={idx} className="font-medium text-xs leading-relaxed">{e}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+
+              <button
+                onClick={() => { setValidatingCampaign(null); setValidationErrors(null); }}
+                className="mt-4 w-full px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold rounded-xl transition-colors"
+              >
+                Entendido
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   if (verificationData) {
     const totalVal = Number(verificationData.total) || 0;
@@ -520,13 +684,13 @@ export default function App() {
   if (!session) return <AuthButton />;
 
   if (tipoUsuario === 'cliente') {
-    const clientCampaigns = campaigns.filter(c => c.id_cliente === session.user.id);
+    const clientCampaigns = campaigns.filter(c => c.id_cliente === session.user.id || c.id_usuario === session.user.id);
     return (
       <>
         <UserProvider userId={session.user.id}>
           <ClientPortal 
             campaigns={clientCampaigns} 
-            onPagarCampaign={(c) => setPaymentCampaign(c)} 
+            onPagarCampaign={handleInitiatePayment} 
             refreshCampaigns={fetchCampaigns} 
           />
         </UserProvider>
@@ -537,6 +701,7 @@ export default function App() {
           session={session}
           onPagado={fetchCampaigns}
         />
+        {renderValidationModal()}
       </>
     );
   }
@@ -553,7 +718,7 @@ export default function App() {
           activeTab={activeTab}
           setActiveTab={setActiveTab}
           rolUsuario={rolUsuario}
-          onPagarCampaign={(c) => setPaymentCampaign(c)}
+          onPagarCampaign={handleInitiatePayment}
           totalInteractions={totalInteractions}
         />
       </UserProvider>
@@ -564,6 +729,7 @@ export default function App() {
         session={session}
         onPagado={fetchCampaigns}
       />
+      {renderValidationModal()}
     </>
   );
 }

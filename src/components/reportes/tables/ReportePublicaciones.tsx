@@ -18,29 +18,29 @@ export const ReportePublicaciones: React.FC<Props> = ({ onBack, defaultUserId })
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
 
   const fetchPublicaciones = useCallback(async (params: FetchDataParams) => {
-    let query = supabase.from('publicaciones').select('*, campaigns(name), usuarios(nombre_completo, email)', { count: 'exact' });
+    let query = supabase.from('publicaciones').select('*, campaigns!inner(nombre_campana, id_usuario, id_cliente), redes_sociales(nombre_red)', { count: 'exact' });
 
     if (defaultUserId) {
-      query = query.eq('id_usuario', defaultUserId);
+      query = query.or(`id_usuario.eq.${defaultUserId},id_cliente.eq.${defaultUserId}`, { foreignTable: 'campaigns' });
     }
 
     if (params.searchTerm) {
-      query = query.or(`contenido.ilike.%${params.searchTerm}%,red_social.ilike.%${params.searchTerm}%`);
+      query = query.or(`contenido.ilike.%${params.searchTerm}%`);
     }
     if (redSocialFilter) {
-      query = query.eq('red_social', redSocialFilter);
+      query = query.eq('redes_sociales.nombre_red', redSocialFilter);
     }
     if (dateRange.start) {
-      query = query.gte('fecha_programada', dateRange.start);
+      query = query.gte('fecha_publicacion', dateRange.start);
     }
     if (dateRange.end) {
-      query = query.lte('fecha_programada', dateRange.end + 'T23:59:59');
+      query = query.lte('fecha_publicacion', dateRange.end + 'T23:59:59');
     }
 
     if (params.sortBy) {
       query = query.order(params.sortBy, { ascending: !params.sortDesc });
     } else {
-      query = query.order('fecha_programada', { ascending: false });
+      query = query.order('fecha_publicacion', { ascending: false });
     }
 
     const from = params.pageIndex * params.pageSize;
@@ -54,20 +54,20 @@ export const ReportePublicaciones: React.FC<Props> = ({ onBack, defaultUserId })
   }, [defaultUserId, redSocialFilter, dateRange]);
 
   const fetchExportData = async () => {
-    let fullQuery = supabase.from('publicaciones').select('*, campaigns(name), usuarios(nombre_completo, email)').order('fecha_programada', { ascending: false });
-    if (defaultUserId) fullQuery = fullQuery.eq('id_usuario', defaultUserId);
-    if (redSocialFilter) fullQuery = fullQuery.eq('red_social', redSocialFilter);
-    if (dateRange.start) fullQuery = fullQuery.gte('fecha_programada', dateRange.start);
-    if (dateRange.end) fullQuery = fullQuery.lte('fecha_programada', dateRange.end + 'T23:59:59');
+    let fullQuery = supabase.from('publicaciones').select('*, campaigns!inner(nombre_campana, id_usuario, id_cliente), redes_sociales(nombre_red)').order('fecha_publicacion', { ascending: false });
+    if (defaultUserId) fullQuery = fullQuery.or(`id_usuario.eq.${defaultUserId},id_cliente.eq.${defaultUserId}`, { foreignTable: 'campaigns' });
+    if (redSocialFilter) fullQuery = fullQuery.eq('redes_sociales.nombre_red', redSocialFilter);
+    if (dateRange.start) fullQuery = fullQuery.gte('fecha_publicacion', dateRange.start);
+    if (dateRange.end) fullQuery = fullQuery.lte('fecha_publicacion', dateRange.end + 'T23:59:59');
     
     const { data, error } = await fullQuery;
     if (error) throw error;
     
-    return (data || []).map(item => ({ 
+    return (data || []).map((item: any) => ({ 
       ...item, 
-      nombre_campana: item.nombre_campana || item.campaigns?.name || 'N/A',
-      nombre_red: item.nombre_red || item.red_social || 'N/A',
-      fecha_publicacion: item.fecha_publicacion || item.fecha_programada || new Date().toISOString()
+      nombre_campana: item.nombre_campana || item.campaigns?.nombre_campana || 'N/A',
+      nombre_red: item.redes_sociales?.nombre_red || item.nombre_red || 'N/A',
+      fecha_publicacion: item.fecha_publicacion || new Date().toISOString()
     }));
   };
 
@@ -83,9 +83,9 @@ export const ReportePublicaciones: React.FC<Props> = ({ onBack, defaultUserId })
     e.stopPropagation();
     const exportItem = { 
       ...item, 
-      nombre_campana: item.nombre_campana || item.campaigns?.name || 'N/A',
-      nombre_red: item.nombre_red || item.red_social || 'N/A',
-      fecha_publicacion: item.fecha_publicacion || item.fecha_programada || new Date().toISOString()
+      nombre_campana: item.nombre_campana || item.campaigns?.nombre_campana || 'N/A',
+      nombre_red: item.redes_sociales?.nombre_red || item.nombre_red || 'N/A',
+      fecha_publicacion: item.fecha_publicacion || new Date().toISOString()
     };
     
     if (action === 'view') {
@@ -97,9 +97,9 @@ export const ReportePublicaciones: React.FC<Props> = ({ onBack, defaultUserId })
     }
   };
 
-  const columns: Column[] = [
-    { header: 'Red Social', accessorKey: 'nombre_red', sortable: true, cell: (item) => <div className="font-bold text-slate-800">{item.nombre_red || item.red_social || 'N/A'}</div> },
-    { header: 'Campaña', accessorKey: 'campaigns', cell: (item) => <div className="text-sm font-medium">{item.nombre_campana || item.campaigns?.name || 'N/A'}</div> },
+  const columns: Column<any>[] = [
+    { header: 'Red Social', accessorKey: 'nombre_red', sortable: true, cell: (item) => <div className="font-bold text-slate-800">{item.redes_sociales?.nombre_red || item.nombre_red || 'N/A'}</div> },
+    { header: 'Campaña', accessorKey: 'campaigns', cell: (item) => <div className="text-sm font-medium">{item.nombre_campana || item.campaigns?.nombre_campana || 'N/A'}</div> },
     { header: 'Estado', accessorKey: 'estado', sortable: true, cell: (item) => (
       <span className={`px-2 py-1 rounded-md text-xs font-semibold ${
         item.estado?.toLowerCase() === 'publicada' ? 'bg-blue-100 text-blue-700' :
@@ -107,7 +107,11 @@ export const ReportePublicaciones: React.FC<Props> = ({ onBack, defaultUserId })
         'bg-slate-100 text-slate-700'
       }`}>{item.estado?.toUpperCase() || 'N/A'}</span>
     )},
-    { header: 'Fecha', accessorKey: 'fecha_publicacion', sortable: true, cell: (item) => new Date(item.fecha_publicacion || item.fecha_programada).toLocaleDateString() },
+    { header: 'Fecha', accessorKey: 'fecha_publicacion', sortable: true, cell: (item) => {
+      const f = item.fecha_publicacion || '';
+      if (!f) return '';
+      return f.includes('T') ? new Date(f).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : new Date(f + 'T12:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
+    } },
     { header: 'Acciones', cell: (item) => (
       <div className="flex items-center gap-2">
         <button onClick={(e) => handleRowAction(item, 'view', e)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded" title="Ver reporte">👁️</button>
@@ -146,7 +150,7 @@ export const ReportePublicaciones: React.FC<Props> = ({ onBack, defaultUserId })
         <DataTable columns={columns} fetchData={fetchPublicaciones} refreshTrigger={searchTerm + redSocialFilter + dateRange.start + dateRange.end} />
       </ReporteView>
 
-      <SidePanel isOpen={!!selectedItem} onClose={() => setSelectedItem(null)} title="Detalles de Publicación" subtitle={selectedItem?.red_social}>
+      <SidePanel isOpen={!!selectedItem} onClose={() => setSelectedItem(null)} title="Detalles de Publicación" subtitle={selectedItem?.redes_sociales?.nombre_red || selectedItem?.nombre_red}>
         {selectedItem && (
           <div className="space-y-6">
             <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
@@ -158,7 +162,7 @@ export const ReportePublicaciones: React.FC<Props> = ({ onBack, defaultUserId })
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
                 <p className="text-xs font-semibold text-slate-500 uppercase">Red Social</p>
-                <p className="font-bold text-slate-800 text-lg">{selectedItem.nombre_red || selectedItem.red_social}</p>
+                <p className="font-bold text-slate-800 text-lg">{selectedItem.redes_sociales?.nombre_red || selectedItem.nombre_red}</p>
               </div>
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
                 <p className="text-xs font-semibold text-slate-500 uppercase">Estado</p>
@@ -166,11 +170,11 @@ export const ReportePublicaciones: React.FC<Props> = ({ onBack, defaultUserId })
               </div>
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
                 <p className="text-xs font-semibold text-slate-500 uppercase">Campaña</p>
-                <p className="font-medium text-slate-800">{selectedItem.nombre_campana || selectedItem.campaigns?.name || 'N/A'}</p>
+                <p className="font-medium text-slate-800">{selectedItem.nombre_campana || selectedItem.campaigns?.nombre_campana || 'N/A'}</p>
               </div>
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
                 <p className="text-xs font-semibold text-slate-500 uppercase">Fecha</p>
-                <p className="font-medium text-slate-800">{new Date(selectedItem.fecha_publicacion || selectedItem.fecha_programada).toLocaleString()}</p>
+                <p className="font-medium text-slate-800">{new Date(selectedItem.fecha_publicacion).toLocaleString()}</p>
               </div>
             </div>
           </div>

@@ -5,7 +5,8 @@ import type { Campaign } from '../types';
 import QRCode from 'qrcode';
 import {
   CreditCard, Plus, X, Save, Loader2, FileText,
-  CheckCircle, Clock, XCircle, Download, Search
+  CheckCircle, Clock, XCircle, Download, Search,
+  ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -470,44 +471,84 @@ const PagoModal: React.FC<ModalProps> = ({ isOpen, onClose, onSaved, campaigns }
 export const PagosModule: React.FC = () => {
   const { isMarketingOrAbove } = useUser();
   const [pagos, setPagos]           = useState<Pago[]>([]);
+  const [allPagosForStats, setAllPagosForStats] = useState<any[]>([]);
   const [campaigns, setCampaigns]   = useState<Campaign[]>([]);
-  const [loading, setLoading]       = useState(true);
+  const [, setLoading]       = useState(true);
+  const [loadingTable, setLoadingTable] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [page, setPage]             = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+  const [pageSize, setPageSize]     = useState(10);
 
-  const fetchAll = async () => {
+  const fetchStatsAndCampaigns = async () => {
     setLoading(true);
     const [{ data: ps }, { data: cs }] = await Promise.all([
-      supabase.from('pagos').select('*, campaigns(nombre_campana)').order('fecha', { ascending: false }),
+      supabase.from('pagos').select('monto, total_con_itbis, fecha, estado_dgii'),
       supabase.from('campaigns').select('id, nombre_campana, estado'),
     ]);
-    if (ps) setPagos(ps.map((p: any) => ({ ...p, nombre_campana: p.campaigns?.nombre_campana })));
+    if (ps) setAllPagosForStats(ps);
     if (cs) setCampaigns(cs.map((c: any) => ({ id: c.id, name: c.nombre_campana, channel: 'Multi', status: c.estado, leads: 0, ctr: 0, reach: '0', startDate: '' })));
     setLoading(false);
   };
 
-  useEffect(() => { fetchAll(); }, []);
+  const fetchTablePage = async (pageIdx: number, search: string, currentSize: number) => {
+    setLoadingTable(true);
+    let query = supabase
+      .from('pagos')
+      .select('*, campaigns(nombre_campana)', { count: 'exact' })
+      .order('fecha', { ascending: false });
 
-  const totalIngresos = pagos.reduce((s, p) => s + (p.total_con_itbis ?? p.monto * 1.18), 0);
+    if (search) {
+      query = query.or(`ncf.ilike.%${search}%,razon_social.ilike.%${search}%`);
+    }
+
+    const from = pageIdx * currentSize;
+    const to = from + currentSize - 1;
+    query = query.range(from, to);
+
+    const { data, count, error } = await query;
+    if (!error && data) {
+      setPagos(data.map((p: any) => ({ ...p, nombre_campana: p.campaigns?.nombre_campana })));
+      setTotalCount(count || 0);
+    }
+    setLoadingTable(false);
+  };
+
+  const fetchAll = async () => {
+    await Promise.all([
+      fetchStatsAndCampaigns(),
+      fetchTablePage(page, searchTerm, pageSize)
+    ]);
+  };
+
+  useEffect(() => {
+    fetchStatsAndCampaigns();
+  }, []);
+
+  useEffect(() => {
+    fetchTablePage(page, searchTerm, pageSize);
+  }, [page, searchTerm, pageSize]);
+
+  const handleSearchChange = (val: string) => {
+    setSearchTerm(val);
+    setPage(0);
+  };
+
+  const totalIngresos = allPagosForStats.reduce((s, p) => s + (p.total_con_itbis ?? p.monto * 1.18), 0);
 
   const currentDate = new Date();
   const currentYear = currentDate.getFullYear();
   const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
   
   const chartData = monthNames.map((name, index) => {
-    const pagosMes = pagos.filter(p => {
+    const pagosMes = allPagosForStats.filter(p => {
       const d = new Date(p.fecha);
       return d.getMonth() === index && d.getFullYear() === currentYear;
     });
     const monto = pagosMes.reduce((sum, p) => sum + (p.total_con_itbis ?? p.monto * 1.18), 0);
     return { name, monto };
   }).filter((_, index) => index <= currentDate.getMonth());
-
-  const filteredPagos = pagos.filter(p => 
-    p.ncf?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    p.razon_social?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.nombre_campana?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
 
   return (
     <div className="space-y-6">
@@ -544,30 +585,30 @@ export const PagosModule: React.FC = () => {
                 className="w-16 h-16 rounded-full flex items-center justify-center hover:scale-105 transition-transform cursor-pointer"
                 style={{
                   background: `conic-gradient(#2563eb ${
-                    pagos.length ? Math.round((pagos.filter(p => p.estado_dgii === 'Aceptado').length / (pagos.filter(p => p.estado_dgii === 'Aceptado').length + pagos.filter(p => p.estado_dgii === 'Pendiente').length || 1)) * 100) : 0
+                    allPagosForStats.length ? Math.round((allPagosForStats.filter(p => p.estado_dgii === 'Aceptado').length / (allPagosForStats.filter(p => p.estado_dgii === 'Aceptado').length + allPagosForStats.filter(p => p.estado_dgii === 'Pendiente').length || 1)) * 100) : 0
                   }%, #f1f5f9 0)`
                 }}
-                title={`Aceptados: ${pagos.filter(p => p.estado_dgii === 'Aceptado').length}\nPendientes: ${pagos.filter(p => p.estado_dgii === 'Pendiente').length}`}
+                title={`Aceptados: ${allPagosForStats.filter(p => p.estado_dgii === 'Aceptado').length}\nPendientes: ${allPagosForStats.filter(p => p.estado_dgii === 'Pendiente').length}`}
               >
                 <div className="w-12 h-12 bg-white rounded-full" />
               </div>
               <div className="text-xs text-slate-500 cursor-default">
                 <div 
                   className="flex items-center gap-1.5 mb-1 hover:text-slate-800 transition-colors"
-                  title={`${pagos.filter(p => p.estado_dgii === 'Aceptado').length} pagos aceptados`}
+                  title={`${allPagosForStats.filter(p => p.estado_dgii === 'Aceptado').length} pagos aceptados`}
                 >
                   <div className="w-2 h-2 rounded-full bg-blue-600" /> Aceptado
                 </div>
                 <div 
                   className="flex items-center gap-1.5 hover:text-slate-800 transition-colors"
-                  title={`${pagos.filter(p => p.estado_dgii === 'Pendiente').length} pagos pendientes`}
+                  title={`${allPagosForStats.filter(p => p.estado_dgii === 'Pendiente').length} pagos pendientes`}
                 >
                   <div className="w-2 h-2 rounded-full bg-slate-200" /> Pendiente
                 </div>
               </div>
             </div>
             <div className="text-right">
-              <p className="text-2xl font-bold text-emerald-500">{pagos.filter(p => p.estado_dgii === 'Pendiente').length}</p>
+              <p className="text-2xl font-bold text-emerald-500">{allPagosForStats.filter(p => p.estado_dgii === 'Pendiente').length}</p>
               <p className="text-[10px] text-slate-400 font-bold uppercase">Pendientes</p>
             </div>
           </div>
@@ -607,7 +648,7 @@ export const PagosModule: React.FC = () => {
           </div>
           
           <div className="relative z-10">
-            <p className="font-mono text-xl tracking-[0.15em] mb-4 text-white/90">TRANS. TOTALES: {pagos.length}</p>
+            <p className="font-mono text-xl tracking-[0.15em] mb-4 text-white/90">TRANS. TOTALES: {allPagosForStats.length}</p>
             <div className="flex justify-between items-end text-xs">
               <div>
                 <p className="text-white/60 mb-1 uppercase tracking-wider text-[10px]">RNC</p>
@@ -633,81 +674,134 @@ export const PagosModule: React.FC = () => {
               type="text" 
               placeholder="Buscar NCF o empresa..." 
               value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
+              onChange={e => handleSearchChange(e.target.value)}
               className="w-full sm:w-64 pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
             />
           </div>
         </div>
-        {loading ? (
+        {loadingTable && pagos.length === 0 ? (
           <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 text-emerald-500 animate-spin" /></div>
         ) : pagos.length === 0 ? (
           <div className="text-center py-16">
             <FileText className="w-10 h-10 text-slate-200 mx-auto mb-2" />
             <p className="text-xs font-semibold text-slate-400">No hay pagos registrados</p>
           </div>
-        ) : filteredPagos.length === 0 ? (
-          <div className="text-center py-16">
-            <p className="text-sm font-semibold text-slate-500">No se encontraron pagos para "{searchTerm}"</p>
-          </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-slate-100 bg-slate-50/60">
-                  {['NCF','Campaña','Razón Social','Monto','ITBIS','Total','Método','Estado DGII','Fecha','Acciones'].map(h => (
-                    <th key={h} className="px-4 py-3 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {filteredPagos.map(p => (
-                  <tr key={p.id_pago} className="hover:bg-slate-50/60 transition-colors">
-                    <td className="px-4 py-3 text-[10px] font-bold text-violet-600 font-mono">{p.ncf ?? '—'}</td>
-                    <td className="px-4 py-3 text-xs text-slate-600">{p.nombre_campana ?? '—'}</td>
-                    <td className="px-4 py-3 text-xs text-slate-500">{p.razon_social || 'Consumidor Final'}</td>
-                    <td className="px-4 py-3 text-xs font-semibold text-slate-700">RD$ {Number(p.monto).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
-                    <td className="px-4 py-3 text-xs text-slate-500">RD$ {(Number(p.monto) * 0.18).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
-                    <td className="px-4 py-3 text-xs font-bold text-slate-800">RD$ {(Number(p.monto) * 1.18).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
-                    <td className="px-4 py-3 text-xs text-slate-500">{p.metodo_pago}</td>
-                    <td className="px-4 py-3">
-                      <span className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full w-fit ${ESTADO_COLORS[p.estado_dgii] ?? 'bg-slate-100 text-slate-600'}`}>
-                        {ESTADO_ICONS[p.estado_dgii]} {p.estado_dgii}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-[10px] text-slate-400">
-                      {new Date(p.fecha).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })}
-                    </td>
-                    <td className="px-4 py-3 text-left">
-                      <button 
-                        onClick={async () => {
-                          const html = await generateReceiptHTML({
-                            id_campana:   p.id_campana,
-                            monto:        p.monto,
-                            ncf:          p.ncf,
-                            metodo_pago:  p.metodo_pago,
-                            rnc_cedula:   p.rnc_cedula,
-                            razon_social: p.razon_social,
-                            nombre_campana: p.nombre_campana,
-                            fecha:        p.fecha,
-                            url_dgii:     (p as any).url_dgii,
-                          }, p.ncf || '');
-                          const win = window.open('', '_blank');
-                          if (win) { 
-                            win.document.write(html); 
-                            win.document.close(); 
-                          }
-                        }}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold text-violet-600 hover:text-slate-900 bg-violet-50 hover:bg-violet-100 rounded-lg transition-colors border border-violet-200/50"
-                      >
-                        <Download className="w-3 h-3" />
-                        <span>PDF</span>
-                      </button>
-                    </td>
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-slate-100 bg-slate-50/60">
+                    {['NCF','Campaña','Razón Social','Subtotal (DOP)','ITBIS (18%)','Total (DOP)','Total (USD)','Método','Estado DGII','Fecha','Acciones'].map(h => (
+                      <th key={h} className="px-4 py-3 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider">{h}</th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {pagos.map(p => {
+                    const totalDop = p.total_con_itbis || (p.monto ? p.monto * 1.18 : 0);
+                    const itbisDop = p.itbis || (p.monto ? p.monto * 0.18 : 0);
+                    const subtotalDop = totalDop - itbisDop;
+                    const totalUsd = totalDop / 59.00;
+                    return (
+                      <tr key={p.id_pago} className="hover:bg-slate-50/60 transition-colors">
+                        <td className="px-4 py-3 text-[10px] font-bold text-violet-600 font-mono">{p.ncf ?? '—'}</td>
+                        <td className="px-4 py-3 text-xs text-slate-600">{p.nombre_campana ?? '—'}</td>
+                        <td className="px-4 py-3 text-xs text-slate-500">{p.razon_social || 'Consumidor Final'}</td>
+                        <td className="px-4 py-3 text-xs text-slate-600">RD$ {subtotalDop.toLocaleString('es-DO', { minimumFractionDigits: 2 })}</td>
+                        <td className="px-4 py-3 text-xs text-slate-500">RD$ {itbisDop.toLocaleString('es-DO', { minimumFractionDigits: 2 })}</td>
+                        <td className="px-4 py-3 text-xs font-bold text-slate-800">RD$ {totalDop.toLocaleString('es-DO', { minimumFractionDigits: 2 })}</td>
+                        <td className="px-4 py-3 text-xs font-medium text-emerald-600 font-mono">US$ {totalUsd.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                        <td className="px-4 py-3 text-xs text-slate-500">{p.metodo_pago}</td>
+                        <td className="px-4 py-3">
+                          <span className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full w-fit ${ESTADO_COLORS[p.estado_dgii] ?? 'bg-slate-100 text-slate-600'}`}>
+                            {ESTADO_ICONS[p.estado_dgii]} {p.estado_dgii}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-[10px] text-slate-400">
+                          {p.fecha.includes('T') ? new Date(p.fecha).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : new Date(p.fecha + 'T12:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })}
+                        </td>
+                        <td className="px-4 py-3 text-left">
+                          <button 
+                            onClick={async () => {
+                              const html = await generateReceiptHTML({
+                                id_campana:   p.id_campana,
+                                monto:        p.monto,
+                                ncf:          p.ncf,
+                                metodo_pago:  p.metodo_pago,
+                                rnc_cedula:   p.rnc_cedula,
+                                razon_social: p.razon_social,
+                                nombre_campana: p.nombre_campana,
+                                fecha:        p.fecha,
+                                url_dgii:     (p as any).url_dgii,
+                              }, p.ncf || '');
+                              const win = window.open('', '_blank');
+                              if (win) { 
+                                win.document.write(html); 
+                                win.document.close(); 
+                              }
+                            }}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold text-violet-600 hover:text-slate-900 bg-violet-50 hover:bg-violet-100 rounded-lg transition-colors border border-violet-200/50"
+                          >
+                            <Download className="w-3 h-3" />
+                            <span>PDF</span>
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination Controls */}
+            {totalCount > 0 && (
+              <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row justify-between items-center gap-4">
+                <div className="text-sm font-medium text-slate-500">
+                  Mostrando <span className="font-bold text-slate-700">{(page * pageSize) + 1}</span> a <span className="font-bold text-slate-700">{Math.min((page + 1) * pageSize, totalCount)}</span> de <span className="font-bold text-slate-700">{totalCount}</span> registros
+                </div>
+                
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-slate-500">Filas:</span>
+                    <select 
+                      value={pageSize}
+                      onChange={(e) => {
+                        setPageSize(Number(e.target.value));
+                        setPage(0);
+                      }}
+                      className="bg-white border border-slate-200 text-slate-700 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-1.5"
+                    >
+                      <option value={10}>10</option>
+                      <option value={25}>25</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                    </select>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setPage(p => Math.max(0, p - 1))}
+                      disabled={page === 0 || loadingTable}
+                      className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <ChevronLeft className="w-5 h-5" />
+                    </button>
+                    <div className="text-sm font-medium text-slate-600 px-2">
+                      Página {totalCount === 0 ? 0 : page + 1} de {Math.ceil(totalCount / pageSize)}
+                    </div>
+                    <button
+                      onClick={() => setPage(p => Math.min(Math.ceil(totalCount / pageSize) - 1, p + 1))}
+                      disabled={page >= Math.ceil(totalCount / pageSize) - 1 || loadingTable || totalCount === 0}
+                      className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <ChevronRight className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 

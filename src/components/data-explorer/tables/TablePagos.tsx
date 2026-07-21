@@ -4,10 +4,10 @@ import { SidePanel } from '../SidePanel';
 import { supabase } from '../../../supabaseClient';
 import { type Pago, type Usuario, type Campaign } from '../../../types';
 import { useUser } from '../../../context/UserContext';
-import { DollarSign, Calendar, Building, FileText, CheckCircle2, User, ExternalLink, QrCode } from 'lucide-react';
+import { DollarSign, Calendar, Building, FileText, CheckCircle2, QrCode } from 'lucide-react';
 
 export const TablePagos: React.FC = () => {
-  const { profile } = useUser();
+  const { } = useUser();
   const [selectedItem, setSelectedItem] = useState<Pago | null>(null);
   const [estadoFilter, setEstadoFilter] = useState<string>('');
   
@@ -84,14 +84,31 @@ export const TablePagos: React.FC = () => {
       )
     },
     {
-      header: 'Monto Total',
+      header: 'Monto (DOP)',
       accessorKey: 'total_con_itbis',
       sortable: true,
-      cell: (item) => (
-        <span className="font-mono font-bold text-emerald-600">
-          ${Number(item.total_con_itbis || item.monto || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-        </span>
-      )
+      cell: (item) => {
+        const dop = item.total_con_itbis || (item.monto ? item.monto * 1.18 : 0);
+        return (
+          <span className="font-mono font-bold text-slate-800">
+            RD$ {dop.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </span>
+        );
+      }
+    },
+    {
+      header: 'Monto (USD)',
+      accessorKey: 'monto',
+      sortable: true,
+      cell: (item) => {
+        const dop = item.total_con_itbis || (item.monto ? item.monto * 1.18 : 0);
+        const usd = dop / 59.00;
+        return (
+          <span className="font-mono font-medium text-slate-500">
+            US$ {usd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </span>
+        );
+      }
     },
     {
       header: 'Método',
@@ -156,16 +173,19 @@ export const TablePagos: React.FC = () => {
               </h3>
               <div className="space-y-3">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-slate-500">Subtotal</span>
-                  <span className="font-mono text-slate-700 font-medium">${Number(selectedItem.monto || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                  <span className="text-slate-500">Subtotal (DOP)</span>
+                  <span className="font-mono text-slate-700 font-medium">RD$ {Number(selectedItem.monto || 0).toLocaleString('es-DO', { minimumFractionDigits: 2 })}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-slate-500">ITBIS (18%)</span>
-                  <span className="font-mono text-slate-700 font-medium">${Number(selectedItem.itbis || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                  <span className="text-slate-500">ITBIS (18% DOP)</span>
+                  <span className="font-mono text-slate-700 font-medium">RD$ {Number(selectedItem.itbis || 0).toLocaleString('es-DO', { minimumFractionDigits: 2 })}</span>
                 </div>
                 <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
                   <span className="font-bold text-slate-800">Total pagado</span>
-                  <span className="font-mono text-emerald-600 font-black text-lg">${Number(selectedItem.total_con_itbis || selectedItem.monto || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                  <div className="text-right">
+                    <span className="font-mono text-slate-850 font-black text-lg block">RD$ {Number(selectedItem.total_con_itbis || selectedItem.monto || 0).toLocaleString('es-DO', { minimumFractionDigits: 2 })}</span>
+                    <span className="font-mono text-emerald-600 font-semibold text-xs block">US$ {((selectedItem.total_con_itbis || selectedItem.monto || 0) / 59.00).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -237,7 +257,7 @@ export const TablePagos: React.FC = () => {
                     {campanaAsociada && (
                       <div className="mt-4 p-3 bg-slate-50 border border-slate-100 rounded-xl">
                         <span className="text-xs text-slate-500 block mb-1">Campaña Asociada</span>
-                        <div className="font-semibold text-slate-800">{campanaAsociada.nombre_campana || campanaAsociada.name || 'Sin título'}</div>
+                        <div className="font-semibold text-slate-800">{(campanaAsociada as any).nombre_campana || campanaAsociada.name || 'Sin título'}</div>
                       </div>
                     )}
                     {clienteAsociado && (

@@ -4,7 +4,7 @@ import { SidePanel } from '../SidePanel';
 import { supabase } from '../../../supabaseClient';
 import { type Usuario, type Campaign, type Pago } from '../../../types';
 import { useUser } from '../../../context/UserContext';
-import { Building2, Mail, Phone, Calendar, BadgeCheck, FileText, Megaphone, CreditCard } from 'lucide-react';
+import { Mail, Phone, Calendar, BadgeCheck, Megaphone, CreditCard } from 'lucide-react';
 
 export const TableClientes: React.FC = () => {
   const { profile } = useUser();
@@ -231,8 +231,8 @@ export const TableClientes: React.FC = () => {
                     <div className="space-y-3 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
                       {campanasAsociadas.map(camp => (
                         <div key={camp.id} className="p-4 bg-slate-50/50 hover:bg-white rounded-2xl border border-slate-100 hover:border-slate-200 hover:shadow-sm transition-all flex items-center justify-between group">
-                          <span className="text-sm font-bold text-slate-700 group-hover:text-purple-700 transition-colors">{camp.nombre_campana || camp.name || 'Sin título'}</span>
-                          <span className="text-xs font-bold px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 shadow-sm">{camp.estado || camp.status || 'Desconocido'}</span>
+                          <span className="text-sm font-bold text-slate-700 group-hover:text-purple-700 transition-colors">{(camp as any).nombre_campana || camp.name || 'Sin título'}</span>
+                          <span className="text-xs font-bold px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 shadow-sm">{(camp as any).estado || camp.status || 'Desconocido'}</span>
                         </div>
                       ))}
                     </div>

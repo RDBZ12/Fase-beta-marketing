@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { TrendingUp, FileText, Download } from 'lucide-react';
+import { TrendingUp } from 'lucide-react';
 import { ReporteView } from '../ReporteView';
 import { DataTable, type Column, type FetchDataParams } from '../../data-explorer/DataTable';
 import { supabase } from '../../../supabaseClient';
@@ -21,7 +21,7 @@ export const ReporteCampanas: React.FC<Props> = ({ onBack, defaultUserId }) => {
     let query = supabase.from('campaigns').select('*', { count: 'exact' });
 
     if (defaultUserId) {
-      query = query.eq('id_usuario', defaultUserId);
+      query = query.or(`id_usuario.eq.${defaultUserId},id_cliente.eq.${defaultUserId}`);
     }
 
     if (params.searchTerm) {
@@ -56,14 +56,22 @@ export const ReporteCampanas: React.FC<Props> = ({ onBack, defaultUserId }) => {
 
   const fetchExportData = async () => {
     let fullQuery = supabase.from('campaigns').select('*').order('created_at', { ascending: false });
-    if (defaultUserId) fullQuery = fullQuery.eq('id_usuario', defaultUserId);
+    if (defaultUserId) fullQuery = fullQuery.or(`id_usuario.eq.${defaultUserId},id_cliente.eq.${defaultUserId}`);
     if (estadoFilter) fullQuery = fullQuery.eq('status', estadoFilter);
     if (dateRange.start) fullQuery = fullQuery.gte('created_at', dateRange.start);
     if (dateRange.end) fullQuery = fullQuery.lte('created_at', dateRange.end + 'T23:59:59');
     
     const { data, error } = await fullQuery;
     if (error) throw error;
-    return data || [];
+    return (data || []).map(item => {
+      let estadoStr = item.estado || item.status || 'N/A';
+      if (item.estado_moderacion) {
+        if (item.estado_moderacion === 'rechazada') estadoStr = 'Cancelada';
+        else if (item.estado_moderacion === 'aprobada') estadoStr = 'Activa';
+        else estadoStr = 'Pendiente';
+      }
+      return { ...item, estado: estadoStr };
+    });
   };
 
   const exportColumns = [
@@ -95,20 +103,41 @@ export const ReporteCampanas: React.FC<Props> = ({ onBack, defaultUserId }) => {
     }
   };
 
-  const columns: Column[] = [
+  const columns: Column<any>[] = [
     { header: 'Campaña', accessorKey: 'nombre_campana', sortable: true, cell: (item) => <div className="font-bold text-slate-800">{item.nombre_campana || item.name}</div> },
     { header: 'Canal', accessorKey: 'canal', sortable: true, cell: (item) => <span>{item.canal || item.channel || 'Multi'}</span> },
-    { header: 'Estado', accessorKey: 'estado', sortable: true, cell: (item) => {
-      const estado = item.estado || item.status || 'N/A';
+    { header: 'Estado', accessorKey: 'status', sortable: true, cell: (item) => {
+      let estadoStr = item.estado || item.status || 'N/A';
+      let colorClass = 'bg-slate-100 text-slate-700';
+      
+      if (item.estado_moderacion) {
+        if (item.estado_moderacion === 'rechazada') {
+          estadoStr = 'Cancelada';
+          colorClass = 'bg-rose-100 text-rose-700';
+        } else if (item.estado_moderacion === 'aprobada') {
+          estadoStr = 'Activa';
+          colorClass = 'bg-emerald-100 text-emerald-700';
+        } else {
+          estadoStr = 'Pendiente';
+          colorClass = 'bg-slate-100 text-slate-700';
+        }
+      } else {
+        if (estadoStr.toLowerCase() === 'activa') colorClass = 'bg-emerald-100 text-emerald-700';
+        else if (estadoStr.toLowerCase() === 'pausada') colorClass = 'bg-amber-100 text-amber-700';
+      }
+
       return (
-        <span className={`px-2 py-1 rounded-md text-xs font-semibold ${
-          estado.toLowerCase() === 'activa' ? 'bg-emerald-100 text-emerald-700' :
-          estado.toLowerCase() === 'pausada' ? 'bg-amber-100 text-amber-700' :
-          'bg-slate-100 text-slate-700'
-        }`}>{estado.toUpperCase()}</span>
+        <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase inline-flex items-center gap-1.5 ${colorClass}`}>
+          {estadoStr === 'Activa' ? '✓ ' : estadoStr === 'Cancelada' ? '✕ ' : '⏱ '}
+          {estadoStr}
+        </span>
       );
     }},
-    { header: 'Fecha', accessorKey: 'created_at', sortable: true, cell: (item) => new Date(item.created_at).toLocaleDateString() },
+    { header: 'Fecha', accessorKey: 'created_at', sortable: true, cell: (item) => {
+      const f = item.created_at || '';
+      if (!f) return '';
+      return f.includes('T') ? new Date(f).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : new Date(f + 'T12:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
+    } },
     { header: 'Acciones', cell: (item) => (
       <div className="flex items-center gap-2">
         <button onClick={(e) => handleRowAction(item, 'view', e)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded" title="Ver reporte">👁️</button>
@@ -167,7 +196,12 @@ export const ReporteCampanas: React.FC<Props> = ({ onBack, defaultUserId }) => {
                 </div>
                 <div>
                   <p className="text-sm text-slate-500">Estado</p>
-                  <p className="font-medium text-slate-800 capitalize">{selectedItem.estado || selectedItem.status || 'N/A'}</p>
+                  <p className="font-medium text-slate-800 capitalize">
+                    {selectedItem.estado_moderacion === 'rechazada' ? 'Cancelada' : 
+                     selectedItem.estado_moderacion === 'aprobada' ? 'Activa' :
+                     selectedItem.estado_moderacion ? 'Pendiente' : 
+                     (selectedItem.estado || selectedItem.status || 'N/A')}
+                  </p>
                 </div>
               </div>
             </div>

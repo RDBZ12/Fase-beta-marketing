@@ -366,9 +366,10 @@ export function PaymentModal({ isOpen, onClose, campaign, session, onPagado }: P
       )
 
       const data = await res.json()
+      console.log('🚀 [DEBUG PAY] Respuesta del servidor:', { status: res.status, ok: res.ok, data });
 
       if (!res.ok || !data.ok) {
-        throw new Error(data.error ?? 'Error desconocido en el servidor')
+        throw new Error(data.error ?? data.message ?? 'Error desconocido en el servidor')
       }
 
       // ── Éxito: generar PDF y mostrar confirmación ──────────────────────
@@ -497,11 +498,10 @@ export function PaymentModal({ isOpen, onClose, campaign, session, onPagado }: P
                 <label className={labelCls}>Presupuesto de campaña (USD)</label>
                 <input
                   type="number"
-                  min="1"
-                  step="0.01"
                   value={monto}
-                  onChange={(e) => setMonto(Number(e.target.value) || 0)}
-                  className={inputCls}
+                  readOnly
+                  disabled
+                  className={`${inputCls} bg-slate-50 text-slate-500 cursor-not-allowed font-semibold`}
                 />
               </div>
 

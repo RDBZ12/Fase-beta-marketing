@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { FileText, DollarSign, Bot, TrendingUp, Briefcase, ArrowUpRight, Database } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
-import { ReporteView } from './ReporteView';
+
 import { ReporteCampanas } from './tables/ReporteCampanas';
 import { ReporteFinanciero } from './tables/ReporteFinanciero';
 import { ReporteIA } from './tables/ReporteIA';

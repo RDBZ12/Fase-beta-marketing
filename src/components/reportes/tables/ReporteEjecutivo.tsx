@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Briefcase, TrendingUp, DollarSign, Users, Target } from 'lucide-react';
 import { ReporteView } from '../ReporteView';
 import { supabase } from '../../../supabaseClient';
-import { exportToPDF, exportToExcel } from '../../../utils/exportUtils';
+
 
 interface Metric {
   title: string;
@@ -32,7 +32,7 @@ export const ReporteEjecutivo: React.FC<Props> = ({ onBack }) => {
         ] = await Promise.all([
           supabase.from('leads').select('*', { count: 'exact', head: true }),
           supabase.from('campaigns').select('*', { count: 'exact', head: true }).eq('status', 'activa'),
-          supabase.from('pagos').select('monto').eq('estado', 'completado'),
+          supabase.from('pagos').select('monto').eq('estado_dgii', 'Aceptado'),
           supabase.from('contenido_ia').select('*', { count: 'exact', head: true })
         ]);
 

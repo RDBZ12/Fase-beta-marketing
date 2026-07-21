@@ -7,6 +7,7 @@ export interface Campaign {
   image_url?: string;
   channel: 'Email' | 'Social' | 'Display' | 'Multi';
   status: 'Activa' | 'Pausada' | 'Completada' | 'Borrador' | 'Pendiente de Pago' | 'Aprobada';
+  estado_moderacion?: 'pendiente' | 'aprobada' | 'necesita_revision' | string;
   leads: number;
   reach: string;
   ctr: number;
@@ -171,4 +172,5 @@ export interface UserProfile {
   telefono?: string;
   whatsapp_session_name?: string;
   whatsapp_phone?: string;
+  codigo_vinculacion_telegram?: string;
 }

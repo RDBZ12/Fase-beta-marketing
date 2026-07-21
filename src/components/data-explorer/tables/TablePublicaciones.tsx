@@ -4,10 +4,10 @@ import { SidePanel } from '../SidePanel';
 import { supabase } from '../../../supabaseClient';
 import { type Publicacion } from '../../../types';
 import { useUser } from '../../../context/UserContext';
-import { Globe, Calendar, FileText, Image as ImageIcon, MessageCircle, Share2, ThumbsUp } from 'lucide-react';
+import { Globe, FileText, Image as ImageIcon, MessageCircle, Share2, ThumbsUp } from 'lucide-react';
 
 export const TablePublicaciones: React.FC = () => {
-  const { profile } = useUser();
+  const { } = useUser();
   const [selectedItem, setSelectedItem] = useState<Publicacion | null>(null);
   const [estadoFilter, setEstadoFilter] = useState<string>('');
   

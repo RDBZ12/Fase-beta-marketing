@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { DataTable, type Column, type FetchDataParams } from '../DataTable';
 import { SidePanel } from '../SidePanel';
 import { supabase } from '../../../supabaseClient';
-import { Activity, Calendar, FileText, MousePointerClick } from 'lucide-react';
+import { Activity, Calendar, MousePointerClick } from 'lucide-react';
 
 export const TableInteracciones: React.FC = () => {
   const [selectedItem, setSelectedItem] = useState<any | null>(null);

@@ -3,7 +3,7 @@ import { DataTable, type Column, type FetchDataParams } from '../DataTable';
 import { SidePanel } from '../SidePanel';
 import { supabase } from '../../../supabaseClient';
 import { type ContenidoIA } from '../../../types';
-import { Bot, Calendar, Hash, Globe, FileText } from 'lucide-react';
+import { Bot, Calendar, Globe, FileText } from 'lucide-react';
 
 export const TableContenidoIA: React.FC = () => {
   const [selectedItem, setSelectedItem] = useState<ContenidoIA | null>(null);
@@ -80,7 +80,6 @@ export const TableContenidoIA: React.FC = () => {
           columns={columns} 
           fetchData={fetchContenidoIA}
           onRowClick={setSelectedItem}
-          selectedRowId={selectedItem?.id_contenido}
         />
       </div>
 

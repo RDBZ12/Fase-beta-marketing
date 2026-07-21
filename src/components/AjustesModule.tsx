@@ -210,6 +210,10 @@ export const AjustesModule: React.FC = () => {
               <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-4">
                 <WhatsAppGatewayConfig />
               </div>
+
+              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-4">
+                <TelegramGatewayConfig />
+              </div>
             </div>
           )}
 
@@ -345,7 +349,9 @@ const WhatsAppGatewayConfig: React.FC = () => {
       if (!targetSession) {
         targetSession = await createOpenWASession(sessionName);
       }
-      await startOpenWASession(targetSession.id);
+      if (!['ready', 'qr_ready', 'initializing', 'authenticating'].includes(targetSession.status)) {
+        await startOpenWASession(targetSession.id);
+      }
       await fetchSessionStatus();
     } catch (err: any) {
       setErrorMsg(err.message || 'Error al iniciar la sesión.');
@@ -535,3 +541,113 @@ const WhatsAppGatewayConfig: React.FC = () => {
   );
 };
 
+// ─── Componente de Ajustes de Telegram ───────────────────────────────
+const TelegramGatewayConfig: React.FC = () => {
+  const { profile } = useUser();
+  const [destinos, setDestinos] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchDestinos = async () => {
+    setLoading(true);
+    if (profile?.id_usuario) {
+      const { data } = await supabase.from('telegram_destinos').select('*').eq('cliente_id', profile.id_usuario);
+      setDestinos(data || []);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchDestinos();
+  }, [profile]);
+
+  const botUsername = 'Marketing_r_bot'; // From prompt
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 bg-blue-100 rounded-lg flex items-center justify-center">
+            <svg className="w-4 h-4 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 5L2 12.5l7 2.5l3-2.5l-2.5 3l4 3.5L21 5z"></path></svg>
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-slate-800">Destinos de Telegram</h3>
+            <p className="text-xs text-slate-400 mt-0.5">Vincula canales, grupos o chats directos para publicar automáticamente.</p>
+          </div>
+        </div>
+        <button
+          onClick={fetchDestinos}
+          disabled={loading}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-semibold border border-slate-200 rounded-xl transition-colors disabled:opacity-50"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+          Refrescar
+        </button>
+      </div>
+
+      <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 text-xs space-y-3">
+        <p className="font-bold text-blue-800">¿Cómo vincular un nuevo destino?</p>
+        <p className="text-blue-700">Telegram requiere que los usuarios inicien la conversación con el bot. Sigue estos pasos:</p>
+        <ol className="list-decimal list-inside space-y-2 ml-1 text-blue-800">
+          <li>
+            Haz clic en el siguiente enlace y luego en <strong>"Iniciar"</strong> (o "Start") dentro de Telegram:
+            <br />
+            {profile?.codigo_vinculacion_telegram && (
+              <a 
+                href={`https://t.me/${botUsername}?start=${profile.codigo_vinculacion_telegram}`} 
+                target="_blank" 
+                rel="noreferrer"
+                className="inline-flex mt-1 items-center gap-1 text-blue-600 bg-blue-100/50 px-2 py-1 rounded font-mono font-bold hover:bg-blue-200 transition-colors"
+              >
+                <ExternalLink className="w-3 h-3" />
+                https://t.me/{botUsername}?start={profile.codigo_vinculacion_telegram}
+              </a>
+            )}
+          </li>
+          <li>Inmediatamente el bot te confirmará la vinculación y aparecerá en la lista de abajo.</li>
+          <li>
+            <strong>Para vincular un Grupo o Canal:</strong> Agrega a <strong>@{botUsername}</strong> como administrador, y luego envía el mensaje: 
+            <code className="bg-blue-100 px-1 py-0.5 rounded ml-1 select-all font-mono text-[10px]">/start {profile?.codigo_vinculacion_telegram}</code>
+          </li>
+        </ol>
+      </div>
+
+      <div className="border border-slate-100 rounded-xl overflow-hidden bg-white">
+        <div className="bg-slate-50 border-b border-slate-100 px-4 py-2">
+          <h4 className="text-xs font-bold text-slate-600 uppercase tracking-wider">Destinos Vinculados ({destinos.length})</h4>
+        </div>
+        {destinos.length === 0 ? (
+          <div className="p-8 text-center text-slate-400 text-xs">
+            Aún no has vinculado ningún destino de Telegram.
+          </div>
+        ) : (
+          <ul className="divide-y divide-slate-100">
+            {destinos.map(d => (
+              <li key={d.id} className="flex justify-between items-center p-4 hover:bg-slate-50 transition-colors">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold uppercase">
+                    {d.nombre_visible.charAt(0)}
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-slate-800">{d.nombre_visible}</p>
+                    <p className="text-[10px] text-slate-400 font-mono">ID: {d.chat_id} • Tipo: {d.tipo}</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={async () => {
+                    if (confirm("¿Desvincular destino? Ya no podrás publicar en él.")) {
+                      await supabase.from('telegram_destinos').delete().eq('id', d.id);
+                      fetchDestinos();
+                    }
+                  }}
+                  className="text-[10px] font-bold text-rose-500 bg-rose-50 px-2 py-1 rounded hover:bg-rose-100 transition-colors"
+                >
+                  Desvincular
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+};

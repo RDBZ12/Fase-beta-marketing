@@ -100,7 +100,7 @@ Si no sabes algo, ofrece derivar al equipo de marketing.`;
       {/* Floating button */}
       <button
         onClick={() => setIsOpen(o => !o)}
-        className="fixed bottom-6 right-6 z-40 w-14 h-14 bg-gradient-to-br from-violet-600 to-indigo-600 text-white rounded-2xl shadow-xl shadow-violet-300 flex items-center justify-center hover:scale-105 active:scale-95 transition-transform"
+        className="fixed bottom-[110px] right-6 z-40 w-14 h-14 bg-gradient-to-br from-violet-600 to-indigo-600 text-white rounded-2xl shadow-xl shadow-violet-300 flex items-center justify-center hover:scale-105 active:scale-95 transition-transform"
         aria-label="Abrir chatbot"
       >
         {isOpen ? <X className="w-6 h-6" /> : <MessageCircle className="w-6 h-6" />}
@@ -108,7 +108,7 @@ Si no sabes algo, ofrece derivar al equipo de marketing.`;
 
       {/* Chat panel */}
       {isOpen && (
-        <div className="fixed bottom-24 right-6 z-40 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-100 flex flex-col overflow-hidden"
+        <div className="fixed bottom-[174px] right-6 z-40 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-100 flex flex-col overflow-hidden"
           style={{ height: '480px' }}>
           {/* Header */}
           <div className="bg-gradient-to-r from-violet-600 to-indigo-600 p-4 flex items-center gap-3">

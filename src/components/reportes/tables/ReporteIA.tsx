@@ -18,7 +18,7 @@ export const ReporteIA: React.FC<Props> = ({ onBack, defaultUserId }) => {
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
 
   const fetchContenido = useCallback(async (params: FetchDataParams) => {
-    let query = supabase.from('contenido_ia').select('*, usuarios(nombre_completo, email)', { count: 'exact' });
+    let query = supabase.from('contenido_ia').select('*, usuarios(nombre, apellido, correo)', { count: 'exact' });
 
     if (defaultUserId) {
       query = query.eq('id_usuario', defaultUserId);
@@ -54,7 +54,7 @@ export const ReporteIA: React.FC<Props> = ({ onBack, defaultUserId }) => {
   }, [defaultUserId, canalFilter, dateRange]);
 
   const fetchExportData = async () => {
-    let fullQuery = supabase.from('contenido_ia').select('*, usuarios(nombre_completo, email)').order('fecha', { ascending: false });
+    let fullQuery = supabase.from('contenido_ia').select('*, usuarios(nombre, apellido, correo)').order('fecha', { ascending: false });
     if (defaultUserId) fullQuery = fullQuery.eq('id_usuario', defaultUserId);
     if (canalFilter) fullQuery = fullQuery.eq('canal', canalFilter);
     if (dateRange.start) fullQuery = fullQuery.gte('fecha', dateRange.start);
@@ -63,9 +63,9 @@ export const ReporteIA: React.FC<Props> = ({ onBack, defaultUserId }) => {
     const { data, error } = await fullQuery;
     if (error) throw error;
     
-    return (data || []).map(item => ({ 
+    return (data || []).map((item: any) => ({ 
       ...item, 
-      cliente_nombre: item.usuarios?.nombre_completo || item.usuarios?.email || 'N/A' 
+      cliente_nombre: item.usuarios ? `${item.usuarios.nombre || ''} ${item.usuarios.apellido || ''}`.trim() || item.usuarios.correo : 'N/A' 
     }));
   };
 
@@ -79,7 +79,7 @@ export const ReporteIA: React.FC<Props> = ({ onBack, defaultUserId }) => {
 
   const handleRowAction = (item: any, action: 'view' | 'pdf' | 'excel', e: React.MouseEvent) => {
     e.stopPropagation();
-    const exportItem = { ...item, cliente_nombre: item.usuarios?.nombre_completo || item.usuarios?.email || 'N/A' };
+    const exportItem = { ...item, cliente_nombre: item.usuarios ? `${item.usuarios.nombre || ''} ${item.usuarios.apellido || ''}`.trim() || item.usuarios.correo : 'N/A' };
     
     if (action === 'view') {
       setSelectedItem(item);
@@ -90,7 +90,7 @@ export const ReporteIA: React.FC<Props> = ({ onBack, defaultUserId }) => {
     }
   };
 
-  const columns: Column[] = [
+  const columns: Column<any>[] = [
     { header: 'Tema / Canal', accessorKey: 'tema', sortable: true, cell: (item) => (
       <div>
         <div className="font-semibold text-slate-800">{item.tema || 'Sin tema'}</div>
@@ -100,8 +100,12 @@ export const ReporteIA: React.FC<Props> = ({ onBack, defaultUserId }) => {
     { header: 'Extracto', accessorKey: 'respuesta_ia', cell: (item) => (
       <div className="max-w-md truncate text-sm text-slate-600 font-medium">{item.respuesta_ia?.substring(0, 80) || 'Sin respuesta'}...</div>
     )},
-    { header: 'Usuario', accessorKey: 'usuarios', cell: (item) => <div className="text-sm font-medium">{item.usuarios?.nombre_completo || item.usuarios?.email || 'N/A'}</div> },
-    { header: 'Fecha', accessorKey: 'fecha', sortable: true, cell: (item) => new Date(item.fecha).toLocaleDateString() },
+    { header: 'Usuario', accessorKey: 'usuarios', cell: (item) => <div className="text-sm font-medium">{item.usuarios ? `${item.usuarios.nombre || ''} ${item.usuarios.apellido || ''}`.trim() || item.usuarios.correo : 'N/A'}</div> },
+    { header: 'Fecha', accessorKey: 'fecha', sortable: true, cell: (item) => {
+      const f = item.fecha || '';
+      if (!f) return '';
+      return f.includes('T') ? new Date(f).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : new Date(f + 'T12:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
+    } },
     { header: 'Acciones', cell: (item) => (
       <div className="flex items-center gap-2">
         <button onClick={(e) => handleRowAction(item, 'view', e)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded" title="Ver reporte">👁️</button>

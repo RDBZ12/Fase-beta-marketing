@@ -18,11 +18,13 @@ import {
   DollarSign,
   TrendingUp,
   Search,
-  FileText
+  FileText,
+  Menu
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
+import { Save, X } from 'lucide-react';
 import type { Campaign } from '../types';
 import { CampaignWizard } from './CampaignWizard';
 import { MisPublicacionesModule } from './MisPublicacionesModule';
@@ -36,17 +38,12 @@ interface ClientPortalProps {
   refreshCampaigns: () => void;
 }
 
-const getLocalDateString = () => {
-  const d = new Date();
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
+
 
 export const ClientPortal: React.FC<ClientPortalProps> = ({ campaigns, onPagarCampaign, refreshCampaigns }) => {
-  const [activeTab, setActiveTab] = useState('mis-campanas');
+  const [activeTab, setActiveTab] = useState('Panel');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isCreatingCampaign, setIsCreatingCampaign] = useState(false);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -54,7 +51,7 @@ export const ClientPortal: React.FC<ClientPortalProps> = ({ campaigns, onPagarCa
   };
 
   const navItems = [
-    { id: 'mis-campanas', label: 'Mis Campañas', icon: Megaphone },
+    { id: 'Panel', label: 'Panel', icon: Megaphone },
     { id: 'mis-publicaciones', label: 'Mis Publicaciones', icon: LayoutDashboard },
     { id: 'pagos', label: 'Pagos', icon: CreditCard },
     { id: 'estadisticas', label: 'Estadísticas', icon: BarChart3 },
@@ -70,28 +67,17 @@ export const ClientPortal: React.FC<ClientPortalProps> = ({ campaigns, onPagarCa
           isSidebarOpen ? 'w-64' : 'w-20'
         } transition-all duration-300 ease-in-out border-r border-slate-800 bg-slate-900 flex flex-col relative z-20`}
       >
-        <button
-          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-          className="absolute -right-3 top-7 w-6 h-6 bg-slate-800 border border-slate-700 rounded-full flex items-center justify-center text-slate-400 hover:text-white hover:border-slate-600 hover:bg-slate-700 transition-colors z-30 shadow-sm"
-        >
-          {isSidebarOpen ? <ChevronLeft className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-        </button>
-
-        <div className="h-20 flex items-center justify-between px-6 border-b border-slate-800">
-          {isSidebarOpen ? (
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-violet-600/20">
-                <Rocket className="w-4 h-4 text-white" />
-              </div>
-              <span className="font-bold text-lg tracking-tight text-white">
-                Marketdev
-              </span>
-            </div>
-          ) : (
-            <div className="w-8 h-8 mx-auto rounded-lg bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center">
+        <div className="h-20 flex items-center px-6 border-b border-slate-800 overflow-hidden whitespace-nowrap">
+          <div className="flex items-center">
+            <div className="w-8 h-8 shrink-0 rounded-lg bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-violet-600/20">
               <Rocket className="w-4 h-4 text-white" />
             </div>
-          )}
+            <span className={`font-bold text-lg tracking-tight text-white transition-all duration-300 ${
+              isSidebarOpen ? 'opacity-100 max-w-[150px] ml-3' : 'opacity-0 max-w-0 ml-0'
+            }`}>
+              Marketdev
+            </span>
+          </div>
         </div>
 
         <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
@@ -102,7 +88,7 @@ export const ClientPortal: React.FC<ClientPortalProps> = ({ campaigns, onPagarCa
               <button
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
-                className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 group ${
+                className={`w-full flex items-center px-3 py-3 rounded-xl transition-all duration-200 group overflow-hidden whitespace-nowrap ${
                   isActive
                     ? 'bg-violet-600 text-white shadow-md shadow-violet-900/20'
                     : 'text-slate-400 hover:text-white hover:bg-white/5'
@@ -114,11 +100,13 @@ export const ClientPortal: React.FC<ClientPortalProps> = ({ campaigns, onPagarCa
                     isActive ? 'text-white' : 'text-slate-400 group-hover:text-white'
                   }`}
                 />
-                {isSidebarOpen && (
-                  <span className="text-sm font-medium tracking-wide">{item.label}</span>
-                )}
+                <span className={`text-sm font-medium tracking-wide transition-all duration-300 ${
+                  isSidebarOpen ? 'opacity-100 max-w-[150px] ml-3' : 'opacity-0 max-w-0 ml-0'
+                }`}>
+                  {item.label}
+                </span>
                 {isActive && isSidebarOpen && (
-                  <div className="ml-auto w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]" />
+                  <div className="ml-auto w-1.5 h-1.5 shrink-0 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]" />
                 )}
                 {!isSidebarOpen && isActive && (
                   <div className="absolute left-1 w-1 h-8 rounded-full bg-violet-500" />
@@ -128,13 +116,17 @@ export const ClientPortal: React.FC<ClientPortalProps> = ({ campaigns, onPagarCa
           })}
         </nav>
 
-        <div className="p-4 border-t border-slate-800">
+        <div className="p-4 border-t border-slate-800 overflow-hidden whitespace-nowrap">
           <button
             onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-all duration-200"
+            className="w-full flex items-center px-3 py-3 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-all duration-200"
           >
             <LogOut className="w-5 h-5 shrink-0" />
-            {isSidebarOpen && <span className="text-sm font-medium">Cerrar Sesión</span>}
+            <span className={`text-sm font-medium transition-all duration-300 ${
+              isSidebarOpen ? 'opacity-100 max-w-[150px] ml-3' : 'opacity-0 max-w-0 ml-0'
+            }`}>
+              Cerrar Sesión
+            </span>
           </button>
         </div>
       </aside>
@@ -146,9 +138,17 @@ export const ClientPortal: React.FC<ClientPortalProps> = ({ campaigns, onPagarCa
         <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] rounded-full bg-indigo-600/10 blur-[120px] pointer-events-none" />
 
         <header className="h-20 border-b border-slate-200 bg-white backdrop-blur-md flex items-center justify-between px-8 z-10">
-          <h1 className="text-xl font-semibold capitalize tracking-tight">
-            {activeTab.replace('-', ' ')}
-          </h1>
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)} 
+              className="p-2 -ml-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900 rounded-lg transition-colors"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+            <h1 className="text-xl font-semibold capitalize tracking-tight">
+              {activeTab.replace('-', ' ')}
+            </h1>
+          </div>
           <div className="flex items-center gap-4">
             <button className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200 hover:bg-slate-200 transition-colors relative">
               <MessageSquare className="w-4 h-4 text-slate-600" />
@@ -163,16 +163,29 @@ export const ClientPortal: React.FC<ClientPortalProps> = ({ campaigns, onPagarCa
         </header>
 
         <div className="flex-1 overflow-y-auto p-8 z-10 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
-          {activeTab === 'mis-campanas' && <MisCampanasModule campaigns={campaigns} onNew={() => setActiveTab('nueva-campana')} onPagar={onPagarCampaign} refreshCampaigns={refreshCampaigns} />}
-          {activeTab === 'nueva-campana' && <CampaignWizard onCancel={() => setActiveTab('mis-campanas')} onFinish={() => { refreshCampaigns(); setActiveTab('mis-campanas'); }} />}
+          {activeTab === 'Panel' && <MisCampanasModule campaigns={campaigns} onNew={() => setIsCreatingCampaign(true)} onPagar={onPagarCampaign} refreshCampaigns={refreshCampaigns} />}
+          
           
           {activeTab === 'mis-publicaciones' && <MisPublicacionesModule campaigns={campaigns} />}
           {activeTab === 'estadisticas' && <ClientEstadisticasModule campaigns={campaigns} />}
           {activeTab === 'reportes' && <CentroReportesCliente />}
-          {activeTab === 'pagos' && <ClientPagosModule campaigns={campaigns} />}
+          {activeTab === 'pagos' && <ClientPagosModule campaigns={campaigns} onPagar={onPagarCampaign} />}
           {activeTab === 'perfil' && <ClientPerfilModule />}
         </div>
       </main>
+
+      {isCreatingCampaign && (
+        <div className="fixed inset-0 z-[1008] flex items-center justify-center bg-black/70 p-4 pl-64 overflow-y-auto">
+           <div className="w-full max-w-5xl bg-white rounded-[10px] shadow-[0_0_40px_rgba(0,0,0,0.4)] relative my-8 animate-blur-in">
+             <button onClick={() => setIsCreatingCampaign(false)} className="absolute top-3 right-3 z-50 p-2 bg-slate-100/80 backdrop-blur-sm rounded-full text-slate-500 hover:bg-red-500 hover:text-white transition-colors shadow-sm">
+               <X className="w-5 h-5" />
+             </button>
+             <div className="p-4 max-h-[85vh] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200 rounded-3xl">
+               <CampaignWizard onCancel={() => setIsCreatingCampaign(false)} onFinish={() => { refreshCampaigns(); setIsCreatingCampaign(false); }} />
+             </div>
+           </div>
+        </div>
+      )}
 
       <ChatbotWidget />
     </div>
@@ -182,26 +195,90 @@ export const ClientPortal: React.FC<ClientPortalProps> = ({ campaigns, onPagarCa
 // --- Subcomponentes de Vista ---
 
 const MisCampanasModule = ({ campaigns, onNew, onPagar, refreshCampaigns }: { campaigns: Campaign[], onNew: () => void, onPagar: (c: Campaign) => void, refreshCampaigns: () => void }) => {
-  const activeCamp = campaigns.filter(c => c.status === 'Activa').length;
-  const totalLeads = campaigns.reduce((acc, c) => acc + (c.leads || 0), 0);
-  const totalReach = campaigns.reduce((acc, c) => acc + (parseInt(String(c.reach).replace(/\D/g, '')) || 0), 0);
-  const totalPresupuesto = campaigns.filter(c => c.status !== 'Borrador' && c.status !== 'Pendiente de Pago').reduce((acc, c) => acc + (c.presupuesto || 0), 0);
+  const [realLeads, setRealLeads] = useState(0);
+  const [realReach, setRealReach] = useState(0);
+  const [chartData, setChartData] = useState<any[]>([
+    { name: 'Lun', alcance: 0 },
+    { name: 'Mar', alcance: 0 },
+    { name: 'Mie', alcance: 0 },
+    { name: 'Jue', alcance: 0 },
+    { name: 'Vie', alcance: 0 },
+    { name: 'Sab', alcance: 0 },
+    { name: 'Dom', alcance: 0 },
+  ]);
 
-  const chartData = [
-    { name: 'Lun', alcance: 1200 },
-    { name: 'Mar', alcance: 1900 },
-    { name: 'Mie', alcance: 1500 },
-    { name: 'Jue', alcance: 2400 },
-    { name: 'Vie', alcance: 2100 },
-    { name: 'Sab', alcance: 3200 },
-    { name: 'Dom', alcance: 3800 },
-  ];
+  useEffect(() => {
+    async function fetchRealMetrics() {
+      const last7Days = Array.from({ length: 7 }).map((_, i) => {
+        const d = new Date();
+        d.setDate(d.getDate() - (6 - i));
+        const dayName = d.toLocaleDateString('es-ES', { weekday: 'short' }).replace('.', '');
+        return { date: d.toISOString().split('T')[0], name: dayName.charAt(0).toUpperCase() + dayName.slice(1), alcance: 0 };
+      });
+
+      if (!campaigns || campaigns.length === 0) {
+        setRealLeads(0);
+        setRealReach(0);
+        setChartData(last7Days.map(d => ({ name: d.name, alcance: d.alcance })));
+        return;
+      }
+      const campIds = campaigns.map(c => c.id);
+
+      // Real Leads
+      const { count: leadsCount } = await supabase
+        .from('leads')
+        .select('*', { count: 'exact', head: true })
+        .in('id_campana', campIds);
+      
+      setRealLeads(leadsCount || 0);
+
+      // Real Reach (Alcance)
+      const { data: pubs } = await supabase
+        .from('publicaciones')
+        .select('id_publicacion')
+        .in('id_campana', campIds);
+      
+      if (pubs && pubs.length > 0) {
+        const pubIds = pubs.map(p => p.id_publicacion);
+        const { data: ints } = await supabase
+          .from('interacciones')
+          .select('cantidad, fecha')
+          .in('id_publicacion', pubIds)
+          .in('tipo_interaccion', ['alcance', 'impresion']);
+        
+        if (ints) {
+          const totalA = ints.reduce((acc, curr) => acc + (curr.cantidad || 0), 0);
+          setRealReach(totalA);
+
+          ints.forEach(int => {
+            if (int.fecha) {
+              const dateStr = int.fecha.split('T')[0];
+              const dayEntry = last7Days.find(d => d.date === dateStr);
+              if (dayEntry) dayEntry.alcance += (int.cantidad || 0);
+            }
+          });
+          setChartData(last7Days.map(d => ({ name: d.name, alcance: d.alcance })));
+        } else {
+          setChartData(last7Days.map(d => ({ name: d.name, alcance: d.alcance })));
+        }
+      } else {
+        setRealReach(0);
+        setChartData(last7Days.map(d => ({ name: d.name, alcance: d.alcance })));
+      }
+    }
+    fetchRealMetrics();
+  }, [campaigns]);
+
+  const activeCamp = campaigns.filter(c => c.status === 'Activa').length;
+  const totalLeads = realLeads;
+  const totalReach = realReach;
+  const totalPresupuesto = campaigns.filter(c => c.status !== 'Borrador' && c.status !== 'Pendiente de Pago').reduce((acc, c) => acc + (c.presupuesto || 0), 0);
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight mb-2">Mis Campañas</h2>
+          <h2 className="text-3xl font-bold tracking-tight mb-2">Campaña</h2>
           <p className="text-slate-500">Crea, edita y revisa el estado de tus campañas publicitarias.</p>
         </div>
         <div className="flex gap-3">
@@ -252,8 +329,8 @@ const MisCampanasModule = ({ campaigns, onNew, onPagar, refreshCampaigns }: { ca
             <DollarSign className="w-6 h-6" />
           </div>
           <div>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Presupuesto Usado</p>
-            <p className="text-2xl font-bold text-slate-900 mt-1">${totalPresupuesto}</p>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Presupuesto Usado (Inc. ITBIS)</p>
+            <p className="text-2xl font-bold text-slate-900 mt-1">${(totalPresupuesto * 1.18).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
           </div>
         </div>
       </div>
@@ -300,16 +377,156 @@ const MisCampanasModule = ({ campaigns, onNew, onPagar, refreshCampaigns }: { ca
 };
 
 
+// --- Modal para Editar Campaña y sus Publicaciones ---
+const ClientEditCampaignModal = ({ 
+  campaign, 
+  onClose, 
+  onSave 
+}: { 
+  campaign: Campaign, 
+  onClose: () => void, 
+  onSave: () => void 
+}) => {
+  const [presupuesto, setPresupuesto] = useState(campaign.presupuesto || 0);
+  const [startDate, setStartDate] = useState(campaign.startDate || '');
+  const [endDate, setEndDate] = useState(campaign.endDate || '');
+  const [publicaciones, setPublicaciones] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
+  useEffect(() => {
+    supabase.from('publicaciones')
+      .select('*')
+      .eq('id_campana', campaign.id)
+      .then(({ data }) => {
+        if (data) setPublicaciones(data);
+        setLoading(false);
+      });
+  }, [campaign.id]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      // 1. Update Campaign
+      await supabase.from('campaigns').update({
+        presupuesto,
+        fecha_inicio: startDate,
+        start_date: startDate,
+        fecha_fin: endDate
+      }).eq('id', campaign.id);
+
+      // 2. Update Publicaciones
+      for (const pub of publicaciones) {
+        await supabase.from('publicaciones').update({
+          contenido: pub.contenido
+        }).eq('id_publicacion', pub.id_publicacion);
+      }
+
+      onSave();
+      onClose();
+    } catch (err) {
+      console.error(err);
+      alert("Error al guardar los cambios.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+      <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+          <div>
+            <h3 className="text-xl font-bold text-slate-800">Editar Campaña</h3>
+            <p className="text-sm text-slate-500">{campaign.name}</p>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-6 overflow-y-auto flex-1 space-y-6">
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Presupuesto ($)</label>
+              <input 
+                type="number" min="0" value={presupuesto} onChange={e => setPresupuesto(Number(e.target.value))}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-violet-500 outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Fecha Inicio</label>
+              <input 
+                type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-violet-500 outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Fecha Fin</label>
+              <input 
+                type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-violet-500 outline-none"
+              />
+            </div>
+          </div>
+
+          <div>
+            <h4 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+              <MessageSquare className="w-4 h-4 text-violet-500" />
+              Contenido de las Publicaciones
+            </h4>
+            {loading ? (
+              <div className="text-center py-8 text-slate-400 text-sm">Cargando publicaciones...</div>
+            ) : publicaciones.length === 0 ? (
+              <div className="text-center py-8 text-slate-400 text-sm border border-dashed rounded-xl">No hay publicaciones en esta campaña.</div>
+            ) : (
+              <div className="space-y-4">
+                {publicaciones.map((pub, idx) => (
+                  <div key={pub.id_publicacion} className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                    <label className="block text-xs font-bold text-slate-600 mb-2">Post #{idx + 1} - {pub.titulo}</label>
+                    <textarea 
+                      rows={5}
+                      value={pub.contenido}
+                      onChange={e => {
+                        const newPubs = [...publicaciones];
+                        newPubs[idx].contenido = e.target.value;
+                        setPublicaciones(newPubs);
+                      }}
+                      className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-violet-500 outline-none resize-none"
+                    />
+                    <p className="text-[10px] text-slate-400 mt-2">Asegúrate de no exceder el límite de hashtags si hubo un error de validación.</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="p-6 border-t border-slate-100 flex justify-end gap-3 bg-slate-50/50">
+          <button onClick={onClose} className="px-6 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:bg-slate-200 transition-colors">Cancelar</button>
+          <button 
+            onClick={handleSave} 
+            disabled={saving}
+            className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold text-white bg-violet-600 hover:bg-violet-500 shadow-lg shadow-violet-500/30 transition-all disabled:opacity-50"
+          >
+            <Save className="w-4 h-4" />
+            {saving ? 'Guardando...' : 'Guardar Cambios'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 
 const MisCampanasView = ({ campaigns, onPagar, refreshCampaigns }: { campaigns: Campaign[], onPagar: (c: Campaign) => void, refreshCampaigns: () => void }) => {
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
   const [publicaciones, setPublicaciones] = useState<any[]>([]);
   const [loadingPubs, setLoadingPubs] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<{presupuesto: number, startDate: string, endDate: string}>({presupuesto: 0, startDate: '', endDate: ''});
+  const [editingCampaignModal, setEditingCampaignModal] = useState<Campaign | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(10);
 
   useEffect(() => {
     if (selectedCampaign) {
@@ -333,89 +550,7 @@ const MisCampanasView = ({ campaigns, onPagar, refreshCampaigns }: { campaigns: 
     }
   }, [selectedCampaign]);
 
-  if (selectedCampaign) {
-    return (
-      <div className="animate-in fade-in slide-in-from-right-8 duration-500">
-        <button 
-          onClick={() => setSelectedCampaign(null)}
-          className="flex items-center gap-2 text-slate-500 hover:text-slate-900 mb-6 transition-colors"
-        >
-          <span className="text-xl">←</span> Volver a mis campañas
-        </button>
-        
-        <div className="bg-white border border-slate-200 rounded-2xl p-8 backdrop-blur-xl mb-6 flex justify-between items-center">
-          <div>
-            <h2 className="text-3xl font-bold text-slate-900 mb-2">{selectedCampaign.name}</h2>
-            <div className="flex gap-3 text-sm">
-              <span className="bg-violet-600/20 text-violet-400 px-3 py-1 rounded-full font-medium border border-violet-500/20">{selectedCampaign.channel}</span>
-              <span className="bg-[#2a2a4a] text-slate-700 px-3 py-1 rounded-full font-medium">{selectedCampaign.status}</span>
-            </div>
-          </div>
-          <div className="text-right">
-            <p className="text-slate-500 text-sm mb-1">Presupuesto</p>
-            <p className="text-2xl font-bold text-emerald-400">${selectedCampaign.presupuesto || 'N/A'}</p>
-            {selectedCampaign.status === 'Borrador' && (
-              <button 
-                onClick={(e) => { e.stopPropagation(); onPagar(selectedCampaign); }}
-                className="mt-2 px-4 py-1.5 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-lg text-sm transition-colors"
-              >
-                Pagar Campaña
-              </button>
-            )}
-          </div>
-        </div>
-
-        <h3 className="text-xl font-bold mb-4 mt-8 flex items-center gap-2">
-          <ImageIcon className="w-5 h-5 text-violet-400" />
-          Publicaciones Generadas
-        </h3>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {loadingPubs ? (
-             <div className="col-span-full py-10 text-center text-slate-500">Cargando publicaciones...</div>
-          ) : publicaciones.length === 0 ? (
-             <div className="col-span-full py-10 text-center text-slate-500 border border-dashed border-slate-200 rounded-xl">
-               No hay publicaciones programadas para esta campaña.
-             </div>
-          ) : (
-            publicaciones.map((pub) => (
-              <div key={pub.id_publicacion} className="bg-white border border-slate-200 rounded-2xl overflow-hidden group hover:border-violet-500/30 transition-all">
-                <div className="aspect-square bg-slate-50 relative flex items-center justify-center">
-                  {pub.imagen_url || selectedCampaign.image_url ? (
-                     <img src={pub.imagen_url || selectedCampaign.image_url} alt="Post" className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
-                  ) : (
-                     <ImageIcon className="w-12 h-12 text-[#2a2a4a]" />
-                  )}
-                  <div className="absolute top-3 right-3 bg-black/60 backdrop-blur-md px-2 py-1 rounded-md flex items-center gap-1">
-                    <Calendar className="w-3 h-3 text-violet-400" />
-                    <span className="text-[10px] font-bold text-slate-900">
-                      {new Date(pub.fecha_publicacion).toLocaleDateString()}
-                    </span>
-                  </div>
-                </div>
-                <div className="p-5">
-                  <h4 className="text-sm font-bold text-slate-900 mb-2">{pub.titulo}</h4>
-                  <p className="text-xs text-slate-700 line-clamp-3 mb-3 whitespace-pre-wrap">
-                    {pub.contenido}
-                  </p>
-                  <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-200">
-                    <span className="text-xs font-semibold text-slate-500">{pub.nombre_red || 'Instagram'}</span>
-                    <span className={`flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded ${
-                      pub.estado === 'Publicada' ? 'text-emerald-400 bg-emerald-400/10' :
-                      pub.estado === 'Fallida' ? 'text-pink-400 bg-pink-400/10' :
-                      'text-amber-400 bg-amber-400/10'
-                    }`}>
-                      <AlertCircle className="w-3 h-3" /> {pub.estado}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-    );
-  }
+  // View moved to modal overlay at the bottom
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
@@ -429,7 +564,10 @@ const MisCampanasView = ({ campaigns, onPagar, refreshCampaigns }: { campaigns: 
                 type="text" 
                 placeholder="Buscar por nombre o red..." 
                 value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
+                onChange={e => {
+                  setSearchTerm(e.target.value);
+                  setPage(0);
+                }}
                 className="w-full sm:w-64 pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all"
               />
             </div>
@@ -447,7 +585,7 @@ const MisCampanasView = ({ campaigns, onPagar, refreshCampaigns }: { campaigns: 
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-medium uppercase text-[10px] tracking-wider">
                 <tr>
                   <th className="px-6 py-4">Campaña</th>
-                  <th className="px-6 py-4">Presupuesto</th>
+                  <th className="px-6 py-4">Presupuesto (Inc. ITBIS)</th>
                   <th className="px-6 py-4">Estado</th>
                   <th className="px-6 py-4">Fecha Inicio</th>
                   <th className="px-6 py-4">Fecha Fin</th>
@@ -455,124 +593,89 @@ const MisCampanasView = ({ campaigns, onPagar, refreshCampaigns }: { campaigns: 
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {campaigns.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()) || (c.brand || c.channel).toLowerCase().includes(searchTerm.toLowerCase())).length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="py-12 text-center text-slate-500">
-                      No se encontraron campañas para "{searchTerm}"
-                    </td>
-                  </tr>
-                ) : campaigns.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()) || (c.brand || c.channel).toLowerCase().includes(searchTerm.toLowerCase())).map((camp) => {
-                  const isEditing = editingId === camp.id;
-                  return (
-                  <tr 
-                    key={camp.id} 
-                    onClick={() => { if (!isEditing) setSelectedCampaign(camp); }}
-                    className="hover:bg-slate-50/50 cursor-pointer transition-colors group"
-                  >
-                    <td className="px-6 py-4">
-                      <div className="font-bold text-slate-900 group-hover:text-violet-600 transition-colors">{camp.name}</div>
-                      <div className="text-xs text-slate-500">{camp.brand || camp.channel}</div>
-                    </td>
-                    <td className="px-6 py-4 text-slate-600 font-medium" onClick={(e) => e.stopPropagation()}>
-                      {isEditing ? (
-                        <div className="flex items-center gap-1">
-                          <span className="text-slate-500">$</span>
-                          <input 
-                            type="number" 
-                            min="0"
-                            value={editForm.presupuesto}
-                            onChange={(e) => setEditForm({...editForm, presupuesto: Number(e.target.value)})}
-                            className="w-20 bg-transparent border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-violet-500"
-                          />
-                        </div>
-                      ) : (
-                        `$${camp.presupuesto || 0}`
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${
-                        camp.status === 'Activa' ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20' : 
-                        camp.status === 'Borrador' ? 'bg-amber-500/10 text-amber-600 border border-amber-500/20' : 
-                        'bg-slate-500/10 text-slate-600 border border-slate-500/20'
-                      }`}>
-                        {camp.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-slate-500" onClick={(e) => e.stopPropagation()}>
-                      {isEditing ? (
-                        <input 
-                          type="date" 
-                          min={getLocalDateString()}
-                          value={editForm.startDate}
-                          onChange={(e) => setEditForm({...editForm, startDate: e.target.value})}
-                          className="bg-transparent border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-violet-500"
-                        />
-                      ) : (
-                        camp.startDate || 'No definida'
-                      )}
-                    </td>
-                    <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
-                      {isEditing ? (
-                        <input 
-                          type="date" 
-                          min={editForm.startDate || getLocalDateString()}
-                          value={editForm.endDate}
-                          onChange={(e) => setEditForm({...editForm, endDate: e.target.value})}
-                          className="bg-transparent border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-violet-500"
-                        />
-                      ) : (
-                        camp.endDate || 'No definida'
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex justify-end gap-2">
-                        {isEditing ? (
-                          <>
-                            <button 
-                              onClick={() => setEditingId(null)}
-                              className="px-3 py-1 border border-slate-200 text-slate-500 hover:bg-slate-50 rounded-lg text-xs"
-                            >
-                              Cancelar
-                            </button>
-                            <button 
-                              onClick={async () => {
-                                await supabase.from('campaigns').update({
-                                  presupuesto: editForm.presupuesto,
-                                  fecha_inicio: editForm.startDate,
-                                  fecha_fin: editForm.endDate
-                                }).eq('id', camp.id);
-                                setEditingId(null);
-                                refreshCampaigns();
-                              }}
-                              className="px-3 py-1 bg-violet-600 hover:bg-violet-500 text-white font-medium rounded-lg text-xs"
-                            >
-                              Guardar
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            {camp.status === 'Borrador' && (
+                {(() => {
+                  const filtered = campaigns.filter(c => 
+                    c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                    (c.brand || c.channel || '').toLowerCase().includes(searchTerm.toLowerCase())
+                  );
+                  const paginatedCampaigns = filtered.slice(page * pageSize, (page + 1) * pageSize);
+                  
+                  if (filtered.length === 0) {
+                    return (
+                      <tr>
+                        <td colSpan={6} className="py-12 text-center text-slate-500">
+                          No se encontraron campañas para "{searchTerm}"
+                        </td>
+                      </tr>
+                    );
+                  }
+                  
+                  return paginatedCampaigns.map((camp) => {
+                    return (
+                      <tr 
+                        key={camp.id} 
+                        onClick={() => setSelectedCampaign(camp)}
+                        className="hover:bg-slate-50/50 cursor-pointer transition-colors group"
+                      >
+                        <td className="px-6 py-4">
+                          <div className="font-bold text-slate-900 group-hover:text-violet-600 transition-colors">{camp.name}</div>
+                          <div className="text-xs text-slate-500">{camp.brand || camp.channel}</div>
+                        </td>
+                        <td className="px-6 py-4 text-slate-600 font-medium" onClick={(e) => e.stopPropagation()}>
+                          ${((camp.presupuesto || 0) * 1.18).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${
+                            camp.status === 'Activa' ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20' : 
+                            camp.status === 'Borrador' ? 'bg-amber-500/10 text-amber-600 border border-amber-500/20' : 
+                            'bg-slate-500/10 text-slate-600 border border-slate-500/20'
+                          }`}>
+                            {camp.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-slate-500" onClick={(e) => e.stopPropagation()}>
+                          {camp.startDate || 'No definida'}
+                        </td>
+                        <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
+                          {camp.endDate || 'No definida'}
+                        </td>
+                        <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex justify-end gap-2">
+                            {camp.status === 'Borrador' && camp.estado_moderacion !== 'rechazada' && (
                               <button 
-                                onClick={() => {
-                                  setEditForm({
-                                    presupuesto: camp.presupuesto || 0,
-                                    startDate: camp.startDate || '',
-                                    endDate: camp.endDate || ''
-                                  });
-                                  setEditingId(camp.id);
-                                }}
+                                onClick={() => setEditingCampaignModal(camp)}
                                 className="px-3 py-1 border border-slate-200 text-slate-600 hover:bg-slate-50 font-medium rounded-lg text-xs transition-colors"
                               >
                                 Editar
                               </button>
                             )}
                             {camp.status === 'Borrador' ? (
-                              <button 
-                                onClick={() => onPagar(camp)}
-                                className="px-4 py-1.5 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-lg text-xs transition-colors shadow-sm"
-                              >
-                                Pagar
-                              </button>
+                              camp.estado_moderacion === 'aprobada' ? (
+                                <button 
+                                  onClick={() => onPagar(camp)}
+                                  className="px-4 py-1.5 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-lg text-xs transition-colors shadow-sm"
+                                >
+                                  Pagar
+                                </button>
+                              ) : camp.estado_moderacion === 'rechazada' ? (
+                                <div className="group relative">
+                                  <span className="px-3 py-1.5 bg-red-100 text-red-700 font-bold rounded-lg text-xs border border-red-200 cursor-not-allowed">
+                                    Cancelada
+                                  </span>
+                                  <div className="absolute bottom-full right-0 mb-2 w-48 p-2 bg-slate-800 text-white text-[10px] rounded shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                                    Tu campaña fue cancelada/rechazada.
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="group relative">
+                                  <span className="px-3 py-1.5 bg-slate-100 text-slate-500 font-bold rounded-lg text-xs border border-slate-200 cursor-not-allowed">
+                                    En revisión
+                                  </span>
+                                  <div className="absolute bottom-full right-0 mb-2 w-48 p-2 bg-slate-800 text-white text-[10px] rounded shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                                    Tu campaña está siendo revisada, te avisaremos.
+                                  </div>
+                                </div>
+                              )
                             ) : (
                               <button 
                                 onClick={() => setSelectedCampaign(camp)}
@@ -581,18 +684,188 @@ const MisCampanasView = ({ campaigns, onPagar, refreshCampaigns }: { campaigns: 
                                 Detalles
                               </button>
                             )}
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                  );
-                })}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  });
+                })()}
               </tbody>
             </table>
           </div>
         )}
+        
+        {/* Pagination Controls */}
+        {(() => {
+          const filtered = campaigns.filter(c => 
+            c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+            (c.brand || c.channel || '').toLowerCase().includes(searchTerm.toLowerCase())
+          );
+          if (filtered.length === 0) return null;
+          return (
+            <div className="px-6 py-4 border-t border-slate-200 bg-slate-50/50 flex flex-col sm:flex-row justify-between items-center gap-4">
+              <div className="text-sm font-medium text-slate-500">
+                Mostrando <span className="font-bold text-slate-700">{(page * pageSize) + 1}</span> a <span className="font-bold text-slate-700">{Math.min((page + 1) * pageSize, filtered.length)}</span> de <span className="font-bold text-slate-700">{filtered.length}</span> registros
+              </div>
+              
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-slate-500">Filas:</span>
+                  <select 
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value));
+                      setPage(0);
+                    }}
+                    className="bg-white border border-slate-200 text-slate-700 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-1.5"
+                  >
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setPage(p => Math.max(0, p - 1))}
+                    disabled={page === 0}
+                    className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
+                  <div className="text-sm font-medium text-slate-600 px-2">
+                    Página {filtered.length === 0 ? 0 : page + 1} de {Math.ceil(filtered.length / pageSize)}
+                  </div>
+                  <button
+                    onClick={() => setPage(p => Math.min(Math.ceil(filtered.length / pageSize) - 1, p + 1))}
+                    disabled={page >= Math.ceil(filtered.length / pageSize) - 1 || filtered.length === 0}
+                    className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </div>
+
+      {editingCampaignModal && (
+        <ClientEditCampaignModal 
+          campaign={editingCampaignModal} 
+          onClose={() => setEditingCampaignModal(null)} 
+          onSave={refreshCampaigns} 
+        />
+      )}
+
+      {selectedCampaign && (
+        <div className="fixed inset-0 z-[1008] flex items-center justify-center bg-black/70 p-4 pl-0 sm:pl-64 overflow-y-auto">
+          <div className="w-full max-w-6xl bg-white rounded-[10px] shadow-[0_0_40px_rgba(0,0,0,0.4)] relative my-8 animate-bounce-down max-h-[90vh] flex flex-col">
+            <button 
+              onClick={() => setSelectedCampaign(null)}
+              className="absolute top-3 right-3 z-50 p-2 bg-slate-100/80 backdrop-blur-sm rounded-full text-slate-500 hover:bg-red-500 hover:text-white transition-all shadow-sm"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <div className="p-8 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200">
+              <div className="bg-white border border-slate-200 rounded-2xl p-6 mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                  <h2 className="text-3xl font-bold text-slate-900 mb-2">{selectedCampaign.name}</h2>
+                  <div className="flex flex-wrap gap-3 text-sm">
+                    <span className="bg-violet-50 text-violet-600 px-3 py-1 rounded-full font-medium border border-violet-200">{selectedCampaign.channel}</span>
+                    <span className="bg-slate-100 text-slate-700 px-3 py-1 rounded-full font-medium border border-slate-200">{selectedCampaign.status}</span>
+                  </div>
+                </div>
+                <div className="text-left md:text-right flex flex-col items-start md:items-end">
+                  <p className="text-slate-500 text-sm mb-1">Presupuesto (Inc. ITBIS)</p>
+                  <p className="text-2xl font-bold text-emerald-600">${((selectedCampaign.presupuesto || 0) * 1.18).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                  <p className="text-[11px] text-slate-500 font-medium mt-1">
+                    Aprox. <strong className="text-slate-700">RD$ {(Number(selectedCampaign.presupuesto || 0) * 60).toLocaleString('en-US')}</strong> + ITBIS (18%) = <strong className="text-emerald-600">RD$ {(Number(selectedCampaign.presupuesto || 0) * 60 * 1.18).toLocaleString('en-US')}</strong>
+                  </p>
+                  {selectedCampaign.status === 'Borrador' && (
+                    selectedCampaign.estado_moderacion === 'aprobada' ? (
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); onPagar(selectedCampaign); }}
+                        className="mt-2 px-4 py-1.5 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-lg text-sm transition-colors"
+                      >
+                        Pagar Campaña
+                      </button>
+                    ) : selectedCampaign.estado_moderacion === 'rechazada' ? (
+                      <div className="group relative mt-2">
+                        <span className="px-3 py-1.5 bg-red-100 text-red-700 font-bold rounded-lg text-xs border border-red-200 cursor-not-allowed">
+                          Cancelada
+                        </span>
+                        <div className="absolute top-full right-0 mt-2 w-48 p-2 bg-slate-800 text-white text-[10px] rounded shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                          Tu campaña fue cancelada/rechazada.
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="group relative mt-2">
+                        <span className="px-3 py-1.5 bg-slate-100 text-slate-500 font-bold rounded-lg text-xs border border-slate-200 cursor-not-allowed">
+                          En revisión
+                        </span>
+                        <div className="absolute top-full right-0 mt-2 w-48 p-2 bg-slate-800 text-white text-[10px] rounded shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                          Tu campaña está siendo revisada por nuestro sistema de IA. Te notificaremos cuando esté aprobada para proceder con el pago.
+                        </div>
+                      </div>
+                    )
+                  )}
+                </div>
+              </div>
+
+              <h3 className="text-xl font-bold mb-4 mt-8 flex items-center gap-2 text-slate-800">
+                <ImageIcon className="w-5 h-5 text-violet-500" />
+                Publicaciones Generadas
+              </h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {loadingPubs ? (
+                   <div className="col-span-full py-10 text-center text-slate-500">Cargando publicaciones...</div>
+                ) : publicaciones.length === 0 ? (
+                   <div className="col-span-full py-10 text-center text-slate-500 border border-dashed border-slate-200 rounded-xl">
+                     No hay publicaciones programadas para esta campaña.
+                   </div>
+                ) : (
+                  publicaciones.map((pub) => (
+                    <div key={pub.id_publicacion} className="bg-white border border-slate-200 rounded-2xl overflow-hidden group hover:border-violet-300 transition-all shadow-sm">
+                      <div className="aspect-square bg-slate-50 relative flex items-center justify-center">
+                        {pub.imagen_url || selectedCampaign.image_url ? (
+                           <img src={pub.imagen_url || selectedCampaign.image_url} alt="Post" className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity" />
+                        ) : (
+                           <ImageIcon className="w-12 h-12 text-slate-300" />
+                        )}
+                        <div className="absolute top-3 right-3 bg-black/60 backdrop-blur-md px-2 py-1 rounded-md flex items-center gap-1">
+                          <Calendar className="w-3 h-3 text-violet-400" />
+                          <span className="text-[10px] font-bold text-white">
+                            {new Date(pub.fecha_publicacion).toLocaleDateString()}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="p-5">
+                        <h4 className="text-sm font-bold text-slate-900 mb-2">{pub.titulo}</h4>
+                        <p className="text-xs text-slate-600 line-clamp-3 mb-3 whitespace-pre-wrap">
+                          {pub.contenido}
+                        </p>
+                        <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-200">
+                          <span className="text-xs font-semibold text-slate-500">{pub.nombre_red || 'Instagram'}</span>
+                          <span className={`flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded ${
+                            pub.estado === 'Publicada' ? 'text-emerald-700 bg-emerald-100' :
+                            pub.estado === 'Fallida' ? 'text-rose-700 bg-rose-100' :
+                            'text-amber-700 bg-amber-100'
+                          }`}>
+                            <AlertCircle className="w-3 h-3" /> {pub.estado}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

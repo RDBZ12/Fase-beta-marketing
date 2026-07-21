@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Image as ImageIcon, Calendar, Sparkles, UploadCloud, AlertCircle, PlusCircle, Edit2, Share2, MessageSquare, Loader2, Search, X } from 'lucide-react';
+import { Image as ImageIcon, Calendar, Sparkles, UploadCloud, AlertCircle, PlusCircle, Edit2, Share2, MessageSquare, Loader2, Search, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { sendWhatsAppTextMessage, sendWhatsAppImageMessage, getOpenWAChats, getOpenWAContacts, getOpenWASessions, getOpenWASettings } from '../lib/whatsapp';
 import { supabase } from '../supabaseClient';
 import type { Campaign } from '../types';
@@ -49,11 +49,17 @@ export const MisPublicacionesModule: React.FC<MisPublicacionesModuleProps> = ({ 
   const [isSaving, setIsSaving] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [alertMsg, setAlertMsg] = useState<string | null>(null);
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null);
   const [redes, setRedes] = useState<any[]>([]);
   const [replicateTargetPub, setReplicateTargetPub] = useState<any | null>(null);
   const [selectedRedId, setSelectedRedId] = useState<string>('');
   const [isReplicating, setIsReplicating] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [totalItems, setTotalItems] = useState(0);
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
     setToast({ message, type });
@@ -97,26 +103,78 @@ export const MisPublicacionesModule: React.FC<MisPublicacionesModuleProps> = ({ 
     fetchRedes();
   }, []);
 
+  const [telegramDestinos, setTelegramDestinos] = useState<any[]>([]);
+  const [selectedTelegramDestinoIds, setSelectedTelegramDestinoIds] = useState<string[]>([]);
+
   useEffect(() => {
-    fetchPublicaciones();
-  }, [campaigns]);
+    const fetchTelegramDestinos = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user?.id) {
+        const { data: usuario } = await supabase.from('usuarios').select('id_usuario').eq('id_usuario', session.user.id).single();
+        if (usuario) {
+          const { data } = await supabase.from('telegram_destinos').select('*').eq('cliente_id', usuario.id_usuario);
+          if (data) {
+            setTelegramDestinos(data);
+          }
+        }
+      }
+    };
+    fetchTelegramDestinos();
+  }, [replicateTargetPub]); // Refresh when modal opens
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchPublicaciones();
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [campaigns, searchTerm, currentPage]);
 
   const fetchPublicaciones = async () => {
     setLoading(true);
     if (campaigns.length === 0) {
       setPublicaciones([]);
+      setTotalPages(1);
       setLoading(false);
       return;
     }
     
-    const campaignIds = campaigns.map(c => c.id);
-    const { data } = await supabase
+    // Filtramos las campañas válidas (pagadas/activas/completadas)
+    const validCampaigns = campaigns.filter(c => c.status !== 'Pendiente de Pago' && c.status !== 'Borrador');
+    const campaignIds = validCampaigns.map(c => c.id);
+
+    if (campaignIds.length === 0) {
+      setPublicaciones([]);
+      setTotalPages(1);
+      setLoading(false);
+      return;
+    }
+
+    let query = supabase
       .from('publicaciones')
-      .select('*, redes_sociales(nombre_red)')
+      .select('*, redes_sociales(nombre_red)', { count: 'exact' })
       .in('id_campana', campaignIds)
-      .order('fecha_publicacion', { ascending: false });
+      .order('created_at', { ascending: false });
+      
+    if (searchTerm) {
+      const matchingRedesIds = redes.filter(r => r.nombre_red.toLowerCase().includes(searchTerm.toLowerCase())).map(r => r.id_red);
+      if (matchingRedesIds.length > 0) {
+        query = query.or(`titulo.ilike.%${searchTerm}%,id_red.in.(${matchingRedesIds.join(',')})`);
+      } else {
+        query = query.ilike('titulo', `%${searchTerm}%`);
+      }
+    }
+
+    const from = (currentPage - 1) * itemsPerPage;
+    const to = from + itemsPerPage - 1;
+    query = query.range(from, to);
+
+    const { data, count } = await query;
       
     if (data) {
+      if (count !== null) {
+        setTotalPages(Math.ceil(count / itemsPerPage) || 1);
+        setTotalItems(count);
+      }
       const now = new Date();
       const updatedData = data.map(pub => {
         const mapped = {
@@ -138,7 +196,7 @@ export const MisPublicacionesModule: React.FC<MisPublicacionesModuleProps> = ({ 
 
   const handleGenerateAI = async () => {
     if (!formData.titulo) {
-      showToast("Por favor ingresa un título o tema para que la IA sepa de qué escribir.", 'error');
+      setAlertMsg("Por favor ingresa un título o tema para que la IA sepa de qué escribir.");
       return;
     }
     setIsGeneratingAI(true);
@@ -164,6 +222,19 @@ REGLAS ESTRICTAS:
       const data = await response.json();
       const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
       setFormData(prev => ({ ...prev, contenido: text }));
+      
+      // Guardar en reporte de IA
+      const { data: { session } } = await supabase.auth.getSession();
+      const currentUserId = session?.user?.id;
+      if (currentUserId && text) {
+        await supabase.from('contenido_ia').insert([{
+          id_usuario: currentUserId,
+          tema: formData.titulo,
+          canal: 'Social (Generador de Post)',
+          respuesta_ia: text,
+        }]);
+      }
+      
       showToast("¡Texto generado exitosamente con IA!", 'success');
     } catch (error) {
       console.error(error);
@@ -176,7 +247,7 @@ REGLAS ESTRICTAS:
   const handleGenerateImageAI = async (e: React.MouseEvent) => {
     e.preventDefault();
     if (!formData.titulo) {
-      showToast("Por favor ingresa un título o tema para generar la imagen.", 'error');
+      setAlertMsg("Por favor ingresa un título o tema para generar la imagen.");
       return;
     }
     setIsGeneratingImageAI(true);
@@ -205,7 +276,31 @@ El prompt debe ser solo el texto en ingles, descriptivo, visual, sin explicacion
       if (englishPrompt) {
         // Usamos Pollinations AI para generar la imagen gratis
         const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(englishPrompt.trim())}?width=1080&height=1080&nologo=true`;
-        setFormData(prev => ({ ...prev, imagen_url: imageUrl }));
+        
+        try {
+          const imageRes = await fetch(imageUrl);
+          const imageBlob = await imageRes.blob();
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            setFormData(prev => ({ ...prev, imagen_url: reader.result as string }));
+          };
+          reader.readAsDataURL(imageBlob);
+        } catch (e) {
+          console.error("Error descargando imagen AI:", e);
+          setFormData(prev => ({ ...prev, imagen_url: imageUrl })); // fallback
+        }
+        // Guardar en reporte de IA
+        const { data: { session } } = await supabase.auth.getSession();
+        const currentUserId = session?.user?.id;
+        if (currentUserId) {
+          await supabase.from('contenido_ia').insert([{
+            id_usuario: currentUserId,
+            tema: formData.titulo,
+            canal: 'Imagen AI (Pollinations)',
+            respuesta_ia: `Prompt utilizado:\n${englishPrompt}\n\nURL Imagen generada:\n${imageUrl}`,
+          }]);
+        }
+        
         showToast("Imagen generada con éxito.", 'success');
       } else {
         showToast("No se pudo generar el prompt para la imagen.", 'error');
@@ -221,7 +316,7 @@ El prompt debe ser solo el texto en ingles, descriptivo, visual, sin explicacion
   const handleSave = async () => {
     if (isSaving) return;
     if (!formData.contenido || !formData.fecha_publicacion) {
-      showToast("Completa los campos requeridos (Contenido y Fecha).", 'error');
+      setAlertMsg("Completa los campos requeridos (Contenido y Fecha).");
       return;
     }
 
@@ -238,8 +333,10 @@ El prompt debe ser solo el texto en ingles, descriptivo, visual, sin explicacion
     }
     const uniquePlats = [plat];
 
-    if (!formData.imagen_url) {
-      showToast("Se requiere obligatoriamente una imagen o video para publicar en cualquier red social. Por favor, sube un archivo multimedia.", 'error');
+    const selectedCamp = campaigns.find(c => c.name === formData.id_campana);
+
+    if (!formData.imagen_url && (!selectedCamp || !selectedCamp.image_url)) {
+      setAlertMsg("Se requiere obligatoriamente una imagen o video para publicar en cualquier red social. Por favor, sube un archivo multimedia.");
       return;
     }
 
@@ -248,23 +345,19 @@ El prompt debe ser solo el texto en ingles, descriptivo, visual, sin explicacion
       const camp = campaigns.find(c => c.name === formData.id_campana);
       if (camp) {
         resolvedCampanaId = camp.id;
-        if (camp.status === 'Pendiente de Pago') {
-          showToast("No puedes programar publicaciones en una campaña que aún no ha sido pagada/aprobada.", 'error');
+        if (camp.status !== 'Activa' && camp.status !== 'Completada') {
+          setAlertMsg("No puedes programar publicaciones en una campaña que aún no ha sido pagada/aprobada.");
           return;
         }
       }
     }
 
-    const datetime = `${formData.fecha_publicacion}T${formData.hora_publicacion || '12:00'}:00`;
-    const selectedDate = new Date(datetime);
-    
-    const now = new Date();
-    now.setSeconds(0, 0); // Permitir el minuto actual exacto
-
-    if (selectedDate < now) {
-      showToast("La fecha y hora de publicación no puede ser en el pasado.", 'error');
+    const selectedDateObj = new Date(`${formData.fecha_publicacion}T${formData.hora_publicacion || '12:00'}:00`);
+    if (selectedDateObj.getTime() < Date.now()) {
+      setAlertMsg("La fecha y hora de publicación no puede ser en el pasado.");
       return;
     }
+
     let actionError;
     let finalMediaUrl = formData.imagen_url;
 
@@ -301,21 +394,23 @@ El prompt debe ser solo el texto en ingles, descriptivo, visual, sin explicacion
     // 2. Enviar a Ayrshare (Edge Function) (Solo si no es WhatsApp)
     let ayrshareId = null;
     const isWhatsApp = selectedRedObj?.nombre_red.toLowerCase().includes('what');
+    const datetime = `${formData.fecha_publicacion}T${formData.hora_publicacion || '12:00'}:00`;
     const isoDate = new Date(datetime).toISOString();
     
-    // Ayrshare requiere que la programación sea de al menos 10-15 minutos en el futuro.
-    // Si la diferencia es menor a 15 minutos, lo publicamos inmediatamente (omitiendo scheduleDate)
+    // Si la fecha es en el futuro (así sea 1 minuto), simplemente lo guardamos en la base de datos como "Programada".
+    // Nuestro propio Cron Job (publish_scheduled) se encargará de disparar la publicación cuando llegue la hora,
+    // utilizando la API nativa de Meta.
     const diffMinutes = (new Date(datetime).getTime() - new Date().getTime()) / 60000;
-    const isFutureEnough = diffMinutes >= 15;
+    const isFutureEnough = diffMinutes > 0;
     
-    if (!isWhatsApp) {
+    // Solo publicamos inmediatamente si NO es WhatsApp y NO es a futuro
+    if (!isWhatsApp && !isFutureEnough) {
       try {
         const { data: ayrData, error: ayrError } = await supabase.functions.invoke('publish_social', {
           body: { 
             post: formData.contenido, 
             platforms: uniquePlats, 
-            mediaUrls: finalMediaUrl ? [finalMediaUrl] : [],
-            scheduleDate: isFutureEnough ? isoDate : undefined
+            mediaUrls: finalMediaUrl ? [finalMediaUrl] : []
           }
         });
         if (!ayrError && ayrData && !ayrData.error) {
@@ -336,13 +431,13 @@ El prompt debe ser solo el texto en ingles, descriptivo, visual, sin explicacion
             }
           } catch(e) { userFriendlyMsg = String(errorRaw); }
 
-          showToast(userFriendlyMsg, 'error');
+          setAlertMsg(userFriendlyMsg);
           setIsSaving(false);
           return; // Detener guardado si falla en Ayrshare
         }
       } catch (edgeErr: any) {
         console.warn("Error invocando publish_social:", edgeErr);
-        showToast("Error al conectar con el publicador de redes: " + edgeErr.message, 'error');
+        setAlertMsg("Error al conectar con el publicador de redes: " + edgeErr.message);
         return;
       }
     }
@@ -389,7 +484,7 @@ El prompt debe ser solo el texto en ingles, descriptivo, visual, sin explicacion
       const defaultIg = redes.find(r => r.nombre_red.toLowerCase().includes('insta'))?.id_red || (redes[0]?.id_red || '');
       setFormData({ id_campana: '', titulo: '', contenido: '', fecha_publicacion: '', hora_publicacion: '', imagen_url: '', id_red: String(defaultIg) });
     } else {
-      showToast("Error al guardar: " + actionError.message, 'error');
+      setAlertMsg("Error al guardar: " + actionError.message);
     }
     
     setIsSaving(false);
@@ -438,34 +533,65 @@ El prompt debe ser solo el texto en ingles, descriptivo, visual, sin explicacion
     }
 
     let ayrshareId = null;
+
     try {
-      // 1. Invocar la Edge Function para publicar inmediatamente
-      const { data: ayrData, error: ayrError } = await supabase.functions.invoke('publish_social', {
-        body: { 
-          post: replicateTargetPub.contenido, 
-          platforms: [plat], 
-          mediaUrls: replicateTargetPub.imagen_url ? [replicateTargetPub.imagen_url] : [],
+      if (plat === 'telegram') {
+        if (selectedTelegramDestinoIds.length === 0) {
+          showToast("Debes seleccionar al menos un destino de Telegram.", "error");
+          setIsReplicating(false);
+          return;
         }
-      });
-
-      if (!ayrError && ayrData && !ayrData.error) {
-        ayrshareId = ayrData.postId || ayrData.data?.id || null;
-      } else {
-        const errorRaw = ayrError?.message || ayrData?.error || 'Error desconocido';
-        let userFriendlyMsg = "Error al publicar en " + (selectedRedObj?.nombre_red || plat) + ".";
         
-        try {
-          const errorText = typeof errorRaw === 'string' ? errorRaw : JSON.stringify(errorRaw);
-          if (errorText.toLowerCase().includes('duplicate') || errorText.includes('"code":137')) {
-            userFriendlyMsg = "⚠️ Bloqueo por Spam: Esta red social ya tiene una publicación idéntica reciente. Cambia el texto para proteger tu cuenta.";
-          } else if (errorText.toLowerCase().includes('unauthorized')) {
-            userFriendlyMsg = "Cuenta desvinculada. Verifica tu conexión con " + (selectedRedObj?.nombre_red || plat) + ".";
-          }
-        } catch(e) {}
+        let hasError = false;
+        for (const destId of selectedTelegramDestinoIds) {
+          const { data: tgData, error: tgError } = await supabase.functions.invoke('share_telegram', {
+            body: { 
+              publicacion_id: replicateTargetPub.id_publicacion,
+              destino_id: destId
+            }
+          });
 
-        showToast(userFriendlyMsg, 'error');
-        setIsReplicating(false);
-        return;
+          if (tgError || tgData?.error) {
+            hasError = true;
+            showToast("Error al publicar en uno de los destinos: " + (tgError?.message || tgData?.error), "error");
+          }
+        }
+        
+        if (hasError) {
+          setIsReplicating(false);
+          setReplicateTargetPub(null);
+          return;
+        }
+      } else {
+        // 1. Invocar la Edge Function para publicar inmediatamente
+        const { data: ayrData, error: ayrError } = await supabase.functions.invoke('publish_social', {
+          body: { 
+            post: replicateTargetPub.contenido, 
+            platforms: [plat], 
+            mediaUrls: replicateTargetPub.imagen_url ? [replicateTargetPub.imagen_url] : [],
+          }
+        });
+
+        if (!ayrError && ayrData && !ayrData.error) {
+          ayrshareId = ayrData.postId || ayrData.data?.id || null;
+        } else {
+          const errorRaw = ayrError?.message || ayrData?.error || 'Error desconocido';
+          let userFriendlyMsg = "Error al publicar en " + (selectedRedObj?.nombre_red || plat) + ".";
+          
+          try {
+            const errorText = typeof errorRaw === 'string' ? errorRaw : JSON.stringify(errorRaw);
+            if (errorText.toLowerCase().includes('duplicate') || errorText.includes('"code":137')) {
+              userFriendlyMsg = "⚠️ Bloqueo por Spam: Esta red social ya tiene una publicación idéntica reciente. Cambia el texto para proteger tu cuenta.";
+            } else if (errorText.toLowerCase().includes('unauthorized') || errorText.toLowerCase().includes('api key')) {
+              userFriendlyMsg = "La conexión con " + (selectedRedObj?.nombre_red || plat) + " falló. Verifica tu clave de Ayrshare.";
+            }
+          } catch(e) {}
+
+          showToast(userFriendlyMsg, "error");
+          setIsReplicating(false);
+          setReplicateTargetPub(null);
+          return;
+        }
       }
 
       // 2. Guardar en Base de Datos
@@ -480,44 +606,43 @@ El prompt debe ser solo el texto en ingles, descriptivo, visual, sin explicacion
         ayrshare_post_id: ayrshareId
       };
 
-      const { error } = await supabase.from('publicaciones').insert([payload]);
-      if (!error) {
+      let actionError;
+      if (replicateTargetPub.estado === 'Borrador') {
+        const { error } = await supabase.from('publicaciones').update(payload).eq('id_publicacion', replicateTargetPub.id_publicacion);
+        actionError = error;
+      } else {
+        const { error } = await supabase.from('publicaciones').insert([payload]);
+        actionError = error;
+      }
+
+      if (!actionError) {
         showToast("Publicación subida a " + (selectedRedObj?.nombre_red || plat) + " exitosamente.", 'success');
         setReplicateTargetPub(null);
         setSelectedRedId('');
         fetchPublicaciones();
       } else {
-        showToast("Error al guardar en base de datos: " + error.message, 'error');
+        setAlertMsg("Error al guardar en base de datos: " + actionError.message);
       }
     } catch (err: any) {
-      showToast("Error de conexión: " + err.message, 'error');
+      setAlertMsg("Error de conexión: " + err.message);
     } finally {
       setIsReplicating(false);
     }
   };
 
-  if (isCreating) {
+  const renderCreateForm = () => {
+    if (!isCreating) return null;
     return (
-      <div className="max-w-3xl mx-auto bg-white border border-slate-200 rounded-3xl p-8 backdrop-blur-xl shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-500 relative">
-        {/* Toast Notification */}
-        {toast && (
-          <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-4 rounded-2xl shadow-2xl animate-in slide-in-from-bottom-8 fade-in duration-300 border ${
-            toast.type === 'success' ? 'bg-emerald-50 text-emerald-900 border-emerald-200' :
-            toast.type === 'error' ? 'bg-pink-50 text-pink-900 border-pink-200' :
-            'bg-slate-50 text-slate-900 border-slate-200'
-          }`}>
-            {toast.type === 'success' && <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600"><Sparkles className="w-4 h-4" /></div>}
-            {toast.type === 'error' && <div className="w-8 h-8 rounded-full bg-pink-100 flex items-center justify-center text-pink-600"><AlertCircle className="w-4 h-4" /></div>}
-            <p className="font-medium text-sm pr-4">{toast.message}</p>
-          </div>
-        )}
-
-        <div className="flex justify-between items-center mb-6 border-b border-slate-200 pb-4">
-          <h2 className="text-2xl font-bold text-slate-900">{editingId ? 'Editar Publicación' : 'Nueva Publicación'}</h2>
-          <button onClick={() => { setIsCreating(false); setEditingId(null); }} className="text-slate-500 hover:text-slate-900 transition-colors">Cancelar</button>
-        </div>
-
-        <div className="space-y-6">
+      <div className="fixed inset-0 z-[1008] flex items-center justify-center bg-black/70 p-4 pl-0 sm:pl-64 overflow-y-auto">
+        <div className="w-full max-w-4xl bg-white rounded-[10px] shadow-[0_0_40px_rgba(0,0,0,0.4)] relative my-8 animate-bounce-down max-h-[90vh] flex flex-col">
+          <button onClick={() => { setIsCreating(false); setEditingId(null); }} className="absolute top-3 right-3 z-50 p-2 bg-slate-100/80 backdrop-blur-sm rounded-full text-slate-500 hover:bg-red-500 hover:text-white transition-all shadow-sm">
+            <X className="w-5 h-5" />
+          </button>
+          <div className="p-8 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200">
+            <div className="mb-6 border-b border-slate-200 pb-4">
+              <h2 className="text-2xl font-bold text-slate-900">{editingId ? 'Editar Publicación' : 'Nueva Publicación'}</h2>
+            </div>
+            <div className="space-y-6">
           <div className="relative">
             <label className="block text-sm font-medium text-slate-700 mb-2">Asociar a Campaña (Opcional)</label>
             <input 
@@ -650,7 +775,19 @@ El prompt debe ser solo el texto en ingles, descriptivo, visual, sin explicacion
             
             <label className="block border-2 border-dashed border-slate-200 rounded-xl p-8 text-center hover:bg-slate-50 transition-colors cursor-pointer group relative overflow-hidden">
               {formData.imagen_url ? (
-                <div className="flex flex-col items-center">
+                <div className="flex flex-col items-center relative mx-auto">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setFormData({...formData, imagen_url: ''});
+                    }}
+                    className="absolute -top-2 -right-4 bg-rose-500 hover:bg-rose-600 text-white rounded-full p-1 shadow-md transition-colors z-10"
+                    title="Quitar imagen"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                   <img src={formData.imagen_url} alt="Preview" className="max-h-32 rounded-lg object-contain mb-3" />
                   <div className="flex gap-2 mb-3">
                     <p className="text-sm font-medium text-violet-600">Haz clic para cambiar la imagen</p>
@@ -707,17 +844,36 @@ El prompt debe ser solo el texto en ingles, descriptivo, visual, sin explicacion
                      : 'Programar Publicación'
                )}
              </button>
+            </div>
           </div>
         </div>
       </div>
-    );
-  }
+      {alertMsg && (
+        <div className="fixed inset-0 z-[1010] flex items-center justify-center bg-black/70 p-4 pl-0 sm:pl-64">
+          <div className="w-full max-w-sm bg-white p-6 rounded-2xl shadow-[0_0_40px_rgba(0,0,0,0.4)] relative animate-bounce-down flex flex-col items-center text-center">
+            <div className="w-12 h-12 bg-rose-100 rounded-full flex items-center justify-center mb-4">
+              <AlertCircle className="w-6 h-6 text-rose-600" />
+            </div>
+            <h3 className="text-lg font-bold text-slate-800 mb-2">Aviso</h3>
+            <p className="text-sm text-slate-600 mb-6">{alertMsg}</p>
+            <button 
+              onClick={() => setAlertMsg(null)}
+              className="w-full py-2.5 bg-violet-600 hover:bg-violet-700 text-white font-bold rounded-xl transition-colors"
+            >
+              Aceptar
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
   return (
     <div className="space-y-6 relative">
       {/* Toast Notification */}
       {toast && (
-        <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-4 rounded-2xl shadow-2xl animate-in slide-in-from-bottom-8 fade-in duration-300 border ${
+        <div className={`fixed bottom-6 right-6 z-[1100] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-2xl animate-in slide-in-from-bottom-8 fade-in duration-300 border ${
           toast.type === 'success' ? 'bg-emerald-50 text-emerald-900 border-emerald-200' :
           toast.type === 'error' ? 'bg-pink-50 text-pink-900 border-pink-200' :
           'bg-slate-50 text-slate-900 border-slate-200'
@@ -728,12 +884,23 @@ El prompt debe ser solo el texto en ingles, descriptivo, visual, sin explicacion
         </div>
       )}
 
-      <div className="flex justify-between items-end">
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-4">
         <div>
           <h2 className="text-3xl font-bold tracking-tight mb-2">Historial de Publicaciones</h2>
           <p className="text-slate-500">Revisa todas tus publicaciones pasadas y futuras.</p>
         </div>
-        <button 
+        <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
+          <div className="relative flex-1 sm:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input 
+              type="text" 
+              placeholder="Buscar título o red..." 
+              value={searchTerm}
+              onChange={e => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+              className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition-all shadow-sm"
+            />
+          </div>
+          <button 
           onClick={() => {
             const nowObj = new Date();
             const localDateInit = new Date(nowObj.getTime() - (nowObj.getTimezoneOffset() * 60000));
@@ -756,6 +923,7 @@ El prompt debe ser solo el texto en ingles, descriptivo, visual, sin explicacion
           <PlusCircle className="w-4 h-4" />
           Nueva Publicación
         </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -841,30 +1009,62 @@ El prompt debe ser solo el texto en ingles, descriptivo, visual, sin explicacion
 
             <div className="space-y-3 mb-6 overflow-y-auto flex-1 pr-2">
               {redes
-                .filter(r => String(r.id_red) !== String(replicateTargetPub.id_red))
+                .filter(r => String(r.id_red) !== String(replicateTargetPub.id_red) || r.nombre_red.toLowerCase().includes('tele'))
                 .map(r => (
-                  <label 
-                    key={r.id_red} 
-                    className={`flex items-center gap-3 p-4 rounded-2xl border cursor-pointer transition-all ${
-                      selectedRedId === String(r.id_red) 
-                        ? 'border-violet-500 bg-violet-50/50 shadow-md ring-1 ring-violet-500' 
-                        : 'border-slate-100 bg-slate-50 hover:bg-slate-100 hover:border-slate-200'
-                    }`}
-                  >
-                    <input 
-                      type="radio" 
-                      name="replicate-network" 
-                      value={r.id_red}
-                      checked={selectedRedId === String(r.id_red)}
-                      onChange={e => setSelectedRedId(e.target.value)}
-                      className="w-4 h-4 text-violet-600 border-slate-300 focus:ring-violet-500"
-                    />
-                    <div className="flex-1">
-                      <span className="font-semibold text-slate-800 block text-sm">{r.nombre_red}</span>
-                    </div>
-                  </label>
+                  <div key={r.id_red} className="flex flex-col gap-2">
+                    <label 
+                      className={`flex items-center gap-3 p-4 rounded-2xl border cursor-pointer transition-all ${
+                        selectedRedId === String(r.id_red) 
+                          ? 'border-violet-500 bg-violet-50/50 shadow-md ring-1 ring-violet-500' 
+                          : 'border-slate-100 bg-slate-50 hover:bg-slate-100 hover:border-slate-200'
+                      }`}
+                    >
+                      <input 
+                        type="radio" 
+                        name="replicate-network" 
+                        value={r.id_red}
+                        checked={selectedRedId === String(r.id_red)}
+                        onChange={e => setSelectedRedId(e.target.value)}
+                        className="w-4 h-4 text-violet-600 border-slate-300 focus:ring-violet-500"
+                      />
+                      <div className="flex-1">
+                        <span className="font-semibold text-slate-800 block text-sm">{r.nombre_red}</span>
+                      </div>
+                    </label>
+                    {r.nombre_red.toLowerCase().includes('tele') && selectedRedId === String(r.id_red) && (
+                      <div className="pl-8 pr-2 pb-2 space-y-2 animate-in slide-in-from-top-2">
+                        <p className="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wider">Destinos Vinculados</p>
+                        {telegramDestinos.length > 0 ? telegramDestinos.map(dest => (
+                          <label key={dest.id} className="flex items-center gap-3 p-3 bg-white border border-slate-200 rounded-xl cursor-pointer hover:border-violet-400 transition-colors">
+                            <input 
+                              type="checkbox" 
+                              name={`telegram-destino-${dest.id}`}
+                              value={dest.id}
+                              checked={selectedTelegramDestinoIds.includes(dest.id)}
+                              onChange={e => {
+                                if (e.target.checked) {
+                                  setSelectedTelegramDestinoIds(prev => [...prev, dest.id]);
+                                } else {
+                                  setSelectedTelegramDestinoIds(prev => prev.filter(id => id !== dest.id));
+                                }
+                              }}
+                              className="w-4 h-4 text-violet-600 border-slate-300 rounded focus:ring-violet-500"
+                            />
+                            <div className="flex-1">
+                              <span className="font-medium text-slate-800 text-sm block">{dest.nombre_visible}</span>
+                              <span className="text-xs text-slate-500 capitalize">{dest.tipo}</span>
+                            </div>
+                          </label>
+                        )) : (
+                          <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-sm text-slate-500">
+                            No tienes destinos de Telegram vinculados. Ve a Ajustes para vincular uno.
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
               ))}
-              {redes.filter(r => String(r.id_red) !== String(replicateTargetPub.id_red)).length === 0 && (
+              {redes.filter(r => String(r.id_red) !== String(replicateTargetPub.id_red) || r.nombre_red.toLowerCase().includes('tele')).length === 0 && (
                 <p className="text-sm text-slate-400 text-center py-4">No hay otras redes sociales activas disponibles.</p>
               )}
             </div>
@@ -889,13 +1089,64 @@ El prompt debe ser solo el texto en ingles, descriptivo, visual, sin explicacion
         </div>
       )}
 
+      {totalItems > 0 && (
+        <div className="px-6 py-4 mt-6 border border-slate-200 bg-white rounded-xl flex flex-col sm:flex-row justify-between items-center gap-4">
+          <div className="text-sm font-medium text-slate-500">
+            Mostrando <span className="font-bold text-slate-700">{((currentPage - 1) * itemsPerPage) + 1}</span> a <span className="font-bold text-slate-700">{Math.min(currentPage * itemsPerPage, totalItems)}</span> de <span className="font-bold text-slate-700">{totalItems}</span> registros
+          </div>
+          
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-slate-500">Filas:</span>
+              <select 
+                value={itemsPerPage}
+                onChange={(e) => {
+                  setItemsPerPage(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="bg-white border border-slate-200 text-slate-700 text-sm rounded-lg focus:ring-violet-500 focus:border-violet-500 p-1.5 outline-none"
+              >
+                <option value={6}>6</option>
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors bg-white"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <div className="text-sm font-medium text-slate-600 px-2">
+                Página {totalPages === 0 ? 0 : currentPage} de {totalPages}
+              </div>
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage >= totalPages || totalItems === 0}
+                className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors bg-white"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {sharingWhatsAppPub && (
         <ShareWhatsAppModal
           isOpen={!!sharingWhatsAppPub}
-          onClose={() => setSharingWhatsAppPub(null)}
+          onClose={() => {
+            setSharingWhatsAppPub(null);
+            fetchPublicaciones();
+          }}
           publication={sharingWhatsAppPub}
         />
       )}
+      {renderCreateForm()}
     </div>
   );
 };
@@ -968,7 +1219,6 @@ const ShareWhatsAppModal: React.FC<ShareWhatsAppModalProps> = ({ isOpen, onClose
       const normalizePhone = (num: string) => num.replace(/[^0-9]/g, '');
 
       // 2. Construir mapa de contactos: número → nombre (pushName es el nombre del perfil WA)
-      //    Ejemplo: "18493501454" → "Dr: José Manuel"
       const contactMap = new Map<string, string>();
       for (const c of (contactsData || [])) {
         const phone = (c.id || '').split('@')[0].split(':')[0];
@@ -1044,48 +1294,36 @@ const ShareWhatsAppModal: React.FC<ShareWhatsAppModalProps> = ({ isOpen, onClose
       console.warn("Could not fetch WA chats/contacts:", err);
       setError("No se pudieron cargar los chats de WhatsApp. Verifica la conexión.");
     } finally {
+      setLoadingChats(false);
       if (isFullLoad) setIsSearching(false);
-      else setLoadingChats(false);
       setReconnecting(false);
     }
   };
-
-
-
 
   const handleSendToChat = async (chatId: string) => {
     setSendingId(chatId);
     setError('');
     try {
       if (publication.imagen_url) {
-        const imgUrl = publication.imagen_url;
-        const response = await fetch(imgUrl);
-        const blob = await response.blob();
-        
-        const reader = new FileReader();
-        reader.readAsDataURL(blob);
-        await new Promise<void>((resolve, reject) => {
-          reader.onloadend = async () => {
-            try {
-              const base64data = reader.result as string;
-              await sendWhatsAppImageMessage(
-                chatId, 
-                base64data, 
-                publication.contenido || undefined,
-                clientSessionName
-              );
-              resolve();
-            } catch (err) {
-              reject(err);
-            }
-          };
-          reader.onerror = (e) => reject(e);
-        });
+        await sendWhatsAppImageMessage(
+          chatId, 
+          publication.imagen_url, 
+          publication.contenido || undefined,
+          clientSessionName
+        );
       } else {
         await sendWhatsAppTextMessage(chatId, publication.contenido || '', clientSessionName);
       }
 
       setSuccessId(chatId);
+      
+      // Si la publicación estaba en Borrador, actualizarla a Publicada en BD
+      if (publication.estado === 'Borrador' || publication.estado === 'Pendiente de Pago') {
+        try {
+          await supabase.from('publicaciones').update({ estado: 'Publicada' }).eq('id_publicacion', publication.id_publicacion);
+        } catch (e) { console.error("Error al actualizar estado a Publicada", e); }
+      }
+
       // Actualizar chats silenciando la carga visible si ya estaban cargados
       if (!fullDataLoaded) loadData(false);
       setTimeout(() => {
@@ -1102,11 +1340,14 @@ const ShareWhatsAppModal: React.FC<ShareWhatsAppModalProps> = ({ isOpen, onClose
     ? recentChats.slice(0, 10)
     : chats
         .filter(chat => {
-          const normalizeText = (text: string) => text.normalize('NFD').replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, '');
+          const normalizeText = (text: string) => text.normalize('NFD').replace(/[\u0300-\u036f]/g, "").toLowerCase();
           const searchNormalized = normalizeText(searchQuery);
+          const searchWords = searchNormalized.split(/\s+/).filter(Boolean);
           const searchNumbers = searchQuery.replace(/[^0-9]/g, '');
           
-          const nameMatch = normalizeText(chat.name || '').includes(searchNormalized);
+          const chatNameNormalized = normalizeText(chat.name || '');
+          const nameMatch = searchWords.length > 0 && searchWords.every(word => chatNameNormalized.includes(word));
+          
           const phoneMatch = chat.id.replace(/[^0-9]/g, '').includes(searchNumbers);
           
           return nameMatch || (searchNumbers.length > 0 && phoneMatch);

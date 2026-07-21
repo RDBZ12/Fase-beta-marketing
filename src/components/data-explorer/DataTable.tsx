@@ -178,7 +178,7 @@ export function DataTable<T extends { id?: string | number } | any>({
               ) : (
                 data.map((item, idx) => (
                   <tr 
-                    key={item.id || item.id_usuario || item.id_lead || item.id_publicacion || item.id_pago || idx} 
+                    key={(item as any).id_pago || (item as any).id_publicacion || (item as any).id_lead || (item as any).id || (item as any).id_usuario || idx} 
                     onClick={() => onRowClick?.(item)}
                     className={`group transition-all duration-200 ${onRowClick ? 'cursor-pointer hover:bg-slate-50:bg-slate-800/50 hover:shadow-sm relative z-0 hover:z-10' : ''}`}
                   >

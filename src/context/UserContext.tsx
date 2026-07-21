@@ -39,12 +39,12 @@ export const UserProvider: React.FC<Props> = ({ children, userId }) => {
       
       const res = await supabase
         .from('usuarios')
-        .select('id_usuario, nombre, apellido, correo, id_rol, roles(nombre_rol), telefono, whatsapp_session_name, whatsapp_phone')
+        .select('id_usuario, nombre, apellido, correo, id_rol, roles(nombre_rol), telefono, whatsapp_session_name, whatsapp_phone, codigo_vinculacion_telegram')
         .eq('id_usuario', userId)
         .single();
         
       if (res.error && res.error.message.includes('column')) {
-        // Fallback without whatsapp columns
+        // Fallback without new columns
         const fallback = await supabase
           .from('usuarios')
           .select('id_usuario, nombre, apellido, correo, id_rol, roles(nombre_rol)')
@@ -69,6 +69,7 @@ export const UserProvider: React.FC<Props> = ({ children, userId }) => {
           telefono: '',
           whatsapp_session_name: '',
           whatsapp_phone: '',
+          codigo_vinculacion_telegram: '',
         });
       } else {
         const rolesData = (data as any).roles;
@@ -82,6 +83,7 @@ export const UserProvider: React.FC<Props> = ({ children, userId }) => {
           telefono: data.telefono || '',
           whatsapp_session_name: data.whatsapp_session_name || '',
           whatsapp_phone: data.whatsapp_phone || '',
+          codigo_vinculacion_telegram: data.codigo_vinculacion_telegram || '',
         });
       }
     } catch {
@@ -93,6 +95,7 @@ export const UserProvider: React.FC<Props> = ({ children, userId }) => {
         correo: '',
         id_rol: 5 as RolId,
         nombre_rol: 'Cliente' as RolNombre,
+        codigo_vinculacion_telegram: '',
       });
     } finally {
       setLoading(false);

@@ -17,9 +17,15 @@ export function getOpenWASettings() {
   const localUrl = localStorage.getItem('openwa_api_url');
   const localKey = localStorage.getItem('openwa_api_key');
   const localSession = localStorage.getItem('openwa_session_name') || 'marketing-bot';
+  let apiUrl = localUrl || import.meta.env.VITE_OPENWA_API_URL || 'http://localhost:2785/api';
+  
+  // CORS Bypass genérico: Si intenta conectar a cualquier puerto localhost, usar proxy
+  if (apiUrl.includes('localhost') || apiUrl.includes('127.0.0.1')) {
+    apiUrl = '/proxy-openwa/api';
+  }
 
   return {
-    apiUrl: localUrl || import.meta.env.VITE_OPENWA_API_URL || 'http://localhost:2886/api',
+    apiUrl,
     apiKey: localKey || import.meta.env.VITE_OPENWA_API_KEY || 'owa_k1_2f95a1fb9205aed468bb424e3e461eece693a50a775a45cec23dade984ea733b',
     sessionName: localSession,
   };
@@ -42,6 +48,20 @@ function getHeaders(apiKey: string) {
   return headers;
 }
 
+// Helper para capturar errores de proxy/servidor apagado
+async function handleOpenWAError(res: Response) {
+  if (res.status === 502 || res.status === 503 || res.status === 504) {
+    const errorMsg = "El servidor de WhatsApp (OpenWA) está apagado o no responde. Por favor, arranca tu servidor local de OpenWA en tu computadora para continuar.";
+    // Despachar evento global para que la UI lo atrape y muestre el popup bouncy
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('openwa-error', { detail: errorMsg }));
+    }
+    throw new Error(errorMsg);
+  }
+  const err = await res.json().catch(() => ({}));
+  throw new Error(err.message || `Error HTTP: ${res.status}`);
+}
+
 // 1. Obtener todas las sesiones
 export async function getOpenWASessions(): Promise<OpenWASession[]> {
   const { apiUrl, apiKey } = getOpenWASettings();
@@ -51,8 +71,7 @@ export async function getOpenWASessions(): Promise<OpenWASession[]> {
       headers: getHeaders(apiKey),
     });
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || `Error HTTP: ${res.status}`);
+      await handleOpenWAError(res);
     }
     return await res.json();
   } catch (error: any) {
@@ -71,8 +90,7 @@ export async function createOpenWASession(name: string): Promise<OpenWASession> 
       body: JSON.stringify({ name }),
     });
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || `Error HTTP: ${res.status}`);
+      await handleOpenWAError(res);
     }
     return await res.json();
   } catch (error: any) {
@@ -90,8 +108,7 @@ export async function startOpenWASession(id: string): Promise<OpenWASession> {
       headers: getHeaders(apiKey),
     });
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || `Error HTTP: ${res.status}`);
+      await handleOpenWAError(res);
     }
     return await res.json();
   } catch (error: any) {
@@ -109,8 +126,7 @@ export async function stopOpenWASession(id: string): Promise<OpenWASession> {
       headers: getHeaders(apiKey),
     });
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || `Error HTTP: ${res.status}`);
+      await handleOpenWAError(res);
     }
     return await res.json();
   } catch (error: any) {
@@ -448,8 +464,7 @@ export async function sendWhatsAppTextMessage(
     });
 
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || `Error HTTP: ${res.status}`);
+      await handleOpenWAError(res);
     }
 
     return await res.json();
@@ -510,8 +525,7 @@ export async function sendWhatsAppImageMessage(
     });
 
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || `Error HTTP: ${res.status}`);
+      await handleOpenWAError(res);
     }
 
     return await res.json();

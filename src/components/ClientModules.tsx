@@ -6,14 +6,19 @@ import type { Campaign } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { generateReceiptHTML } from './PagosModule';
 import { getOpenWASessions, createOpenWASession, startOpenWASession, stopOpenWASession, getOpenWAQRCode } from '../lib/whatsapp';
+import { getRecentMedia, getMediaInsights } from '../utils/instagramAnalytics';
+import { Heart, MessageCircle, Share2, Camera, ChevronLeft, ChevronRight, ArrowLeftRight } from 'lucide-react';
 
 // ==========================================
 // MÓDULO DE PAGOS DEL CLIENTE
 // ==========================================
-export const ClientPagosModule = ({ campaigns }: { campaigns: Campaign[] }) => {
+export const ClientPagosModule = ({ campaigns, onPagar }: { campaigns: Campaign[], onPagar?: (c: Campaign) => void }) => {
   const [pagos, setPagos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(10);
+  const [isFlipped, setIsFlipped] = useState(false);
   const { profile } = useUser();
 
   // Genera un NCF estable para la campaña basándose en su ID
@@ -50,22 +55,24 @@ export const ClientPagosModule = ({ campaigns }: { campaigns: Campaign[] }) => {
         }
       }
 
-      // Las campañas pagadas son aquellas que no están en 'Pendiente de Pago' ni en 'Borrador'
-      const paidCampaigns = campaigns.filter(c => c.status !== 'Pendiente de Pago' && c.status !== 'Borrador');
+      // Mostrar campañas facturadas o pendientes, excluyendo las rechazadas/canceladas
+      const billingCampaigns = campaigns.filter(c => c.estado_moderacion !== 'rechazada');
       
       let dbPagos: any[] = [];
-      if (paidCampaigns.length > 0) {
+      if (billingCampaigns.length > 0) {
         const { data, error } = await supabase
           .from('pagos')
           .select('*')
-          .in('id_campana', paidCampaigns.map(c => c.id));
+          .in('id_campana', billingCampaigns.map(c => c.id));
         if (!error && data) {
           dbPagos = data;
         }
       }
 
-      const formatPagos = paidCampaigns.map(c => {
+      const formatPagos = billingCampaigns.map(c => {
         const dbPago = dbPagos.find(p => p.id_campana === c.id);
+        const statusLower = (c.status || '').toLowerCase().trim();
+        const isPending = statusLower === 'pendiente de pago' || statusLower === 'borrador';
         
         return {
           id: dbPago ? dbPago.id_pago : c.id,
@@ -73,13 +80,14 @@ export const ClientPagosModule = ({ campaigns }: { campaigns: Campaign[] }) => {
           concepto: `Campaña: ${c.name}`,
           nombre_campana: c.name,
           monto: c.presupuesto || 0, // Usamos el presupuesto original de la campaña en USD en lugar del dbPago.monto que está en DOP sin ITBIS
-          estado: 'Aprobado',
-          ncf: dbPago?.ncf || getStableNCF(c.id),
-          metodo_pago: dbPago?.metodo_pago || 'PayPal',
+          estado: isPending ? 'Pendiente' : 'Aprobado',
+          ncf: dbPago?.ncf || (isPending ? 'Pendiente' : getStableNCF(c.id)),
+          metodo_pago: dbPago?.metodo_pago || (isPending ? 'Pendiente' : 'PayPal'),
           rnc_cedula: dbPago?.rnc_cedula || clientRnc || undefined,
           razon_social: dbPago?.razon_social || clientEmpresa || undefined,
           id_campana: c.id,
-          url_dgii: dbPago?.url_dgii
+          url_dgii: dbPago?.url_dgii,
+          rawCampaign: c
         };
       });
       
@@ -117,7 +125,7 @@ export const ClientPagosModule = ({ campaigns }: { campaigns: Campaign[] }) => {
     }
   };
 
-  const totalInvertido = pagos.reduce((sum, p) => sum + p.monto, 0);
+  const totalInvertido = pagos.filter(p => p.estado === 'Aprobado').reduce((sum, p) => sum + (p.monto * 1.18), 0);
   
   const currentDate = new Date();
   const currentYear = currentDate.getFullYear();
@@ -126,11 +134,14 @@ export const ClientPagosModule = ({ campaigns }: { campaigns: Campaign[] }) => {
   const chartData = monthNames.map((name, index) => {
     const pagosMes = pagos.filter(p => {
       const d = new Date(p.fecha);
-      return d.getMonth() === index && d.getFullYear() === currentYear;
+      return p.estado === 'Aprobado' && d.getMonth() === index && d.getFullYear() === currentYear;
     });
-    const monto = pagosMes.reduce((sum, p) => sum + p.monto, 0);
+    const monto = pagosMes.reduce((sum, p) => sum + (p.monto * 1.18), 0);
     return { name, monto };
   }).filter((_, index) => index <= currentDate.getMonth()); // Muestra desde Enero hasta el mes actual
+
+  const filtered = pagos.filter(p => p.concepto.toLowerCase().includes(searchTerm.toLowerCase()) || p.ncf.toLowerCase().includes(searchTerm.toLowerCase()));
+  const paginatedPagos = filtered.slice(page * pageSize, (page + 1) * pageSize);
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -144,21 +155,78 @@ export const ClientPagosModule = ({ campaigns }: { campaigns: Campaign[] }) => {
       {/* Dashboard Top Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* KPI 1: Total Invertido */}
-        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
-          <div>
-            <h3 className="text-sm font-bold text-slate-800 mb-1">Inversión Total</h3>
-            <p className="text-xs text-slate-500 mb-4">Balance de campañas pagadas</p>
-            <div className="flex items-end gap-3">
-              <span className="text-4xl font-black text-slate-900 tracking-tight">${totalInvertido.toLocaleString()}</span>
+        {/* KPI 1: Total Invertido (Flip Card) */}
+        <div className="bg-transparent perspective-1000">
+          <div className={`relative w-full h-full bg-white border border-slate-200 rounded-3xl shadow-sm transition-transform duration-500 preserve-3d ${isFlipped ? 'rotate-y-180' : ''}`}>
+            
+            {/* FRONT FACE (USD) */}
+            <div className="absolute inset-0 backface-hidden flex flex-col justify-between p-6">
+              <div>
+                <div className="flex justify-between items-start mb-1">
+                  <h3 className="text-sm font-bold text-slate-800">Inversión Total</h3>
+                  <button 
+                    onClick={() => setIsFlipped(true)}
+                    className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-violet-600 transition-colors"
+                    title="Ver en DOP"
+                  >
+                    <ArrowLeftRight className="w-4 h-4" />
+                  </button>
+                </div>
+                <p className="text-xs text-slate-500 mb-4">Balance de campañas pagadas</p>
+                <div className="flex items-end gap-3">
+                  <span className="text-4xl font-black text-slate-900 tracking-tight">${totalInvertido.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span className="text-sm font-bold text-emerald-500 mb-1">USD</span>
+                </div>
+              </div>
+              <div className="mt-6 flex items-center gap-4">
+                <div className="w-16 h-16 rounded-full border-4 border-slate-100 border-l-violet-600 border-t-violet-600 transform -rotate-45 shrink-0" />
+                <div className="text-xs text-slate-500">
+                  <div className="flex items-center gap-1.5 mb-1"><div className="w-2 h-2 rounded-full bg-violet-600" /> PayPal</div>
+                  <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-slate-200" /> Tarjeta</div>
+                </div>
+              </div>
             </div>
-          </div>
-          <div className="mt-6 flex items-center gap-4">
-            <div className="w-16 h-16 rounded-full border-4 border-slate-100 border-l-violet-600 border-t-violet-600 transform -rotate-45" />
-            <div className="text-xs text-slate-500">
-              <div className="flex items-center gap-1.5 mb-1"><div className="w-2 h-2 rounded-full bg-violet-600" /> PayPal</div>
-              <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-slate-200" /> Tarjeta</div>
+
+            {/* BACK FACE (DOP) */}
+            <div className="absolute inset-0 backface-hidden rotate-y-180 flex flex-col justify-between p-6 bg-violet-50 rounded-3xl border border-violet-200">
+              <div>
+                <div className="flex justify-between items-start mb-1">
+                  <h3 className="text-sm font-bold text-violet-900">Inversión Total</h3>
+                  <button 
+                    onClick={() => setIsFlipped(false)}
+                    className="p-1.5 rounded-full hover:bg-violet-200 text-violet-400 hover:text-violet-700 transition-colors"
+                    title="Ver en USD"
+                  >
+                    <ArrowLeftRight className="w-4 h-4" />
+                  </button>
+                </div>
+                <p className="text-xs text-violet-500 mb-4">Balance convertido a pesos</p>
+                <div className="flex items-end gap-3">
+                  <span className="text-3xl sm:text-4xl font-black text-violet-900 tracking-tight whitespace-nowrap">RD${(totalInvertido * 59.00).toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+              <div className="mt-6 flex items-center gap-4">
+                <div className="text-xs font-medium text-violet-600/80 bg-white/50 px-3 py-1.5 rounded-lg border border-violet-200/50">
+                  Tasa estimada: RD$ 59.00 / USD
+                </div>
+              </div>
             </div>
+
+            {/* Spacer to maintain layout dimensions for absolute positioned faces */}
+            <div className="invisible p-6 flex flex-col justify-between">
+              <div>
+                <h3 className="text-sm font-bold mb-1">Spacer</h3>
+                <p className="text-xs mb-4">Spacer</p>
+                <div className="flex items-end gap-3">
+                  <span className="text-4xl font-black tracking-tight">${totalInvertido.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+              <div className="mt-6 flex items-center gap-4">
+                <div className="w-16 h-16 shrink-0" />
+                <div className="h-8" />
+              </div>
+            </div>
+            
           </div>
         </div>
 
@@ -221,7 +289,10 @@ export const ClientPagosModule = ({ campaigns }: { campaigns: Campaign[] }) => {
               type="text" 
               placeholder="Buscar pago o NCF..." 
               value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
+              onChange={e => {
+                setSearchTerm(e.target.value);
+                setPage(0);
+              }}
               className="w-full sm:w-64 pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all"
             />
           </div>
@@ -232,56 +303,143 @@ export const ClientPagosModule = ({ campaigns }: { campaigns: Campaign[] }) => {
               <tr className="border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50/50">
                 <th className="p-4">Fecha</th>
                 <th className="p-4">Concepto</th>
-                <th className="p-4">Monto (USD)</th>
+                <th className="p-4">Subtotal (DOP)</th>
+                <th className="p-4">ITBIS (18% DOP)</th>
+                <th className="p-4">Total (DOP)</th>
+                <th className="p-4">Total (USD)</th>
                 <th className="p-4">Estado</th>
                 <th className="p-4">Comprobante Fiscal (NCF)</th>
                 <th className="p-4 text-right">Acciones</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#2a2a4a] text-sm text-slate-700">
+            <tbody className="divide-y divide-slate-100 text-sm text-slate-700">
               {loading ? (
-                <tr><td colSpan={6} className="py-10 text-center text-slate-500">Cargando pagos...</td></tr>
+                <tr><td colSpan={9} className="py-10 text-center text-slate-500">Cargando pagos...</td></tr>
               ) : pagos.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-slate-500">
-                    <CreditCard className="w-12 h-12 text-[#2a2a4a] mx-auto mb-3" />
+                  <td colSpan={9} className="py-12 text-center text-slate-500">
+                    <CreditCard className="w-12 h-12 text-slate-200 mx-auto mb-3" />
                     No tienes pagos registrados.
                   </td>
                 </tr>
               ) : (
-                pagos.filter(p => p.concepto.toLowerCase().includes(searchTerm.toLowerCase()) || p.ncf.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 ? (
+                filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-12 text-center text-slate-500">
+                    <td colSpan={9} className="py-12 text-center text-slate-500">
                       No se encontraron resultados para "{searchTerm}"
                     </td>
                   </tr>
                 ) : (
-                  pagos.filter(p => p.concepto.toLowerCase().includes(searchTerm.toLowerCase()) || p.ncf.toLowerCase().includes(searchTerm.toLowerCase())).map((pago) => (
-                  <tr key={pago.id} className="hover:bg-[#2a2a4a]/20 transition-colors">
-                    <td className="p-4 whitespace-nowrap">{new Date(pago.fecha).toLocaleDateString()}</td>
-                    <td className="p-4 font-medium text-slate-800">{pago.concepto}</td>
-                    <td className="p-4 font-bold text-slate-900">${pago.monto.toLocaleString()}</td>
-                    <td className="p-4">
-                      <span className="bg-emerald-500/10 text-emerald-400 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider border border-emerald-500/20">
-                        {pago.estado}
-                      </span>
-                    </td>
-                    <td className="p-4 font-mono text-xs text-slate-500">{pago.ncf}</td>
-                    <td className="p-4 text-right">
-                      <button 
-                        onClick={() => handleDownloadPDF(pago)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-violet-400 hover:text-slate-900 bg-violet-500/10 hover:bg-violet-500/20 rounded-lg transition-colors"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                        PDF
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              ))}
+                  paginatedPagos.map((pago) => {
+                    const subtotalUSD = pago.monto;
+                    const subtotalDOP = subtotalUSD * 59.00;
+                    const itbisDOP = subtotalDOP * 0.18;
+                    const totalDOP = subtotalDOP * 1.18;
+                    const totalUSD = subtotalUSD * 1.18;
+                    return (
+                      <tr key={pago.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="p-4 whitespace-nowrap text-slate-500">
+                          {pago.fecha.includes('T') 
+                            ? new Date(pago.fecha).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })
+                            : new Date(pago.fecha + 'T12:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })
+                          }
+                        </td>
+                        <td className="p-4 font-medium text-slate-800">{pago.concepto}</td>
+                        <td className="p-4 text-slate-600">RD$ {subtotalDOP.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="p-4 text-slate-500">RD$ {itbisDOP.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="p-4 font-bold text-slate-900">RD$ {totalDOP.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="p-4 font-medium text-emerald-600">US$ {totalUSD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="p-4">
+                          <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider border ${pago.estado === 'Pendiente' ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-emerald-100 text-emerald-700 border-emerald-200'}`}>
+                            {pago.estado}
+                          </span>
+                        </td>
+                        <td className="p-4 font-mono text-xs text-slate-500">
+                          {pago.ncf === 'Pendiente' ? (
+                            <span className="text-amber-500 text-[10px] font-bold uppercase tracking-wider">Pendiente de Pago</span>
+                          ) : pago.ncf}
+                        </td>
+                        <td className="p-4 text-right">
+                          {pago.estado === 'Pendiente' ? (
+                            pago.rawCampaign.estado_moderacion === 'aprobada' ? (
+                              <button 
+                                onClick={() => onPagar && onPagar(pago.rawCampaign)}
+                                className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold text-white bg-violet-600 hover:bg-violet-500 rounded-lg transition-colors shadow-sm"
+                              >
+                                <CreditCard className="w-3.5 h-3.5" />
+                                Pagar
+                              </button>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase text-amber-700 bg-amber-100 rounded-lg whitespace-nowrap">
+                                En Revisión
+                              </span>
+                            )
+                          ) : (
+                            <button 
+                              onClick={() => handleDownloadPDF(pago)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-violet-600 hover:text-slate-900 bg-violet-50 hover:bg-violet-100 rounded-lg transition-colors border border-violet-200/50"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                              PDF
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )
+              )}
             </tbody>
           </table>
         </div>
+
+        {/* Pagination Controls */}
+        {!loading && filtered.length > 0 && (
+          <div className="px-6 py-4 border-t border-slate-200 bg-slate-50/50 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div className="text-sm font-medium text-slate-500">
+              Mostrando <span className="font-bold text-slate-700">{(page * pageSize) + 1}</span> a <span className="font-bold text-slate-700">{Math.min((page + 1) * pageSize, filtered.length)}</span> de <span className="font-bold text-slate-700">{filtered.length}</span> registros
+            </div>
+            
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-slate-500">Filas:</span>
+                <select 
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setPage(0);
+                  }}
+                  className="bg-white border border-slate-200 text-slate-700 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-1.5"
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </div>
+
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setPage(p => Math.max(0, p - 1))}
+                  disabled={page === 0}
+                  className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <div className="text-sm font-medium text-slate-600 px-2">
+                  Página {filtered.length === 0 ? 0 : page + 1} de {Math.ceil(filtered.length / pageSize)}
+                </div>
+                <button
+                  onClick={() => setPage(p => Math.min(Math.ceil(filtered.length / pageSize) - 1, p + 1))}
+                  disabled={page >= Math.ceil(filtered.length / pageSize) - 1 || filtered.length === 0}
+                  className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -293,6 +451,7 @@ export const ClientPagosModule = ({ campaigns }: { campaigns: Campaign[] }) => {
 export const ClientEstadisticasModule = ({ campaigns }: { campaigns: any[] }) => {
   const [chartData, setChartData] = useState<any[]>([]);
   const [realClicks, setRealClicks] = useState<number | null>(null);
+  const [instagramPosts, setInstagramPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const activeCamp = campaigns.filter(c => c.status === 'Activa').length;
@@ -370,6 +529,38 @@ export const ClientEstadisticasModule = ({ campaigns }: { campaigns: any[] }) =>
         console.error("Error fetching link analytics", e);
       }
 
+      // 3. Fetch Real Instagram Analytics (Meta Graph API)
+      try {
+        // En un entorno de cliente real, el token debería venir del backend, pero aquí usamos las variables de Vite.
+        const token = import.meta.env.VITE_INSTAGRAM_ACCESS_TOKEN;
+        const accountId = import.meta.env.VITE_INSTAGRAM_BUSINESS_ACCOUNT_ID;
+        
+        if (token && accountId) {
+          const recentMedia = await getRecentMedia(accountId, token, 3);
+          
+          // Enriquecemos cada post con los insights avanzados (shares) de forma concurrente
+          const enrichedMedia = await Promise.all(
+            recentMedia.map(async (media: any) => {
+              try {
+                const insights = await getMediaInsights(media.id, token);
+                const sharesMetric = insights.find((m: any) => m.name === 'shares');
+                return {
+                  ...media,
+                  shares_count: sharesMetric?.values[0]?.value || 0
+                };
+              } catch (e) {
+                // Si el post es muy reciente o no soporta insights
+                return { ...media, shares_count: 0 };
+              }
+            })
+          );
+          
+          setInstagramPosts(enrichedMedia);
+        }
+      } catch (e) {
+        console.error("Error fetching Instagram analytics", e);
+      }
+
       setLoading(false);
     };
 
@@ -443,6 +634,64 @@ export const ClientEstadisticasModule = ({ campaigns }: { campaigns: any[] }) =>
            <div className="flex flex-col items-center justify-center min-h-[250px] text-center">
              <BarChart3 className="w-12 h-12 text-slate-300 mb-4" />
              <p className="text-slate-500">Aún no hay publicaciones en los últimos 7 días.</p>
+           </div>
+        )}
+      </div>
+
+      {/* SECCIÓN INSTAGRAM EN TIEMPO REAL */}
+      <div className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-10 h-10 rounded-xl bg-pink-500/10 text-pink-500 flex items-center justify-center">
+            <Camera className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-slate-900">Rendimiento en Instagram</h3>
+            <p className="text-xs text-slate-500">Métricas en tiempo real directamente desde Meta API</p>
+          </div>
+        </div>
+
+        {instagramPosts.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {instagramPosts.map((post) => (
+              <div key={post.id} className="bg-slate-50 rounded-2xl overflow-hidden border border-slate-200 group hover:shadow-md transition-all">
+                <div className="aspect-square bg-slate-200 relative overflow-hidden">
+                  {post.media_type === 'VIDEO' ? (
+                    <div className="w-full h-full flex items-center justify-center bg-slate-900 text-white relative">
+                       <video src={post.media_url} className="w-full h-full object-cover opacity-80" muted loop playsInline />
+                       <Play className="absolute w-12 h-12 text-white/70" />
+                    </div>
+                  ) : (
+                    <img src={post.media_url} alt={post.caption || 'Publicación de Instagram'} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                  )}
+                  <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-md text-white text-[10px] font-bold px-2 py-1 rounded-md">
+                    {new Date(post.timestamp).toLocaleDateString()}
+                  </div>
+                </div>
+                <div className="p-4">
+                  <p className="text-xs text-slate-600 line-clamp-2 mb-4 h-8">{post.caption}</p>
+                  
+                  <div className="flex items-center justify-between border-t border-slate-200/60 pt-3">
+                    <div className="flex items-center gap-1.5 text-rose-500">
+                      <Heart className="w-4 h-4 fill-current" />
+                      <span className="text-sm font-bold">{post.like_count || 0}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-blue-500">
+                      <MessageCircle className="w-4 h-4 fill-current" />
+                      <span className="text-sm font-bold">{post.comments_count || 0}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-emerald-500">
+                      <Share2 className="w-4 h-4" />
+                      <span className="text-sm font-bold">{post.shares_count || 0}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+           <div className="text-center py-10 bg-slate-50 rounded-2xl border border-dashed border-slate-300">
+              <Camera className="w-8 h-8 text-slate-300 mx-auto mb-3" />
+              <p className="text-sm text-slate-500">No se encontraron publicaciones recientes o el token no está configurado.</p>
            </div>
         )}
       </div>
@@ -610,7 +859,7 @@ export const ClientPerfilModule = () => {
       if (!session) {
         session = await createOpenWASession(whatsappSessionName);
       }
-      if (session.status !== 'ready' && session.status !== 'qr_ready') {
+      if (!['ready', 'qr_ready', 'initializing', 'authenticating'].includes(session.status)) {
         await startOpenWASession(session.id);
       }
       await fetchSessionStatus();
@@ -841,6 +1090,9 @@ export const ClientPerfilModule = () => {
 
         <hr className="border-slate-100" />
 
+        <TelegramConfigClient />
+
+        <hr className="border-slate-100" />
 
         <div>
           <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
@@ -880,6 +1132,114 @@ export const ClientPerfilModule = () => {
           </div>
         </div>
 
+      </div>
+    </div>
+  );
+};
+
+const TelegramConfigClient: React.FC = () => {
+  const { profile } = useUser();
+  const [destinos, setDestinos] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchDestinos = async () => {
+    setLoading(true);
+    if (profile?.id_usuario) {
+      const { data } = await supabase.from('telegram_destinos').select('*').eq('cliente_id', profile.id_usuario);
+      setDestinos(data || []);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchDestinos();
+  }, [profile]);
+
+  const botUsername = 'Marketing_r_bot';
+
+  return (
+    <div>
+      <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2 justify-between">
+        <div className="flex items-center gap-2">
+          <svg className="w-5 h-5 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 5L2 12.5l7 2.5l3-2.5l-2.5 3l4 3.5L21 5z"></path></svg>
+          Destinos de Telegram
+        </div>
+        <button
+          onClick={fetchDestinos}
+          disabled={loading}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-semibold border border-slate-200 rounded-xl transition-colors disabled:opacity-50"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+          Refrescar
+        </button>
+      </h3>
+      <p className="text-xs text-slate-500 mb-4">
+        Vincula canales, grupos o chats directos para publicar automáticamente mediante Telegram Bot API.
+      </p>
+
+      <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 text-xs space-y-3 mb-6">
+        <p className="font-bold text-blue-800">¿Cómo vincular un nuevo destino?</p>
+        <p className="text-blue-700">Para autorizar envíos, debes iniciar la conversación con el bot. Sigue estos pasos:</p>
+        <ol className="list-decimal list-inside space-y-2 ml-1 text-blue-800">
+          <li>
+            Haz clic en el siguiente enlace y luego presiona <strong>"Iniciar"</strong> (o "Start") dentro de Telegram:
+            <br />
+            {profile?.codigo_vinculacion_telegram && (
+              <a 
+                href={`https://t.me/${botUsername}?start=${profile.codigo_vinculacion_telegram}`} 
+                target="_blank" 
+                rel="noreferrer"
+                className="inline-flex mt-2 items-center gap-1 text-blue-600 bg-blue-100/50 px-2 py-1.5 rounded font-mono font-bold hover:bg-blue-200 transition-colors shadow-sm"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                https://t.me/{botUsername}?start={profile.codigo_vinculacion_telegram}
+              </a>
+            )}
+          </li>
+          <li>Inmediatamente el bot registrará el chat y aparecerá en la lista de abajo (dale a refrescar).</li>
+          <li>
+            <strong>Para vincular un Grupo o Canal:</strong> Agrega a <strong>@{botUsername}</strong> como administrador, y luego envía este mensaje exacto en el grupo/canal: 
+            <code className="bg-blue-100 px-1 py-0.5 rounded ml-1 select-all font-mono text-[10px]">/start {profile?.codigo_vinculacion_telegram}</code>
+          </li>
+        </ol>
+      </div>
+
+      <div className="border border-slate-100 rounded-xl overflow-hidden bg-white shadow-sm">
+        <div className="bg-slate-50 border-b border-slate-100 px-4 py-2.5">
+          <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Tus Destinos Vinculados ({destinos.length})</h4>
+        </div>
+        {destinos.length === 0 ? (
+          <div className="p-8 text-center text-slate-400 text-xs bg-slate-50/50">
+            Aún no has vinculado ningún destino de Telegram.
+          </div>
+        ) : (
+          <ul className="divide-y divide-slate-100">
+            {destinos.map(d => (
+              <li key={d.id} className="flex justify-between items-center p-4 hover:bg-slate-50 transition-colors">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold uppercase text-lg shadow-sm">
+                    {d.nombre_visible.charAt(0)}
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-slate-800">{d.nombre_visible}</p>
+                    <p className="text-[10px] text-slate-400 font-mono mt-0.5">ID: {d.chat_id} • {d.tipo.toUpperCase()}</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={async () => {
+                    if (confirm("¿Desvincular destino? Ya no podrás publicar en él.")) {
+                      await supabase.from('telegram_destinos').delete().eq('id', d.id);
+                      fetchDestinos();
+                    }
+                  }}
+                  className="text-xs font-bold text-rose-500 bg-rose-50 px-3 py-1.5 rounded-lg hover:bg-rose-100 transition-colors"
+                >
+                  Desvincular
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   );

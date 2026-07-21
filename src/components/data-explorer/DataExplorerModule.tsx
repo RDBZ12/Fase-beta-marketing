@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Users, Megaphone, FileText, Search, 
+  Users, Megaphone, FileText, 
   TrendingUp, ArrowUpRight, ArrowLeft, DollarSign, Bot, BarChart3, Database
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';

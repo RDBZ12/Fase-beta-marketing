@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -38,6 +39,25 @@ async function capturePayPalOrder(orderId: string, accessToken: string): Promise
   })
   const json = await res.json()
   return json
+}
+
+function getDOFormattedDates() {
+  const now = new Date();
+  const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+  const doDate = new Date(utc + (3600000 * -4)); // UTC-4
+
+  const day = String(doDate.getDate()).padStart(2, '0');
+  const month = String(doDate.getMonth() + 1).padStart(2, '0');
+  const year = doDate.getFullYear();
+  
+  const hours = String(doDate.getHours()).padStart(2, '0');
+  const minutes = String(doDate.getMinutes()).padStart(2, '0');
+  const seconds = String(doDate.getSeconds()).padStart(2, '0');
+
+  const fechaEmision = `${day}-${month}-${year}`;
+  const fechaHoraFirma = `${day}-${month}-${year} ${hours}:${minutes}:${seconds}`;
+
+  return { fechaEmision, fechaHoraFirma };
 }
 
 // ── Handler ───────────────────────────────────────────────────────────────────
@@ -90,11 +110,68 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')! // Usa service role para saltar RLS
     )
 
+    // ── 3.1 Extraer id_usuario de forma segura desde el JWT ─────────────────
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: 'Falta token de autorización. Debes iniciar sesión.' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    const token = authHeader.replace('Bearer ', '')
+    const { data: authData, error: authErr } = await supabase.auth.getUser(token)
+    const user = authData?.user
+
+    if (authErr || !user) {
+      return new Response(
+        JSON.stringify({ error: 'Usuario no autenticado o token inválido.' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    const id_usuario_seguro = user.id;
+
     const { data: pagoExistente } = await supabase
       .from('pagos')
       .select('id_pago')
       .eq('paypal_order_id', order_id)
       .maybeSingle()
+
+    // ── 3.2 Validar estado de moderación y precio mínimo de campaña ────────
+    const { data: campanaDB, error: campErr } = await supabase
+      .from('campaigns')
+      .select('estado_moderacion')
+      .eq('id', campana_id)
+      .single()
+    
+    if (campErr || !campanaDB) {
+      return new Response(
+        JSON.stringify({ error: 'Campaña no encontrada.' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    if (campanaDB.estado_moderacion !== 'aprobada') {
+      return new Response(
+        JSON.stringify({ error: 'La campaña no ha sido aprobada por moderación.' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    const { data: config } = await supabase
+      .from('configuracion_sistema')
+      .select('valor')
+      .eq('clave', 'precio_minimo_campana')
+      .single()
+    
+    const precioMinimo = config?.valor || 5.83
+    if (monto_esperado < precioMinimo || montoCapturado < precioMinimo) {
+      return new Response(
+        JSON.stringify({ error: `El monto pagado (${montoCapturado}) es inferior al mínimo permitido (${precioMinimo}).` }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
 
     if (pagoExistente) {
       return new Response(
@@ -119,6 +196,8 @@ serve(async (req) => {
     try {
       const ecfApiKey = Deno.env.get('ECF_API_KEY')
       if (ecfApiKey) {
+        const { fechaEmision, fechaHoraFirma } = getDOFormattedDates()
+
         const ecfPayload = {
           "ECF": {
             "Encabezado": {
@@ -136,6 +215,19 @@ serve(async (req) => {
                 },
                 "IndicadorMontoGravado": "0",
                 "IndicadorEnvioDiferido": "1"
+              },
+              "Emisor": {
+                "RNCEmisor": "132907401",
+                "CorreoEmisor": "utesa@utesa.edu.com",
+                "FechaEmision": fechaEmision,
+                "DireccionEmisor": "Santiago",
+                "NombreComercial": "UTESA",
+                "RazonSocialEmisor": "UTESA",
+                "TablaTelefonoEmisor": {
+                  "TelefonoEmisor": [
+                    "829-282-7556"
+                  ]
+                }
               },
               "Totales": {
                 "ITBIS1": "18",
@@ -160,7 +252,8 @@ serve(async (req) => {
                 "IndicadorFacturacion": "1",
                 "IndicadorBienoServicio": "1"
               }
-            }
+            },
+            "FechaHoraFirma": fechaHoraFirma
           }
         }
         
@@ -199,8 +292,10 @@ serve(async (req) => {
       .from('pagos')
       .insert({
         id_campana:      campana_id,
+        id_usuario:      id_usuario_seguro,
         paypal_order_id: order_id,
         monto:           parseFloat(monto.toFixed(2)),
+        fecha:           new Date().toISOString(),
         ncf,
         estado_dgii:     'Aceptado',
         metodo_pago:     'PayPal',

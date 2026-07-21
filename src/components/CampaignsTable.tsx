@@ -1,5 +1,5 @@
-import React from 'react';
-import { Edit2, MoreHorizontal, Search } from 'lucide-react';
+import React, { useState } from 'react';
+import { Edit2, MoreHorizontal, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { Campaign } from '../types';
 
 interface CampaignsTableProps {
@@ -19,6 +19,16 @@ export const CampaignsTable: React.FC<CampaignsTableProps> = ({
   onDeleteCampaign,
   onPagarCampaign,
 }) => {
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(10);
+  const [prevSearch, setPrevSearch] = useState(searchTerm);
+
+  if (searchTerm !== prevSearch) {
+    setPage(0);
+    setPrevSearch(searchTerm);
+  }
+
+  const paginatedCampaigns = campaigns.slice(page * pageSize, (page + 1) * pageSize);
   const getChannelStyle = (channel: string) => {
     switch (channel) {
       case 'Email':
@@ -99,12 +109,12 @@ export const CampaignsTable: React.FC<CampaignsTableProps> = ({
           <tbody className="divide-y divide-slate-50 text-xs">
             {campaigns.length === 0 ? (
               <tr>
-                <td colSpan={8} className="py-8 text-center text-slate-400 font-medium">
+                <td colSpan={9} className="py-8 text-center text-slate-400 font-medium">
                   No se encontraron campañas.
                 </td>
               </tr>
             ) : (
-              campaigns.map((camp) => (
+              paginatedCampaigns.map((camp) => (
                 <tr key={camp.id} className="hover:bg-slate-50/50 transition-colors duration-150">
                   <td className="py-3.5">
                     <div className="flex items-center gap-3">
@@ -189,6 +199,54 @@ export const CampaignsTable: React.FC<CampaignsTableProps> = ({
           </tbody>
         </table>
       </div>
+
+      {/* Pagination Controls */}
+      {campaigns.length > 0 && (
+        <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4 bg-white">
+          <div className="text-xs font-semibold text-slate-500">
+            Mostrando <span className="font-bold text-slate-700">{(page * pageSize) + 1}</span> a <span className="font-bold text-slate-700">{Math.min((page + 1) * pageSize, campaigns.length)}</span> de <span className="font-bold text-slate-700">{campaigns.length}</span> campañas
+          </div>
+          
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-semibold text-slate-500">Filas:</span>
+              <select 
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setPage(0);
+                }}
+                className="bg-slate-50 border border-slate-200 text-slate-700 text-xs rounded-lg focus:outline-none focus:border-slate-300 p-1.5 font-semibold"
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPage(p => Math.max(0, p - 1))}
+                disabled={page === 0}
+                className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <div className="text-xs font-semibold text-slate-600 px-2">
+                Página {campaigns.length === 0 ? 0 : page + 1} de {Math.ceil(campaigns.length / pageSize)}
+              </div>
+              <button
+                onClick={() => setPage(p => Math.min(Math.ceil(campaigns.length / pageSize) - 1, p + 1))}
+                disabled={page >= Math.ceil(campaigns.length / pageSize) - 1 || campaigns.length === 0}
+                className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

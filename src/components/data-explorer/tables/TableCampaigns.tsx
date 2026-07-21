@@ -4,7 +4,7 @@ import { SidePanel } from '../SidePanel';
 import { supabase } from '../../../supabaseClient';
 import { type Campaign, type Usuario, type Publicacion, type Lead, type Pago } from '../../../types';
 import { useUser } from '../../../context/UserContext';
-import { Tag, Calendar, User, BarChart, FileText, Share2, CreditCard, Users } from 'lucide-react';
+import { Tag, Calendar, User, Share2, CreditCard, Users } from 'lucide-react';
 
 export const TableCampaigns: React.FC = () => {
   const { profile } = useUser();
@@ -41,7 +41,7 @@ export const TableCampaigns: React.FC = () => {
         ];
 
         if (idCli) {
-          promises.push(supabase.from('usuarios').select('*').eq('id_usuario', idCli).single());
+          promises.push(supabase.from('usuarios').select('*').eq('id_usuario', idCli).single() as any);
         }
 
         const results = await Promise.all(promises);
@@ -51,7 +51,7 @@ export const TableCampaigns: React.FC = () => {
         setPagos((results[2].data || []) as Pago[]);
         
         if (idCli && results[3]) {
-          setDueño((results[3].data || null) as Usuario);
+          setDueño((results[3].data || null) as unknown as Usuario);
         }
 
       } catch (error) {
@@ -100,7 +100,7 @@ export const TableCampaigns: React.FC = () => {
       sortable: true,
       cell: (item) => (
         <div>
-          <div className="font-bold text-slate-800">{item.nombre_campana || item.name}</div>
+          <div className="font-bold text-slate-800">{(item as any).nombre_campana || item.name}</div>
           <div className="text-xs text-slate-500 line-clamp-1 max-w-[200px]">{item.objetivo || item.descripcion || 'Sin descripción'}</div>
         </div>
       )
@@ -123,13 +123,13 @@ export const TableCampaigns: React.FC = () => {
       sortable: true,
       cell: (item) => {
         let bg = 'bg-slate-100 text-slate-700';
-        if (item.status === 'Activa' || item.estado === 'Activa') bg = 'bg-emerald-100 text-emerald-700 border-emerald-200';
-        if (item.status === 'Pausada' || item.estado === 'Pausada') bg = 'bg-amber-100 text-amber-700 border-amber-200';
-        if (item.status === 'Pendiente de Pago' || item.estado === 'Pendiente de Pago') bg = 'bg-rose-100 text-rose-700 border-rose-200';
+        if (item.status === 'Activa' || (item as any).estado === 'Activa') bg = 'bg-emerald-100 text-emerald-700 border-emerald-200';
+        if (item.status === 'Pausada' || (item as any).estado === 'Pausada') bg = 'bg-amber-100 text-amber-700 border-amber-200';
+        if (item.status === 'Pendiente de Pago' || (item as any).estado === 'Pendiente de Pago') bg = 'bg-rose-100 text-rose-700 border-rose-200';
         
         return (
           <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${bg}`}>
-            {item.status || item.estado || 'N/A'}
+            {item.status || (item as any).estado || 'N/A'}
           </span>
         );
       }
@@ -163,7 +163,7 @@ export const TableCampaigns: React.FC = () => {
       <SidePanel
         isOpen={!!selectedItem}
         onClose={() => setSelectedItem(null)}
-        title={selectedItem?.nombre_campana || selectedItem?.name || ''}
+        title={(selectedItem as any)?.nombre_campana || selectedItem?.name || ''}
         subtitle="Detalles de la Campaña"
       >
         {selectedItem && (
@@ -178,7 +178,7 @@ export const TableCampaigns: React.FC = () => {
               <div className="space-y-4">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-slate-500">Estado</span>
-                  <span className="font-bold text-slate-800">{selectedItem.status || selectedItem.estado}</span>
+                  <span className="font-bold text-slate-800">{selectedItem.status || (selectedItem as any).estado}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-slate-500">Canal</span>
@@ -262,11 +262,11 @@ export const TableCampaigns: React.FC = () => {
                   <div className="space-y-4">
                     <div className="text-sm flex justify-between bg-slate-50/50 p-3 rounded-xl border border-slate-100">
                       <span className="text-slate-500">Inicio</span>
-                      <span className="text-slate-700 font-semibold">{selectedItem.fechaInicio || selectedItem.startDate ? new Date(selectedItem.fechaInicio || selectedItem.startDate).toLocaleDateString() : 'N/A'}</span>
+                      <span className="text-slate-700 font-semibold">{((selectedItem as any).fechaInicio || selectedItem.startDate) ? new Date(((selectedItem as any).fechaInicio || selectedItem.startDate) as string).toLocaleDateString() : 'N/A'}</span>
                     </div>
                     <div className="text-sm flex justify-between">
                       <span className="text-slate-500">Fin</span>
-                      <span className="text-slate-700 font-semibold">{selectedItem.fechaFin || selectedItem.endDate ? new Date(selectedItem.fechaFin || selectedItem.endDate).toLocaleDateString() : 'N/A'}</span>
+                      <span className="text-slate-700 font-semibold">{((selectedItem as any).fechaFin || selectedItem.endDate) ? new Date(((selectedItem as any).fechaFin || selectedItem.endDate) as string).toLocaleDateString() : 'N/A'}</span>
                     </div>
                   </div>
                 </div>

@@ -7,7 +7,7 @@ import { useUser } from '../../../context/UserContext';
 import { User, Mail, Phone, Calendar, Target, Flag } from 'lucide-react';
 
 export const TableLeads: React.FC = () => {
-  const { profile } = useUser();
+  const { } = useUser();
   const [selectedItem, setSelectedItem] = useState<Lead | null>(null);
   const [estadoFilter, setEstadoFilter] = useState<string>('');
   

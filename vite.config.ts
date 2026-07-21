@@ -23,7 +23,23 @@ export default defineConfig({
     'import.meta.env.VITE_NETWORK_IP': JSON.stringify(getLocalIP())
   },
   server: {
-    allowedHosts: true
+    allowedHosts: true,
+    proxy: {
+      '/proxy-openwa': {
+        target: 'http://localhost:2785',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/proxy-openwa/, ''),
+        configure: (proxy, _options) => {
+          proxy.on('error', (err: any, req: any, res: any) => {
+            // Silenciar los errores de proxy para no ensuciar la terminal
+            if (res && !res.headersSent && typeof res.writeHead === 'function') {
+              res.writeHead(502, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: 'OpenWA Offline' }));
+            }
+          });
+        }
+      }
+    }
   }
 })
 
