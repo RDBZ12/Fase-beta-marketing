@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
 import { Search, CheckCircle, AlertTriangle, Clock, Eye, X } from 'lucide-react';
 import type { Campaign } from '../../types';
@@ -82,7 +82,7 @@ export function AdminCampanasModule({ campaigns, fetchCampaigns }: AdminCampanas
 
   const [adminCampaigns, setAdminCampaigns] = useState<any[]>([]);
   const [totalPages, setTotalPages] = useState(1);
-  const [loading, setLoading] = useState(false);
+  const [, setLoading] = useState(false);
 
   useEffect(() => {
     fetchAdminCampaignsServer();

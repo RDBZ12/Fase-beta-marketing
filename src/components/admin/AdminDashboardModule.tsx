@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
 import { 
-  TrendingUp, Users, Megaphone, DollarSign, Activity, 
+  Users, Megaphone, DollarSign, Activity,
   CreditCard, CheckCircle2, AlertCircle, Clock 
 } from 'lucide-react';
 import type { Pago, Campaign } from '../../types';

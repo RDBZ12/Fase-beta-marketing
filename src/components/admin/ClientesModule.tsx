@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
-import { 
-  Building2, Search, Filter, MoreVertical, CreditCard, 
-  Activity, Users, Zap, AlertTriangle, Play, Pause, ExternalLink,
-  ChevronRight, LogIn, X, Clock, Settings
+import {
+  Building2, Search, CreditCard, 
+  Activity, Zap, Pause, ExternalLink,
+  ChevronRight, LogIn, X, Settings
 } from 'lucide-react';
 
 export function ClientesModule() {

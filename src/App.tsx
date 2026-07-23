@@ -9,14 +9,11 @@ import { Channels } from './components/Channels';
 import { CampaignsTable } from './components/CampaignsTable';
 import { CampaignModal } from './components/CampaignModal';
 import { AIModal } from './components/AIModal';
-import { ClientGallery } from './components/ClientGallery';
 import { ClientPortal } from './components/ClientPortal';
 import { PaymentModal } from './components/PaymentModal';
 import { UsuariosModule } from './components/UsuariosModule';
 
 import { LeadsModule } from './components/LeadsModule';
-import { PublicacionesModule } from './components/PublicacionesModule';
-import { AnalyticsModule } from './components/AnalyticsModule';
 import { PagosModule } from './components/PagosModule';
 import { AjustesModule } from './components/AjustesModule';
 import { CampanasModule } from './components/CampanasModule';
@@ -343,7 +340,6 @@ export default function App() {
     try {
       let combinedData: any[] = [];
       const { data: sessionData } = await supabase.auth.getSession();
-      const userId = sessionData?.session?.user?.id;
       
       // Determine if user is admin based on internal role mapping logic (or just rely on RLS/limit)
       // To prevent massive egress for admins, we limit the global app state to 150 recent campaigns.
@@ -353,7 +349,7 @@ export default function App() {
       // For general app state, limit to 200 to prevent crash/egress on large databases
       query = query.limit(200);
 
-      const { data: campsData, error: campsError } = await query;
+      const { data: campsData } = await query;
       
       if (campsData) combinedData = [...combinedData, ...campsData];
 

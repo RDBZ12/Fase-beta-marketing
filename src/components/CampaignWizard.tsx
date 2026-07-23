@@ -21,7 +21,6 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onCancel, onFini
   const [alertMsg, setAlertMsg] = useState('');
   const [step, setStep] = useState(1);
   const [, setIsGenerating] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
   const [formData, setFormData] = useState({
     businessName: '',
     budget: '',
@@ -126,7 +125,6 @@ Reglas:
       return;
     }
     
-    setErrorMsg('');
     setIsGenerating(true);
     setStep(2);
     
@@ -205,7 +203,7 @@ Genera la estrategia de marketing completa y estructurada como JSON. Asegúrate 
       setStep(3);
     } catch (err) {
       console.error(err);
-      setErrorMsg(`Error: ${err instanceof Error ? err.message : 'Desconocido'}`);
+      console.error(`Error: ${err instanceof Error ? err.message : 'Desconocido'}`);
       setStep(1);
     } finally {
       setIsGenerating(false);
