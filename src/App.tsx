@@ -24,6 +24,12 @@ import { AdminCampanasModule } from './components/admin/AdminCampanasModule';
 import { AdminDashboardModule } from './components/admin/AdminDashboardModule';
 import { ClientesModule } from './components/admin/ClientesModule';
 
+import { LearningProvider } from './learning/context/LearningContext';
+import LearningTour from './learning/components/tour/LearningTour';
+import LearningFAB from './learning/components/LearningFAB';
+import LearningChat from './learning/components/LearningChat';
+import { LearningDispatcher } from './learning/services/LearningDispatcher';
+
 import { UserProvider } from './context/UserContext';
 import type { Campaign, Metric } from './types';
 import { ShieldCheck } from 'lucide-react';
@@ -339,8 +345,7 @@ export default function App() {
     setLoading(true);
     try {
       let combinedData: any[] = [];
-      const { data: sessionData } = await supabase.auth.getSession();
-      
+      await supabase.auth.getSession();
       // Determine if user is admin based on internal role mapping logic (or just rely on RLS/limit)
       // To prevent massive egress for admins, we limit the global app state to 150 recent campaigns.
       // The AdminCampanasModule handles its own deep pagination.
@@ -669,63 +674,87 @@ export default function App() {
     );
   }
 
-  if (loadingAuth || (session && tipoUsuario === null)) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-50">
-        <div className="w-8 h-8 border-4 border-violet-600 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
-
-  if (!session) return <AuthButton />;
-
-  if (tipoUsuario === 'cliente') {
-    const clientCampaigns = campaigns.filter(c => c.id_cliente === session.user.id || c.id_usuario === session.user.id);
-    return (
-      <>
-        <UserProvider userId={session.user.id}>
-          <ClientPortal 
-            campaigns={clientCampaigns} 
-            onPagarCampaign={handleInitiatePayment} 
-            refreshCampaigns={fetchCampaigns} 
-          />
-        </UserProvider>
-        <PaymentModal
-          isOpen={!!paymentCampaign}
-          onClose={() => setPaymentCampaign(null)}
-          campaign={paymentCampaign}
-          session={session}
-          onPagado={fetchCampaigns}
-        />
-        {renderValidationModal()}
-      </>
-    );
-  }
-
   return (
-    <>
-      <UserProvider userId={session.user.id}>
-        <AppLayout
-          campaigns={campaigns}
-          fetchCampaigns={fetchCampaigns}
-          loading={loading}
-          searchTerm={searchTerm}
-          setSearchTerm={setSearchTerm}
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-          rolUsuario={rolUsuario}
-          onPagarCampaign={handleInitiatePayment}
-          totalInteractions={totalInteractions}
-        />
-      </UserProvider>
-      <PaymentModal
-        isOpen={!!paymentCampaign}
-        onClose={() => setPaymentCampaign(null)}
-        campaign={paymentCampaign}
-        session={session}
-        onPagado={fetchCampaigns}
-      />
-      {renderValidationModal()}
-    </>
+    <LearningProvider>
+      {(() => {
+        if (loadingAuth || (session && tipoUsuario === null)) {
+          return (
+            <div className="flex items-center justify-center min-h-screen bg-slate-50">
+              <div className="w-8 h-8 border-4 border-violet-600 border-t-transparent rounded-full animate-spin" />
+            </div>
+          );
+        }
+
+        if (!session) {
+          return (
+            <>
+              <AuthButton />
+              <LearningTour />
+              <LearningFAB />
+              <LearningChat />
+            </>
+          );
+        }
+
+        if (tipoUsuario === 'cliente') {
+          const clientCampaigns = campaigns.filter(c => c.id_cliente === session.user.id || c.id_usuario === session.user.id);
+          return (
+            <>
+              <UserProvider userId={session.user.id}>
+                <ClientPortal 
+                  campaigns={clientCampaigns} 
+                  onPagarCampaign={handleInitiatePayment} 
+                  refreshCampaigns={fetchCampaigns} 
+                />
+              </UserProvider>
+              <PaymentModal
+                isOpen={!!paymentCampaign}
+                onClose={() => {
+                  setPaymentCampaign(null);
+                  LearningDispatcher.dispatch('UPDATE_UI_STATE', { currentModal: null });
+                }}
+                campaign={paymentCampaign}
+                session={session}
+                onPagado={fetchCampaigns}
+              />
+              {renderValidationModal()}
+              <LearningTour />
+              <LearningFAB />
+              <LearningChat />
+            </>
+          );
+        }
+
+        return (
+          <>
+            <UserProvider userId={session.user.id}>
+              <AppLayout
+                campaigns={campaigns}
+                fetchCampaigns={fetchCampaigns}
+                loading={loading}
+                searchTerm={searchTerm}
+                setSearchTerm={setSearchTerm}
+                activeTab={activeTab}
+                setActiveTab={setActiveTab}
+                rolUsuario={rolUsuario}
+                onPagarCampaign={handleInitiatePayment}
+                totalInteractions={totalInteractions}
+              />
+            </UserProvider>
+            <PaymentModal
+              isOpen={!!paymentCampaign}
+              onClose={() => {
+                setPaymentCampaign(null);
+                LearningDispatcher.dispatch('UPDATE_UI_STATE', { currentModal: null });
+              }}
+              campaign={paymentCampaign}
+              session={session}
+              onPagado={fetchCampaigns}
+            />
+            {renderValidationModal()}
+          </>
+        );
+      })()}
+    </LearningProvider>
   );
 }

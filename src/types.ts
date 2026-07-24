@@ -173,4 +173,6 @@ export interface UserProfile {
   whatsapp_session_name?: string;
   whatsapp_phone?: string;
   codigo_vinculacion_telegram?: string;
+  tour_completed?: boolean;
+  learning_progress?: any;
 }

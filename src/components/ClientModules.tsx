@@ -153,7 +153,7 @@ export const ClientPagosModule = ({ campaigns, onPagar }: { campaigns: Campaign[
       </div>
 
       {/* Dashboard Top Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6" id="tour-pagos-cards-container">
         
         {/* KPI 1: Total Invertido (Flip Card) */}
         <div className="bg-transparent perspective-1000">
@@ -280,7 +280,7 @@ export const ClientPagosModule = ({ campaigns, onPagar }: { campaigns: Campaign[
 
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
+      <div id="tour-pagos-history" className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
         <div className="p-6 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50/50">
           <h3 className="text-lg font-bold text-slate-800">Depósitos recientes</h3>
           <div className="relative w-full sm:w-auto">
@@ -363,6 +363,7 @@ export const ClientPagosModule = ({ campaigns, onPagar }: { campaigns: Campaign[
                           {pago.estado === 'Pendiente' ? (
                             pago.rawCampaign.estado_moderacion === 'aprobada' ? (
                               <button 
+                                id="tour-pagos-table-pending"
                                 onClick={() => onPagar && onPagar(pago.rawCampaign)}
                                 className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold text-white bg-violet-600 hover:bg-violet-500 rounded-lg transition-colors shadow-sm"
                               >
@@ -376,6 +377,7 @@ export const ClientPagosModule = ({ campaigns, onPagar }: { campaigns: Campaign[
                             )
                           ) : (
                             <button 
+                              id="tour-pagos-download"
                               onClick={() => handleDownloadPDF(pago)}
                               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-violet-600 hover:text-slate-900 bg-violet-50 hover:bg-violet-100 rounded-lg transition-colors border border-violet-200/50"
                             >
@@ -574,7 +576,7 @@ export const ClientEstadisticasModule = ({ campaigns }: { campaigns: any[] }) =>
         <p className="text-slate-500">Métricas en tiempo real basadas en la actividad de tu cuenta.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div id="tour-stats-kpi" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="bg-white border border-slate-200 rounded-2xl p-6 backdrop-blur-xl relative overflow-hidden group hover:border-violet-500/30 transition-colors">
           <div className="w-10 h-10 rounded-xl bg-violet-500/20 text-violet-400 flex items-center justify-center mb-4">
             <Users className="w-5 h-5" />
@@ -639,7 +641,7 @@ export const ClientEstadisticasModule = ({ campaigns }: { campaigns: any[] }) =>
       </div>
 
       {/* SECCIÓN INSTAGRAM EN TIEMPO REAL */}
-      <div className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm">
+      <div id="tour-stats-ig" className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm">
         <div className="flex items-center gap-3 mb-6">
           <div className="w-10 h-10 rounded-xl bg-pink-500/10 text-pink-500 flex items-center justify-center">
             <Camera className="w-5 h-5" />
@@ -918,7 +920,7 @@ export const ClientPerfilModule = () => {
             Datos de Facturación Fiscal (e-CF)
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <div>
+            <div id="tour-profile-empresa">
               <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
                 Razón Social / Nombre de la Empresa *
               </label>
@@ -930,7 +932,7 @@ export const ClientPerfilModule = () => {
                 className="w-full px-4 py-2.5 text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
               />
             </div>
-            <div>
+            <div id="tour-profile-rnc">
               <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
                 RNC o Cédula de Identidad *
               </label>
@@ -967,7 +969,7 @@ export const ClientPerfilModule = () => {
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <div>
+            <div id="tour-profile-phone">
               <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
                 Número de Teléfono Vinculado (con Código de País)
               </label>
@@ -992,7 +994,7 @@ export const ClientPerfilModule = () => {
             </div>
           </div>
 
-          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div id="tour-profile-status" className="bg-slate-50 border border-slate-200 rounded-2xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Estado de Conexión</p>
               <div className="flex items-center gap-2 mt-1">
@@ -1020,6 +1022,7 @@ export const ClientPerfilModule = () => {
             <div className="flex flex-wrap gap-2">
               {(!currentSession || currentSession.status === 'disconnected' || currentSession.status === 'created' || currentSession.status === 'failed') ? (
                 <button
+                  id="tour-profile-connect-btn"
                   onClick={handleCreateAndStart}
                   disabled={actionLoading}
                   className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white text-xs font-bold rounded-xl transition-colors shadow-sm"
@@ -1029,6 +1032,7 @@ export const ClientPerfilModule = () => {
                 </button>
               ) : (
                 <button
+                  id="tour-profile-connect-btn"
                   onClick={handleStop}
                   disabled={actionLoading}
                   className="flex items-center gap-1.5 px-4 py-2 bg-rose-600 hover:bg-rose-700 disabled:bg-slate-300 text-white text-xs font-bold rounded-xl transition-colors shadow-sm"
@@ -1063,7 +1067,7 @@ export const ClientPerfilModule = () => {
                 </ol>
                 <p className="text-[10px] text-amber-600 font-bold">El estado se actualizará automáticamente a "Conectado" en esta pantalla una vez completado.</p>
               </div>
-              <div className="w-44 h-44 bg-white border border-slate-200 rounded-xl p-2.5 flex items-center justify-center shrink-0 shadow-sm relative overflow-hidden">
+              <div id="tour-profile-qr" className="w-44 h-44 bg-white border border-slate-200 rounded-xl p-2.5 flex items-center justify-center shrink-0 shadow-sm relative overflow-hidden">
                 {qrCodeData ? (
                   <img src={qrCodeData} alt="WhatsApp QR Code" className="w-full h-full object-contain" />
                 ) : (
