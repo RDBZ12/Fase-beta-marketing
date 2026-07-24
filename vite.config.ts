@@ -26,7 +26,7 @@ export default defineConfig({
     allowedHosts: true,
     proxy: {
       '/proxy-openwa': {
-        target: 'http://localhost:2785',
+        target: 'http://127.0.0.1:2785',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/proxy-openwa/, ''),
         configure: (proxy, _options) => {

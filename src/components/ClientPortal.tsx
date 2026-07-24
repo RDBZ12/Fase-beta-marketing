@@ -31,7 +31,6 @@ import { CampaignWizard } from './CampaignWizard';
 import { MisPublicacionesModule } from './MisPublicacionesModule';
 import { ClientPagosModule, ClientEstadisticasModule, ClientPerfilModule } from './ClientModules';
 import { CentroReportesCliente } from './reportes/CentroReportesCliente';
-import { ChatbotWidget } from './ChatbotWidget';
 import LearningCenter from '../learning/components/LearningCenter';
 import { useLearning } from '../learning/context/LearningContext';
 import { LearningDispatcher } from '../learning/services/LearningDispatcher';
@@ -52,6 +51,7 @@ export const ClientPortal: React.FC<ClientPortalProps> = ({ campaigns, onPagarCa
   
   const { uiState } = useLearning();
 
+  // Sincronizar el tab activo del portal cuando el UIState del tour cambie
   useEffect(() => {
     if (uiState.currentScreen) {
       const screenMap: Record<string, string> = {
@@ -69,24 +69,50 @@ export const ClientPortal: React.FC<ClientPortalProps> = ({ campaigns, onPagarCa
     }
   }, [uiState.currentScreen, activeTab]);
 
-  const [shouldShowWelcome, setShouldShowWelcome] = useState(() => {
-    return sessionStorage.getItem('wants_tour') === 'true' && !sessionStorage.getItem('login_tour_completed');
+  // Actualizar el UIState del Dispatcher al cambiar de pestaña manualmente
+  const handleTabChange = (tabId: string) => {
+    if (tabId === 'ayuda') {
+      setShowCenter(true);
+      return;
+    }
+
+    setActiveTab(tabId);
+    const screenMap: Record<string, string> = {
+      'Panel': 'campaigns',
+      'mis-publicaciones': 'publicaciones',
+      'pagos': 'pagos',
+      'estadisticas': 'estadisticas',
+      'reportes': 'reportes',
+      'perfil': 'perfil',
+    };
+    const screenName = screenMap[tabId] || tabId;
+    LearningDispatcher.dispatch('UPDATE_UI_STATE', { currentScreen: screenName });
+    LearningDispatcher.dispatch('TRIGGER_ACTION', `click_sidebar_${screenName}`);
+  };
+
+  // Show welcome modal if the user hasn't completed the main tour and we haven't dismissed it locally this session
+  const [showWelcome, setShowWelcome] = useState(() => {
+    const isCompleted = localStorage.getItem('marketdev_tour_completed') === 'true';
+    const isDismissed = sessionStorage.getItem('welcome_dismissed') === 'true';
+    return !isCompleted && !isDismissed;
   });
 
+  const shouldShowWelcome = showWelcome;
+
   const handleStartTour = () => {
-    setShouldShowWelcome(false);
-    LearningDispatcher.dispatch('START_FLOW', 'CREATE_CAMPAIGN');
+    localStorage.setItem('marketdev_tour_completed', 'true');
+    sessionStorage.setItem('welcome_dismissed', 'true');
+    setShowWelcome(false);
+    LearningDispatcher.dispatch('START_FLOW', 'GLOBAL_ONBOARDING');
   };
 
   const handleSkipTour = () => {
-    setShouldShowWelcome(false);
-    sessionStorage.setItem('login_tour_completed', 'true');
+    localStorage.setItem('marketdev_tour_completed', 'true');
+    sessionStorage.setItem('welcome_dismissed', 'true');
+    setShowWelcome(false);
   };
 
-  const handleTabChange = (tabId: string) => {
-    setActiveTab(tabId);
-    LearningDispatcher.dispatch('TRIGGER_ACTION', `click_tab_${tabId.toLowerCase()}`);
-  };
+
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -94,7 +120,7 @@ export const ClientPortal: React.FC<ClientPortalProps> = ({ campaigns, onPagarCa
   };
 
   const navItems = [
-    { id: 'Panel', label: 'Panel', icon: Megaphone },
+    { id: 'Panel', label: 'Mis Campañas', icon: Megaphone },
     { id: 'mis-publicaciones', label: 'Mis Publicaciones', icon: LayoutDashboard },
     { id: 'pagos', label: 'Pagos', icon: CreditCard },
     { id: 'estadisticas', label: 'Estadísticas', icon: BarChart3 },
@@ -109,7 +135,7 @@ export const ClientPortal: React.FC<ClientPortalProps> = ({ campaigns, onPagarCa
       <aside
         className={`${
           isSidebarOpen ? 'w-64' : 'w-20'
-        } transition-all duration-300 ease-in-out border-r border-slate-800 bg-slate-900 flex flex-col relative z-20`}
+        } transition-all duration-300 ease-in-out border-r border-slate-800 bg-slate-900 flex flex-col relative`}
       >
         <div className="h-20 flex items-center px-6 border-b border-slate-800 overflow-hidden whitespace-nowrap">
           <div className="flex items-center">
@@ -214,7 +240,7 @@ export const ClientPortal: React.FC<ClientPortalProps> = ({ campaigns, onPagarCa
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-8 z-10 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
+        <div className="flex-1 overflow-y-auto p-8 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
           {activeTab === 'Panel' && <MisCampanasModule campaigns={campaigns} onNew={() => setIsCreatingCampaign(true)} onPagar={onPagarCampaign} refreshCampaigns={refreshCampaigns} />}
           
           
@@ -232,13 +258,14 @@ export const ClientPortal: React.FC<ClientPortalProps> = ({ campaigns, onPagarCa
              <button onClick={() => setIsCreatingCampaign(false)} className="absolute top-3 right-3 z-50 p-2 bg-slate-100/80 backdrop-blur-sm rounded-full text-slate-500 hover:bg-red-500 hover:text-white transition-colors shadow-sm">
                <X className="w-5 h-5" />
              </button>
-             <div className="p-4 max-h-[85vh] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200 rounded-3xl">
+             <div className="p-4 max-h-[85vh] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200 rounded-3xl relative">
                <CampaignWizard onCancel={() => setIsCreatingCampaign(false)} onFinish={() => { refreshCampaigns(); setIsCreatingCampaign(false); }} />
              </div>
            </div>
         </div>
       )}
 
+      {/* Welcome Modal for new users */}
       {shouldShowWelcome && (
         <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 text-center animate-blur-in">
@@ -269,7 +296,6 @@ export const ClientPortal: React.FC<ClientPortalProps> = ({ campaigns, onPagarCa
       )}
 
       {showCenter && <LearningCenter onClose={() => setShowCenter(false)} />}
-      <ChatbotWidget />
     </div>
   );
 };

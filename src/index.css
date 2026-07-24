@@ -35,27 +35,6 @@
   .rotate-y-180 {
     transform: rotateY(180deg);
   }
-  .hide-scrollbar::-webkit-scrollbar {
-    display: none;
-  }
-  .hide-scrollbar {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-  }
-  .glass {
-    @apply bg-white/70 backdrop-blur-md border border-white/40 shadow-[0_8px_30px_rgb(0,0,0,0.04)];
-  }
-  .gradient-text {
-    @apply text-transparent bg-clip-text bg-gradient-to-r from-violet-600 to-indigo-600;
-  }
-  .animate-pulse-glow {
-    animation: pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-  }
-}
-
-@keyframes pulse-glow {
-  0%, 100% { opacity: 1; box-shadow: 0 0 15px rgba(124, 58, 237, 0.5); }
-  50% { opacity: .7; box-shadow: 0 0 5px rgba(124, 58, 237, 0.2); }
 }
 
 @keyframes bounce-down {

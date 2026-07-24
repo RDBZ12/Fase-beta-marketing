@@ -4,6 +4,7 @@ import { sendWhatsAppTextMessage, sendWhatsAppImageMessage, getOpenWAChats, getO
 import { supabase } from '../supabaseClient';
 import type { Campaign } from '../types';
 import { useUser } from '../context/UserContext';
+import { LearningDispatcher } from '../learning/services/LearningDispatcher';
 
 interface MisPublicacionesModuleProps {
   campaigns: Campaign[];
@@ -274,21 +275,14 @@ El prompt debe ser solo el texto en ingles, descriptivo, visual, sin explicacion
       const englishPrompt = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
       
       if (englishPrompt) {
+        // Limpiamos el prompt de saltos de línea, comillas, signos de interrogación o espacios extra
+        const cleanPrompt = englishPrompt.replace(/[\n\r"?]/g, ' ').trim();
         // Usamos Pollinations AI para generar la imagen gratis
-        const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(englishPrompt.trim())}?width=1080&height=1080&nologo=true`;
+        const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanPrompt)}?width=1080&height=1080&nologo=true`;
         
-        try {
-          const imageRes = await fetch(imageUrl);
-          const imageBlob = await imageRes.blob();
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            setFormData(prev => ({ ...prev, imagen_url: reader.result as string }));
-          };
-          reader.readAsDataURL(imageBlob);
-        } catch (e) {
-          console.error("Error descargando imagen AI:", e);
-          setFormData(prev => ({ ...prev, imagen_url: imageUrl })); // fallback
-        }
+        // Asignamos la URL directamente para que el navegador la cargue de forma nativa sin bloqueos de CORS
+        setFormData(prev => ({ ...prev, imagen_url: imageUrl }));
+        
         // Guardar en reporte de IA
         const { data: { session } } = await supabase.auth.getSession();
         const currentUserId = session?.user?.id;
@@ -297,7 +291,7 @@ El prompt debe ser solo el texto en ingles, descriptivo, visual, sin explicacion
             id_usuario: currentUserId,
             tema: formData.titulo,
             canal: 'Imagen AI (Pollinations)',
-            respuesta_ia: `Prompt utilizado:\n${englishPrompt}\n\nURL Imagen generada:\n${imageUrl}`,
+            respuesta_ia: `Prompt utilizado:\n${cleanPrompt}\n\nURL Imagen generada:\n${imageUrl}`,
           }]);
         }
         
@@ -635,131 +629,134 @@ El prompt debe ser solo el texto en ingles, descriptivo, visual, sin explicacion
     return (
       <div className="fixed inset-0 z-[1008] flex items-center justify-center bg-black/70 p-4 pl-0 sm:pl-64 overflow-y-auto">
         <div className="w-full max-w-4xl bg-white rounded-[10px] shadow-[0_0_40px_rgba(0,0,0,0.4)] relative my-8 animate-bounce-down max-h-[90vh] flex flex-col">
-          <button onClick={() => { setIsCreating(false); setEditingId(null); }} className="absolute top-3 right-3 z-50 p-2 bg-slate-100/80 backdrop-blur-sm rounded-full text-slate-500 hover:bg-red-500 hover:text-white transition-all shadow-sm">
+           <button onClick={() => { 
+            setIsCreating(false); 
+            setEditingId(null); 
+            LearningDispatcher.dispatch('UPDATE_UI_STATE', { currentModal: null });
+          }} className="absolute top-3 right-3 z-50 p-2 bg-slate-100/80 backdrop-blur-sm rounded-full text-slate-500 hover:bg-red-500 hover:text-white transition-all shadow-sm">
             <X className="w-5 h-5" />
           </button>
           <div className="p-8 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200">
             <div className="mb-6 border-b border-slate-200 pb-4">
               <h2 className="text-2xl font-bold text-slate-900">{editingId ? 'Editar Publicación' : 'Nueva Publicación'}</h2>
             </div>
-            <div className="space-y-6">
-          <div className="relative">
-            <label className="block text-sm font-medium text-slate-700 mb-2">Asociar a Campaña (Opcional)</label>
-            <input 
-              value={formData.id_campana}
-              onFocus={() => setIsDropdownOpen(true)}
-              onBlur={() => setTimeout(() => setIsDropdownOpen(false), 200)}
-              onChange={e => {
-                setFormData({...formData, id_campana: e.target.value});
-                setIsDropdownOpen(true);
-              }}
-              placeholder="Escribe para buscar o selecciona una..."
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:border-violet-500" 
-            />
-            {isDropdownOpen && (
-              <div className="absolute z-10 w-full mt-2 bg-white border border-slate-200 rounded-xl shadow-xl max-h-60 overflow-y-auto">
-                {campaigns
-                  .filter(c => c.status !== 'Completada')
-                  .filter(c => c.name.toLowerCase().includes(formData.id_campana.toLowerCase()))
-                  .map(c => (
-                    <div 
-                      key={c.id} 
-                      onClick={() => {
-                        setFormData({...formData, id_campana: c.name});
-                        setIsDropdownOpen(false);
-                      }}
-                      className="px-4 py-3 cursor-pointer hover:bg-slate-50 flex items-center justify-between border-b border-slate-100 last:border-0"
-                    >
-                      <span className="font-medium text-slate-700">{c.name}</span>
-                      <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md ${
-                        c.status === 'Activa' ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20' : 
-                        c.status === 'Borrador' ? 'bg-amber-500/10 text-amber-600 border border-amber-500/20' : 
-                        'bg-slate-500/10 text-slate-600 border border-slate-500/20'
-                      }`}>
-                        {c.status}
-                      </span>
-                    </div>
-                ))}
-                {campaigns.filter(c => c.status !== 'Completada' && c.name.toLowerCase().includes(formData.id_campana.toLowerCase())).length === 0 && (
-                  <div className="px-4 py-3 text-sm text-slate-500">No hay coincidencias...</div>
-                )}
-              </div>
-            )}
-          </div>
+            <div className="relative" id="tour-pub-modal-assoc">
+             <label className="block text-sm font-medium text-slate-700 mb-2">Asociar a Campaña (Opcional)</label>
+             <input 
+               value={formData.id_campana}
+               onFocus={() => setIsDropdownOpen(true)}
+               onBlur={() => setTimeout(() => setIsDropdownOpen(false), 200)}
+               onChange={e => {
+                 setFormData({...formData, id_campana: e.target.value});
+                 setIsDropdownOpen(true);
+               }}
+               placeholder="Escribe para buscar o selecciona una..."
+               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:border-violet-500" 
+             />
+             {isDropdownOpen && (
+               <div className="absolute z-10 w-full mt-2 bg-white border border-slate-200 rounded-xl shadow-xl max-h-60 overflow-y-auto">
+                 {campaigns
+                   .filter(c => c.status !== 'Completada')
+                   .filter(c => c.name.toLowerCase().includes(formData.id_campana.toLowerCase()))
+                   .map(c => (
+                     <div 
+                       key={c.id} 
+                       onClick={() => {
+                         setFormData({...formData, id_campana: c.name});
+                         setIsDropdownOpen(false);
+                       }}
+                       className="px-4 py-3 cursor-pointer hover:bg-slate-50 flex items-center justify-between border-b border-slate-100 last:border-0"
+                     >
+                       <span className="font-medium text-slate-700">{c.name}</span>
+                       <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md ${
+                         c.status === 'Activa' ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20' : 
+                         c.status === 'Borrador' ? 'bg-amber-500/10 text-amber-600 border border-amber-500/20' : 
+                         'bg-slate-500/10 text-slate-600 border border-slate-500/20'
+                       }`}>
+                         {c.status}
+                       </span>
+                     </div>
+                 ))}
+                 {campaigns.filter(c => c.status !== 'Completada' && c.name.toLowerCase().includes(formData.id_campana.toLowerCase())).length === 0 && (
+                   <div className="px-4 py-3 text-sm text-slate-500">No hay coincidencias...</div>
+                 )}
+               </div>
+             )}
+           </div>
 
 
 
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Tema o Título (Para generar IA)</label>
-            <input 
-              type="text" 
-              value={formData.titulo}
-              onChange={e => setFormData({...formData, titulo: e.target.value})}
-              placeholder="Ej. Promoción de verano 50% de descuento..."
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:border-violet-500" />
-          </div>
+           <div id="tour-pub-modal-title">
+             <label className="block text-sm font-medium text-slate-700 mb-2">Tema o Título (Para generar IA)</label>
+             <input 
+               type="text" 
+               value={formData.titulo}
+               onChange={e => setFormData({...formData, titulo: e.target.value})}
+               placeholder="Ej. Promoción de verano 50% de descuento..."
+               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:border-violet-500" />
+           </div>
 
-          <div>
-            <div className="flex justify-between items-end mb-2">
-              <label className="block text-sm font-medium text-slate-700">Contenido / Copy</label>
-              <button 
-                onClick={handleGenerateAI}
-                disabled={isGeneratingAI}
-                className="flex items-center gap-1.5 text-xs font-bold text-violet-400 bg-violet-400/10 px-3 py-1.5 rounded-lg hover:bg-violet-400/20 transition-colors disabled:opacity-50">
-                <Sparkles className="w-3.5 h-3.5" />
-                {isGeneratingAI ? 'Generando...' : 'Generar con IA'}
-              </button>
-            </div>
-            <textarea 
-              rows={5} 
-              value={formData.contenido}
-              onChange={e => setFormData({...formData, contenido: e.target.value})}
-              placeholder="Escribe el texto de tu publicación aquí o usa la IA para generarlo..."
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:border-violet-500 resize-none"></textarea>
-          </div>
+           <div id="tour-pub-modal-copy">
+             <div className="flex justify-between items-end mb-2">
+               <label className="block text-sm font-medium text-slate-700">Contenido / Copy</label>
+               <button 
+                 onClick={handleGenerateAI}
+                 disabled={isGeneratingAI}
+                 className="flex items-center gap-1.5 text-xs font-bold text-violet-400 bg-violet-400/10 px-3 py-1.5 rounded-lg hover:bg-violet-400/20 transition-colors disabled:opacity-50">
+                 <Sparkles className="w-3.5 h-3.5" />
+                 {isGeneratingAI ? 'Generando...' : 'Generar con IA'}
+               </button>
+             </div>
+             <textarea 
+               rows={5} 
+               value={formData.contenido}
+               onChange={e => setFormData({...formData, contenido: e.target.value})}
+               placeholder="Escribe el texto de tu publicación aquí o usa la IA para generarlo..."
+               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:border-violet-500 resize-none"></textarea>
+           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Red Social *</label>
-            <select 
-              value={formData.id_red}
-              onChange={e => setFormData({...formData, id_red: e.target.value})}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:border-violet-500"
-              required
-            >
-              <option value="">Seleccionar Red Social...</option>
-              {redes.map(r => (
-                <option key={r.id_red} value={r.id_red}>{r.nombre_red}</option>
-              ))}
-            </select>
-          </div>
+           <div id="tour-pub-modal-social">
+             <label className="block text-sm font-medium text-slate-700 mb-2">Red Social *</label>
+             <select 
+               value={formData.id_red}
+               onChange={e => setFormData({...formData, id_red: e.target.value})}
+               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:border-violet-500"
+               required
+             >
+               <option value="">Seleccionar Red Social...</option>
+               {redes.map(r => (
+                 <option key={r.id_red} value={r.id_red}>{r.nombre_red}</option>
+               ))}
+             </select>
+           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Fecha de Publicación</label>
-              <input 
-                type="date" 
-                min={getLocalDateString()}
-                value={formData.fecha_publicacion}
-                onChange={e => {
-                  setFormData({...formData, fecha_publicacion: e.target.value});
-                  setIsDateTimeModified(true);
-                }}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:border-violet-500 [color-scheme:dark]" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Hora</label>
-              <input 
-                type="time" 
-                value={formData.hora_publicacion}
-                onChange={e => {
-                  setFormData({...formData, hora_publicacion: e.target.value});
-                  setIsDateTimeModified(true);
-                }}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:border-violet-500 [color-scheme:dark]" />
-            </div>
-          </div>
+           <div className="grid grid-cols-2 gap-4" id="tour-pub-modal-schedule">
+             <div>
+               <label className="block text-sm font-medium text-slate-700 mb-2">Fecha de Publicación</label>
+               <input 
+                 type="date" 
+                 min={getLocalDateString()}
+                 value={formData.fecha_publicacion}
+                 onChange={e => {
+                   setFormData({...formData, fecha_publicacion: e.target.value});
+                   setIsDateTimeModified(true);
+                 }}
+                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:border-violet-500 [color-scheme:dark]" />
+             </div>
+             <div>
+               <label className="block text-sm font-medium text-slate-700 mb-2">Hora</label>
+               <input 
+                 type="time" 
+                 value={formData.hora_publicacion}
+                 onChange={e => {
+                   setFormData({...formData, hora_publicacion: e.target.value});
+                   setIsDateTimeModified(true);
+                 }}
+                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:border-violet-500 [color-scheme:dark]" />
+             </div>
+           </div>
 
-          <div>
+          <div id="tour-pub-modal-media">
             <div className="flex items-center gap-4 mb-2">
               <button 
                 type="button"
@@ -791,18 +788,6 @@ El prompt debe ser solo el texto en ingles, descriptivo, visual, sin explicacion
                   <img src={formData.imagen_url} alt="Preview" className="max-h-32 rounded-lg object-contain mb-3" />
                   <div className="flex gap-2 mb-3">
                     <p className="text-sm font-medium text-violet-600">Haz clic para cambiar la imagen</p>
-                    {formData.imagen_url.startsWith('http') && (
-                      <a 
-                        href={formData.imagen_url} 
-                        download="generada.jpg" 
-                        target="_blank" 
-                        rel="noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="text-sm font-medium text-pink-600 hover:underline flex items-center gap-1"
-                      >
-                        (Descargar a PC)
-                      </a>
-                    )}
                   </div>
                 </div>
               ) : (
@@ -829,9 +814,13 @@ El prompt debe ser solo el texto en ingles, descriptivo, visual, sin explicacion
               />
             </label>
           </div>
-
-          <div className="pt-6 border-t border-slate-200 flex justify-end gap-3">
-             <button onClick={() => { setIsCreating(false); setEditingId(null); }} className="px-6 py-2.5 rounded-xl font-medium text-slate-500 hover:text-slate-900 transition-colors">Cancelar</button>
+ 
+          <div className="pt-6 border-t border-slate-200 flex justify-end gap-3" id="tour-pub-modal-submit">
+             <button onClick={() => { 
+              setIsCreating(false); 
+              setEditingId(null); 
+              LearningDispatcher.dispatch('UPDATE_UI_STATE', { currentModal: null });
+            }} className="px-6 py-2.5 rounded-xl font-medium text-slate-500 hover:text-slate-900 transition-colors">Cancelar</button>
              <button 
                onClick={handleSave}
                disabled={isSaving}
@@ -847,7 +836,6 @@ El prompt debe ser solo el texto en ingles, descriptivo, visual, sin explicacion
             </div>
           </div>
         </div>
-      </div>
       {alertMsg && (
         <div className="fixed inset-0 z-[1010] flex items-center justify-center bg-black/70 p-4 pl-0 sm:pl-64">
           <div className="w-full max-w-sm bg-white p-6 rounded-2xl shadow-[0_0_40px_rgba(0,0,0,0.4)] relative animate-bounce-down flex flex-col items-center text-center">
@@ -885,14 +873,15 @@ El prompt debe ser solo el texto en ingles, descriptivo, visual, sin explicacion
       )}
 
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-4">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight mb-2">Historial de Publicaciones</h2>
+        <div id="tour-pub-header">
+          <h2 id="tour-pub-title" className="text-3xl font-bold tracking-tight mb-2">Historial de Publicaciones</h2>
           <p className="text-slate-500">Revisa todas tus publicaciones pasadas y futuras.</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
-          <div className="relative flex-1 sm:w-64">
+          <div id="tour-pub-filter" className="relative flex-1 sm:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input 
+              id="tour-pub-search"
               type="text" 
               placeholder="Buscar título o red..." 
               value={searchTerm}
@@ -917,7 +906,11 @@ El prompt debe ser solo el texto en ingles, descriptivo, visual, sin explicacion
             setIsDateTimeModified(false);
             setEditingId(null);
             setIsCreating(true);
+            // Dispatch dynamic UI change to update state
+            LearningDispatcher.dispatch('UPDATE_UI_STATE', { currentModal: 'newPublication' });
+            LearningDispatcher.dispatch('TRIGGER_ACTION', 'click_new_publication');
           }}
+          id="tour-pub-create-btn"
           className="flex items-center gap-2 px-5 py-2.5 bg-violet-600 hover:bg-violet-500 text-white rounded-xl font-medium transition-all shadow-[0_0_20px_rgba(124,58,237,0.3)] hover:shadow-[0_0_25px_rgba(124,58,237,0.5)]"
         >
           <PlusCircle className="w-4 h-4" />
@@ -926,7 +919,7 @@ El prompt debe ser solo el texto en ingles, descriptivo, visual, sin explicacion
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div id="tour-pub-grid" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {loading ? (
              <div className="col-span-full py-20 text-center text-slate-500">Cargando publicaciones...</div>
           ) : publicaciones.length === 0 ? (
@@ -946,9 +939,10 @@ El prompt debe ser solo el texto en ingles, descriptivo, visual, sin explicacion
                     ) : (
                        <ImageIcon className="w-10 h-10 text-[#2a2a4a]" />
                     )}
-                    <div className="absolute top-3 left-3 flex gap-2">
+                    <div id="tour-pub-actions" className="absolute top-3 left-3 flex gap-2">
                       {(pub.estado === 'Programada' || pub.estado === 'Borrador') && (
                         <button 
+                          id="tour-pub-edit-btn"
                           onClick={() => handleEditClick(pub, camp)}
                           className="bg-white/90 backdrop-blur-md px-2 py-1.5 rounded-md text-slate-600 hover:text-violet-600 transition-colors shadow-sm flex items-center gap-1 group/edit"
                           title="Editar publicación"
@@ -958,6 +952,7 @@ El prompt debe ser solo el texto en ingles, descriptivo, visual, sin explicacion
                         </button>
                       )}
                       <button 
+                        id="tour-pub-replicate-btn"
                         onClick={() => { setReplicateTargetPub(pub); setSelectedRedId(''); }}
                         className="bg-white/90 backdrop-blur-md px-2 py-1.5 rounded-md text-slate-600 hover:text-violet-600 transition-colors shadow-sm flex items-center gap-1 group/replicate"
                         title="Subir a otra red social"

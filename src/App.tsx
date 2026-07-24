@@ -17,18 +17,16 @@ import { LeadsModule } from './components/LeadsModule';
 import { PagosModule } from './components/PagosModule';
 import { AjustesModule } from './components/AjustesModule';
 import { CampanasModule } from './components/CampanasModule';
-import { ChatbotWidget } from './components/ChatbotWidget';
-import { DataExplorerModule } from './components/data-explorer/DataExplorerModule';
-import { CentroReportes } from './components/reportes/CentroReportes';
-import { AdminCampanasModule } from './components/admin/AdminCampanasModule';
-import { AdminDashboardModule } from './components/admin/AdminDashboardModule';
-import { ClientesModule } from './components/admin/ClientesModule';
-
 import { LearningProvider } from './learning/context/LearningContext';
 import LearningTour from './learning/components/tour/LearningTour';
 import LearningFAB from './learning/components/LearningFAB';
 import LearningChat from './learning/components/LearningChat';
 import { LearningDispatcher } from './learning/services/LearningDispatcher';
+import { DataExplorerModule } from './components/data-explorer/DataExplorerModule';
+import { CentroReportes } from './components/reportes/CentroReportes';
+import { AdminCampanasModule } from './components/admin/AdminCampanasModule';
+import { AdminDashboardModule } from './components/admin/AdminDashboardModule';
+import { ClientesModule } from './components/admin/ClientesModule';
 
 import { UserProvider } from './context/UserContext';
 import type { Campaign, Metric } from './types';
@@ -262,7 +260,7 @@ function AppLayout({
         campaignToEdit={editingCampaign}
       />
       <AIModal isOpen={isAIModalOpen} onClose={() => setIsAIModalOpen(false)} />
-      <ChatbotWidget />
+      
     </div>
   );
 }
@@ -346,6 +344,7 @@ export default function App() {
     try {
       let combinedData: any[] = [];
       await supabase.auth.getSession();
+      
       // Determine if user is admin based on internal role mapping logic (or just rely on RLS/limit)
       // To prevent massive egress for admins, we limit the global app state to 150 recent campaigns.
       // The AdminCampanasModule handles its own deep pagination.
