@@ -14,11 +14,20 @@ export interface OpenWASession {
 
 // Obtiene la configuración de OpenWA (prioriza localStorage, luego usa variables de entorno)
 export function getOpenWASettings() {
-  const localUrl = localStorage.getItem('openwa_api_url');
-  const localKey = localStorage.getItem('openwa_api_key');
-  const localSession = localStorage.getItem('openwa_session_name') || 'marketing-bot';
+  let localUrl: string | null = null;
+  let localKey: string | null = null;
+  let localSession = 'marketing-bot';
+
+  try {
+    localUrl = localStorage.getItem('openwa_api_url');
+    localKey = localStorage.getItem('openwa_api_key');
+    localSession = localStorage.getItem('openwa_session_name') || 'marketing-bot';
+  } catch (e) {
+    console.warn('localStorage is not available for OpenWA settings');
+  }
+
   let apiUrl = localUrl || import.meta.env.VITE_OPENWA_API_URL || 'http://localhost:2785/api';
-  
+
   // CORS Bypass genérico: Si intenta conectar a cualquier puerto localhost, usar proxy
   if (apiUrl.includes('localhost') || apiUrl.includes('127.0.0.1')) {
     apiUrl = '/proxy-openwa/api';
@@ -26,15 +35,19 @@ export function getOpenWASettings() {
 
   return {
     apiUrl,
-    apiKey: localKey || import.meta.env.VITE_OPENWA_API_KEY || 'owa_k1_2f95a1fb9205aed468bb424e3e461eece693a50a775a45cec23dade984ea733b',
+    apiKey: localKey || import.meta.env.VITE_OPENWA_API_KEY || 'owa_k1_98f0a84c3b21bd0ec89b7b8d78a2182a90dc355b4d0ef5aab13b9ad3a1c931a3',
     sessionName: localSession,
   };
 }
 
 export function saveOpenWASettings(url: string, key: string, sessionName: string) {
-  localStorage.setItem('openwa_api_url', url.trim());
-  localStorage.setItem('openwa_api_key', key.trim());
-  localStorage.setItem('openwa_session_name', sessionName.trim());
+  try {
+    localStorage.setItem('openwa_api_url', url.trim());
+    localStorage.setItem('openwa_api_key', key.trim());
+    localStorage.setItem('openwa_session_name', sessionName.trim());
+  } catch (e) {
+    console.warn('localStorage is not available to save OpenWA settings');
+  }
 }
 
 // Helper para cabeceras
@@ -51,11 +64,7 @@ function getHeaders(apiKey: string) {
 // Helper para capturar errores de proxy/servidor apagado
 async function handleOpenWAError(res: Response) {
   if (res.status === 502 || res.status === 503 || res.status === 504) {
-    const errorMsg = "El servidor de WhatsApp (OpenWA) está apagado o no responde. Por favor, arranca tu servidor local de OpenWA en tu computadora para continuar.";
-    // Despachar evento global para que la UI lo atrape y muestre el popup bouncy
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('openwa-error', { detail: errorMsg }));
-    }
+    const errorMsg = "El servidor de WhatsApp (OpenWA) está apagado o no responde.";
     throw new Error(errorMsg);
   }
   const err = await res.json().catch(() => ({}));
@@ -71,12 +80,14 @@ export async function getOpenWASessions(): Promise<OpenWASession[]> {
       headers: getHeaders(apiKey),
     });
     if (!res.ok) {
+      if (res.status === 502 || res.status === 503 || res.status === 504) {
+        return []; // Retornar vacío de forma pacífica si está apagado
+      }
       await handleOpenWAError(res);
     }
     return await res.json();
   } catch (error: any) {
-    console.error('Error fetching OpenWA sessions:', error);
-    throw new Error(error.message || 'No se pudo conectar con el servidor de OpenWA.');
+    return []; // Retornar vacío si no hay conexión en absoluto
   }
 }
 
@@ -263,7 +274,7 @@ export async function getOpenWAContacts(sessionNameOverride?: string): Promise<O
       headers: getHeaders(apiKey),
     });
     if (!res.ok) return [];
-    
+
     const data = await res.json();
     const filteredData = Array.isArray(data) ? data.filter((c: any) => !(c.id || '').endsWith('@lid')) : [];
     cachedContacts = filteredData;
@@ -336,7 +347,7 @@ let lastChatsFetch = 0;
 export async function getOpenWAChats(sessionNameOverride?: string, messageLimit: number = 50): Promise<ChatSummary[]> {
   const isFullLoad = messageLimit > 50;
   const now = Date.now();
-  
+
   // Usar caché si es una carga completa (búsqueda) y hace menos de 2 minutos se cargó
   if (isFullLoad && cachedChats && (now - lastChatsFetch < 120000)) {
     return cachedChats;
@@ -352,7 +363,7 @@ export async function getOpenWAChats(sessionNameOverride?: string, messageLimit:
       method: 'GET',
       headers: getHeaders(apiKey),
     });
-    
+
     // 2. Llamar al endpoint /messages para obtener la verdadera actividad reciente (workaround para Baileys)
     const msgsRes = await fetch(`${apiUrl}/sessions/${session.id}/messages?limit=${messageLimit}`, {
       method: 'GET',
@@ -370,7 +381,7 @@ export async function getOpenWAChats(sessionNameOverride?: string, messageLimit:
       if (originalId.endsWith('@lid')) continue;
       // Normalizamos el ID limpiando @c.us o @s.whatsapp.net para poder cruzarlo
       const cleanId = originalId.split('@')[0].split(':')[0];
-      
+
       chatMap.set(cleanId, {
         id: originalId,
         name: chat.nombre || chat.id,
@@ -385,10 +396,10 @@ export async function getOpenWAChats(sessionNameOverride?: string, messageLimit:
     for (const msg of messages) {
       const chatId = msg.chatId;
       if (!chatId || chatId === 'status@broadcast' || chatId.includes('broadcast') || chatId.endsWith('@lid')) continue;
-      
+
       const cleanId = chatId.split('@')[0].split(':')[0];
       const ts = msg.timestamp ?? 0;
-      
+
       const existing = chatMap.get(cleanId);
       if (existing) {
         if (ts > existing.timestamp) {
@@ -437,14 +448,14 @@ export function formatWhatsAppJID(phoneNumber: string): string {
 
 // 5. Enviar mensaje de texto
 export async function sendWhatsAppTextMessage(
-  phoneNumber: string, 
+  phoneNumber: string,
   text: string,
   sessionNameOverride?: string
 ): Promise<{ messageId: string; timestamp: number }> {
   const { apiUrl, apiKey, sessionName: defaultSessionName } = getOpenWASettings();
   const sessionName = sessionNameOverride || defaultSessionName;
   const chatId = formatWhatsAppJID(phoneNumber);
-  
+
   if (!chatId) {
     throw new Error('El número de teléfono proporcionado no es válido.');
   }
@@ -476,7 +487,7 @@ export async function sendWhatsAppTextMessage(
 
 // 6. Enviar archivo/imagen con caption
 export async function sendWhatsAppImageMessage(
-  phoneNumber: string, 
+  phoneNumber: string,
   imageUrlOrBase64: string,
   caption?: string,
   sessionNameOverride?: string
@@ -484,7 +495,7 @@ export async function sendWhatsAppImageMessage(
   const { apiUrl, apiKey, sessionName: defaultSessionName } = getOpenWASettings();
   const sessionName = sessionNameOverride || defaultSessionName;
   const chatId = formatWhatsAppJID(phoneNumber);
-  
+
   if (!chatId) {
     throw new Error('El número de teléfono proporcionado no es válido.');
   }
@@ -495,20 +506,20 @@ export async function sendWhatsAppImageMessage(
 
 
     const payload: any = { chatId, caption: caption?.trim() };
-    
+
     // Si es un base64 o Data URL
     if (imageUrlOrBase64.startsWith('data:') || !imageUrlOrBase64.startsWith('http')) {
       const parts = imageUrlOrBase64.split(',');
       const base64Data = parts[1] || parts[0];
       const match = imageUrlOrBase64.match(/data:([^;]+);/);
       let mimetype = match ? match[1] : 'image/jpeg';
-      
+
       // Si el fetch del blob devolvió algo que no es imagen (ej. text/html por un error 404/CORS)
       // forzamos un mimetype de imagen para evitar que WhatsApp Web crashee con "Error: t".
       if (!mimetype.startsWith('image/')) {
         mimetype = 'image/jpeg';
       }
-      
+
       payload.base64 = base64Data;
       payload.mimetype = mimetype;
       const ext = mimetype.split('/')[1] || 'jpeg';

@@ -1,9 +1,17 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
-import {
-  Building2, Search, CreditCard, 
-  Activity, Zap, Pause, ExternalLink,
-  ChevronRight, LogIn, X, Settings
+import { 
+  Building2, 
+  Search, 
+  CreditCard, 
+  Activity, 
+  Zap, 
+  ExternalLink,
+  ChevronRight, 
+  LogIn, 
+  X, 
+  Settings,
+  Pause
 } from 'lucide-react';
 
 export function ClientesModule() {

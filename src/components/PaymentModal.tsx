@@ -412,7 +412,7 @@ export function PaymentModal({ isOpen, onClose, campaign, session, onPagado }: P
   const labelCls = 'mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-500'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" id="tour-payment-modal">
       <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl overflow-hidden">
 
         {/* Header */}
@@ -442,7 +442,7 @@ export function PaymentModal({ isOpen, onClose, campaign, session, onPagado }: P
 
           {/* ── Estado: éxito ─────────────────────────────────────────── */}
           {estado === 'success' && (
-            <div className="flex flex-col items-center py-8 gap-3">
+            <div className="flex flex-col items-center py-8 gap-3" id="tour-pay-success">
               <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center">
                 <CheckCircle2 className="w-9 h-9 text-emerald-600" />
               </div>
@@ -450,7 +450,7 @@ export function PaymentModal({ isOpen, onClose, campaign, session, onPagado }: P
               <p className="text-xs text-slate-500 text-center">
                 La campaña fue activada y el comprobante PDF se descargó automáticamente.
               </p>
-              <div className="bg-violet-50 border border-violet-200 rounded-xl px-4 py-2 text-center">
+              <div className="bg-violet-50 border border-violet-200 rounded-xl px-4 py-2 text-center" id="tour-pay-pdf">
                 <p className="text-[10px] font-bold text-slate-400 uppercase">e-NCF Generado</p>
                 <p className="text-sm font-black text-violet-700 font-mono">{ncfFinal}</p>
               </div>
@@ -494,7 +494,7 @@ export function PaymentModal({ isOpen, onClose, campaign, session, onPagado }: P
           {estado === 'idle' && (
             <>
               {/* Monto */}
-              <div>
+              <div id="tour-pay-amount">
                 <label className={labelCls}>Presupuesto de campaña (USD)</label>
                 <input
                   type="number"
@@ -507,7 +507,7 @@ export function PaymentModal({ isOpen, onClose, campaign, session, onPagado }: P
 
               {/* RNC / Razón Social */}
               <div className="grid grid-cols-2 gap-3">
-                <div>
+                <div id="tour-pay-rnc">
                   <label className={labelCls}>RNC / Cédula</label>
                   <input
                     type="text"
@@ -517,7 +517,7 @@ export function PaymentModal({ isOpen, onClose, campaign, session, onPagado }: P
                     className={inputCls}
                   />
                 </div>
-                <div>
+                <div id="tour-pay-name">
                   <label className={labelCls}>Razón Social</label>
                   <input
                     type="text"
@@ -556,7 +556,7 @@ export function PaymentModal({ isOpen, onClose, campaign, session, onPagado }: P
 
               {/* Botón PayPal */}
               {monto > 0 && (
-                <div className="pt-1">
+                <div className="pt-1" id="tour-pay-paypal">
                   <PayPalButtons
                     style={{ layout: 'vertical', shape: 'rect', color: 'gold' }}
                     key={`paypal-${campaign.id}-${total.toFixed(2)}`}
