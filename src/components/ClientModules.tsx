@@ -1,14 +1,14 @@
 // src/components/ClientModules.tsx (Parcial: Restauración de Perfil con Tour ID interactivo)
 import { useState, useEffect } from 'react';
-import { CreditCard, Download, ExternalLink, BarChart3, Users, MousePointerClick, User, Shield, CheckCircle2, Save, Loader2, Search, Play, Square, RefreshCw, MessageSquare, AlertCircle, MessageSquare as MessageSquareIcon, Play as PlayIcon, Square as SquareIcon, RefreshCw as RefreshCwIcon, Save as SaveIcon } from 'lucide-react';
+import { CreditCard, Download, ExternalLink, BarChart3, Users, MousePointerClick, User, Loader2, Search, Play, Square, RefreshCw, MessageSquare, AlertCircle, Save as SaveIcon } from 'lucide-react';
 import { useUser } from '../context/UserContext';
 import { supabase } from '../supabaseClient';
 import type { Campaign } from '../types';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { generateReceiptHTML } from './PagosModule';
 import { getOpenWASessions, createOpenWASession, startOpenWASession, stopOpenWASession, getOpenWAQRCode } from '../lib/whatsapp';
 import { getRecentMedia, getMediaInsights } from '../utils/instagramAnalytics';
-import { Heart, MessageCircle, Share2, Camera, ChevronLeft, ChevronRight, ArrowLeftRight } from 'lucide-react';
+import { Camera, ChevronLeft, ChevronRight, ArrowLeftRight } from 'lucide-react';
 import { LearningDispatcher } from '../learning/services/LearningDispatcher';
 
 // ==========================================
@@ -19,7 +19,7 @@ export const ClientPagosModule = ({ campaigns, onPagar }: { campaigns: Campaign[
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize] = useState(10);
   const [isFlipped, setIsFlipped] = useState(false);
   const { profile } = useUser();
 
@@ -321,7 +321,7 @@ export const ClientPagosModule = ({ campaigns, onPagar }: { campaigns: Campaign[
 // ==========================================
 export const ClientEstadisticasModule = ({ campaigns }: { campaigns: Campaign[] }) => {
   const [instagramPosts, setInstagramPosts] = useState<any[]>([]);
-  const [loadingInsta, setLoadingInsta] = useState(false);
+  const [, setLoadingInsta] = useState(false);
   const { profile } = useUser();
 
   const totalLeads = campaigns.reduce((sum, c) => sum + (c.leads || 0), 0);
@@ -335,13 +335,14 @@ export const ClientEstadisticasModule = ({ campaigns }: { campaigns: Campaign[] 
       try {
         const { data: clientData } = await supabase
           .from('clientes_portal')
-          .select('instagram_access_token')
+          .select('instagram_access_token, instagram_account_id')
           .eq('auth_user_id', profile.id_usuario)
           .maybeSingle();
 
         const token = clientData?.instagram_access_token;
-        if (token) {
-          const media = await getRecentMedia(token);
+        const accountId = clientData?.instagram_account_id;
+        if (token && accountId) {
+          const media = await getRecentMedia(accountId, token);
           const detailedMedia = await Promise.all(media.map(async (m: any) => {
             try {
               const insights = await getMediaInsights(m.id, token);
@@ -361,15 +362,6 @@ export const ClientEstadisticasModule = ({ campaigns }: { campaigns: Campaign[] 
     fetchInstagram();
   }, [profile?.id_usuario]);
 
-  const mockChartData = [
-    { name: 'Lun', alcance: 1200 },
-    { name: 'Mar', alcance: 1900 },
-    { name: 'Mié', alcance: 3000 },
-    { name: 'Jue', alcance: 5000 },
-    { name: 'Vie', alcance: 4800 },
-    { name: 'Sáb', alcance: 6000 },
-    { name: 'Dom', alcance: 7500 },
-  ];
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">

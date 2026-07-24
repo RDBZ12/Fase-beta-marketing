@@ -38,7 +38,7 @@ function calcPosition(el: Element | null, preferredPlacement: string): Pos {
   const spaceRight = vw - r.right;
   const spaceLeft = r.left;
   const spaceBottom = vh - r.bottom;
-  const spaceTop = r.top;
+
 
   let placement = preferredPlacement;
   if (placement === 'auto') {
