@@ -2,7 +2,7 @@
 // Contexto Centralizado del Motor de Aprendizaje - Marketdev
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { flowSteps } from '../data/flows';
-import type { StepDef, ExpectedStateDef } from '../data/flows';
+import type { StepDef } from '../data/flows';
 import { LearningDispatcher } from '../services/LearningDispatcher';
 import type { LearningAction } from '../services/LearningDispatcher';
 
@@ -117,8 +117,6 @@ export const LearningProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   // ContextDetector: Corrección de inicio unificada (solo Nivel 1 y Nivel 2, sin tocar el DOM)
   const detectStartStep = useCallback((flowId: string): number => {
-    const steps = flowSteps[flowId] || [];
-
     // Nivel 1: Determinar según UIState actual
     if (flowId === 'CREATE_CAMPAIGN') {
       if (uiState.currentModal === 'campaignWizard') {
