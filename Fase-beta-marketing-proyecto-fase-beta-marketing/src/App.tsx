@@ -751,6 +751,9 @@ export default function App() {
               onPagado={fetchCampaigns}
             />
             {renderValidationModal()}
+            <LearningTour />
+            <LearningFAB />
+            <LearningChat />
           </>
         );
       })()}
