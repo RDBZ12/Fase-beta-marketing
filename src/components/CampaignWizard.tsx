@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrainCircuit, CheckCircle2, Edit3, ArrowLeft, X, Download, AlertCircle } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { generarPromptImagen, generarUrlImagen } from '../utils/promptUtils';
 
+
+import { LearningDispatcher } from '../learning/services/LearningDispatcher';
 
 interface CampaignWizardProps {
   onCancel: () => void;
@@ -18,7 +20,16 @@ const getLocalDateString = () => {
 };
 
 export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onCancel, onFinish }) => {
+  // Cuando el wizard se monta, registrar el modal activo en el estado de la interfaz
+  useEffect(() => {
+    LearningDispatcher.dispatch('UPDATE_UI_STATE', { 
+      currentModal: 'campaignWizard',
+      currentWizardStep: 1
+    });
+  }, []);
+
   const [alertMsg, setAlertMsg] = useState('');
+  const [, setErrorMsg] = useState('');
   const [step, setStep] = useState(1);
   const [, setIsGenerating] = useState(false);
   const [formData, setFormData] = useState({
@@ -32,6 +43,22 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onCancel, onFini
     scheduledTime: '',
     socialNetwork: 'instagram'
   });
+
+  // Notificar cambios de inputs del formulario al LearningContext
+  const updateWizardFormState = (updates: Partial<typeof formData>) => {
+    const nextFormData = { ...formData, ...updates };
+    setFormData(nextFormData);
+    LearningDispatcher.dispatch('UPDATE_UI_STATE', {
+      formValues: nextFormData
+    });
+  };
+
+  const handleStepChange = (nextStepVal: number) => {
+    setStep(nextStepVal);
+    LearningDispatcher.dispatch('UPDATE_UI_STATE', {
+      currentWizardStep: nextStepVal
+    });
+  };
 
   const [aiResults, setAiResults] = useState<any>(null);
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
@@ -125,8 +152,10 @@ Reglas:
       return;
     }
     
+    setErrorMsg('');
     setIsGenerating(true);
-    setStep(2);
+    handleStepChange(2);
+    LearningDispatcher.dispatch('TRIGGER_ACTION', 'click_ai_generate');
     
     try {
       const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
@@ -200,11 +229,11 @@ Genera la estrategia de marketing completa y estructurada como JSON. Asegúrate 
       const parsed = JSON.parse(cleanJson);
       
       setAiResults(parsed);
-      setStep(3);
+      handleStepChange(3);
     } catch (err) {
       console.error(err);
-      console.error(`Error: ${err instanceof Error ? err.message : 'Desconocido'}`);
-      setStep(1);
+      setErrorMsg(`Error: ${err instanceof Error ? err.message : 'Desconocido'}`);
+      handleStepChange(1);
     } finally {
       setIsGenerating(false);
     }
@@ -367,21 +396,21 @@ Genera la estrategia de marketing completa y estructurada como JSON. Asegúrate 
           <div className="relative z-10 space-y-6">
             <h3 className="text-xl font-bold mb-4 text-slate-900">Detalles del Negocio</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
+              <div className="space-y-2" id="tour-cw-name">
                 <label className="text-sm font-medium text-slate-700">Nombre del Negocio<span className="text-red-500 ml-1">*</span></label>
                 <input 
                   type="text" 
                   value={formData.businessName}
-                  onChange={e => setFormData({...formData, businessName: e.target.value})}
+                  onChange={e => updateWizardFormState({ businessName: e.target.value })}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500" placeholder="Ej. Nova Innovations" />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2" id="tour-cw-budget">
                 <label className="text-sm font-medium text-slate-700">Presupuesto ($USD)<span className="text-red-500 ml-1">*</span></label>
                 <input 
                   type="text"
                   pattern="[0-9]*"
                   value={formData.budget}
-                  onChange={e => setFormData({...formData, budget: e.target.value.replace(/\D/g, '')})}
+                  onChange={e => updateWizardFormState({ budget: e.target.value.replace(/\D/g, '') })}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500" placeholder="1500" />
                 {formData.budget && (
                   <p className="text-[11px] text-slate-500 font-medium px-1">
@@ -391,21 +420,21 @@ Genera la estrategia de marketing completa y estructurada como JSON. Asegúrate 
               </div>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2" id="tour-cw-description">
               <label className="text-sm font-medium text-slate-700">Descripción del Negocio<span className="text-red-500 ml-1">*</span></label>
               <textarea 
                 rows={3} 
                 value={formData.description}
-                onChange={e => setFormData({...formData, description: e.target.value})}
+                onChange={e => updateWizardFormState({ description: e.target.value })}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 resize-none" placeholder="Describe brevemente a qué te dedicas y qué valor aportas..."></textarea>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
+              <div className="space-y-2" id="tour-cw-audience">
                 <label className="text-sm font-medium text-slate-700">Público Objetivo<span className="text-red-500 ml-1">*</span></label>
                 <select 
                   value={formData.audience}
-                  onChange={e => setFormData({...formData, audience: e.target.value})}
+                  onChange={e => updateWizardFormState({ audience: e.target.value })}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 appearance-none">
                   <option value="">Selecciona tu audiencia ideal</option>
                   <option value="profesionales">Profesionales 25-45 años</option>
@@ -413,11 +442,11 @@ Genera la estrategia de marketing completa y estructurada como JSON. Asegúrate 
                   <option value="empresas">B2B (Otras Empresas)</option>
                 </select>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2" id="tour-cw-objective">
                 <label className="text-sm font-medium text-slate-700">Objetivo Principal<span className="text-red-500 ml-1">*</span></label>
                 <select 
                   value={formData.objective}
-                  onChange={e => setFormData({...formData, objective: e.target.value})}
+                  onChange={e => updateWizardFormState({ objective: e.target.value })}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 appearance-none">
                   <option value="">¿Qué deseas lograr?</option>
                   <option value="awareness">Reconocimiento de Marca</option>
@@ -427,14 +456,14 @@ Genera la estrategia de marketing completa y estructurada como JSON. Asegúrate 
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6" id="tour-cw-dates">
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-700">Fecha de Inicio<span className="text-red-500 ml-1">*</span></label>
                 <input 
                   type="date" 
                   value={formData.startDate}
                   min={getLocalDateString()}
-                  onChange={e => setFormData({...formData, startDate: e.target.value})}
+                  onChange={e => updateWizardFormState({ startDate: e.target.value })}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
               </div>
               <div className="space-y-2">
@@ -443,17 +472,17 @@ Genera la estrategia de marketing completa y estructurada como JSON. Asegúrate 
                   type="date" 
                   value={formData.endDate}
                   min={formData.startDate || getLocalDateString()}
-                  onChange={e => setFormData({...formData, endDate: e.target.value})}
+                  onChange={e => updateWizardFormState({ endDate: e.target.value })}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
+              <div className="space-y-2" id="tour-cw-social">
                 <label className="text-sm font-medium text-slate-700">Red Social (Destino)</label>
                 <select 
                   value={formData.socialNetwork}
-                  onChange={e => setFormData({...formData, socialNetwork: e.target.value})}
+                  onChange={e => updateWizardFormState({ socialNetwork: e.target.value })}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 appearance-none">
                   <option value="instagram">Instagram</option>
                   <option value="facebook">Facebook</option>
@@ -462,17 +491,17 @@ Genera la estrategia de marketing completa y estructurada como JSON. Asegúrate 
                   <option value="telegram">Telegram</option>
                 </select>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2" id="tour-cw-time">
                 <label className="text-sm font-medium text-slate-700">Hora Programada (Opcional)</label>
                 <input 
                   type="time" 
                   value={formData.scheduledTime}
-                  onChange={e => setFormData({...formData, scheduledTime: e.target.value})}
+                  onChange={e => updateWizardFormState({ scheduledTime: e.target.value })}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
               </div>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2" id="tour-cw-images">
               <label className="text-sm font-medium text-slate-700">Imágenes de la Campaña</label>
               <div className="flex flex-col gap-4">
                 <div className="flex flex-wrap items-center gap-3">
@@ -526,7 +555,11 @@ Genera la estrategia de marketing completa y estructurada como JSON. Asegúrate 
             <div className="pt-6 flex justify-end gap-4 border-t border-slate-200 mt-6">
               <button onClick={onCancel} className="px-6 py-3 rounded-xl font-medium text-slate-500 hover:text-slate-900 transition-colors">Cancelar</button>
               <button 
-                onClick={handleGenerateAI}
+                id="tour-cw-ai-generation"
+                onClick={() => {
+                  handleGenerateAI();
+                  window.dispatchEvent(new CustomEvent('tutor_action_completed', { detail: 'click_ai_generate' }));
+                }}
                 className="flex items-center gap-2 px-8 py-3 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white rounded-xl font-bold transition-all shadow-[0_0_20px_rgba(124,58,237,0.4)] hover:shadow-[0_0_30px_rgba(124,58,237,0.6)]"
               >
                 <BrainCircuit className="w-5 h-5" />
@@ -560,7 +593,7 @@ Genera la estrategia de marketing completa y estructurada como JSON. Asegúrate 
             Resultados de la IA
           </h3>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6" id="tour-cw-review">
             <div className="space-y-6">
               {/* Estrategia */}
               <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 relative group">
@@ -630,12 +663,17 @@ Genera la estrategia de marketing completa y estructurada como JSON. Asegúrate 
           </div>
 
           <div className="pt-6 flex justify-between items-center border-t border-slate-200 mt-8">
-            <button onClick={() => setStep(1)} className="flex items-center gap-2 px-6 py-3 rounded-xl font-medium text-slate-500 hover:text-slate-900 transition-colors">
+            <button onClick={() => handleStepChange(1)} className="flex items-center gap-2 px-6 py-3 rounded-xl font-medium text-slate-500 hover:text-slate-900 transition-colors">
               <ArrowLeft className="w-4 h-4" />
               Editar Formulario
             </button>
             <button 
-              onClick={handleApprove}
+              id="tour-cw-approve"
+              onClick={() => {
+                handleApprove();
+                handleStepChange(4);
+                LearningDispatcher.dispatch('TRIGGER_ACTION', 'click_approve_campaign');
+              }}
               className="flex items-center gap-2 px-8 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:shadow-[0_0_30px_rgba(16,185,129,0.5)]"
             >
               <CheckCircle2 className="w-5 h-5" />
@@ -655,7 +693,14 @@ Genera la estrategia de marketing completa y estructurada como JSON. Asegúrate 
             </p>
             
             <button 
-              onClick={onFinish}
+              onClick={() => {
+                onFinish();
+                LearningDispatcher.dispatch('UPDATE_UI_STATE', { 
+                  currentModal: null,
+                  currentWizardStep: null
+                });
+                LearningDispatcher.dispatch('FINISH_FLOW');
+              }}
               className="w-full py-4 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white rounded-xl font-bold text-lg transition-all shadow-[0_0_20px_rgba(124,58,237,0.4)]"
             >
               Ir a Mis Campañas
