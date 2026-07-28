@@ -52,8 +52,18 @@ Tono: profesional y persuasivo.`;
         }
       );
 
-      if (!response.ok) throw new Error(`Gemini API error ${response.status}`);
-      const data = await response.json();
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Gemini API error ${response.status}: ${errorText.substring(0, 100)}`);
+      }
+      
+      let data;
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        throw new Error('La respuesta de la IA no es válida.');
+      }
+      
       const fullText = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? 'No se pudo generar contenido.';
       // Animate text appearance
       let i = 0;

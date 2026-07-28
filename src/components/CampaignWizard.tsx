@@ -226,7 +226,13 @@ Genera la estrategia de marketing completa y estructurada como JSON. Asegúrate 
       const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '{}';
       
       const cleanJson = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-      const parsed = JSON.parse(cleanJson);
+      
+      let parsed;
+      try {
+        parsed = JSON.parse(cleanJson);
+      } catch (parseError) {
+        throw new Error('La IA devolvió un formato inválido. Por favor, intenta de nuevo.');
+      }
       
       setAiResults(parsed);
       handleStepChange(3);
@@ -315,7 +321,10 @@ Genera la estrategia de marketing completa y estructurada como JSON. Asegúrate 
           imagen_url: finalImageUrl
         };
         const { error: pubError } = await supabase.from('publicaciones').insert([singlePub]);
-        if (pubError) console.error("Error al guardar publicación:", pubError);
+        if (pubError) {
+          console.error("Error al guardar publicación:", pubError);
+          throw new Error('Error al guardar la publicación generada. Verifica la conexión a la base de datos.');
+        }
         
         if (userId) {
           await supabase.from('contenido_ia').insert([{
