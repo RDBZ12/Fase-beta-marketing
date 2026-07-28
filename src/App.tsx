@@ -689,8 +689,6 @@ export default function App() {
             <>
               <AuthButton />
               <LearningTour />
-              <LearningFAB />
-              <LearningChat />
             </>
           );
         }

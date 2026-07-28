@@ -148,7 +148,9 @@ export default function LearningTour() {
     };
   }, [visible, updatePos]);
 
-  if (!activeFlow || !visible || !currentStep) return null;
+  console.log('[DEBUG TOUR] RENDER:', { activeFlow, hasCurrentStep: !!currentStep, visible });
+
+  if (!activeFlow || !currentStep) return null;
 
   const sr = spotRect;
   const hasSpot = sr && !isCenter;
@@ -199,8 +201,8 @@ export default function LearningTour() {
           left: pos.left,
           width: TW,
           pointerEvents: 'auto',
-          opacity: entering ? 1 : 0,
-          transform: entering ? 'scale(1) translateY(0)' : 'scale(0.94) translateY(8px)',
+          opacity: 1,
+          transform: 'scale(1) translateY(0)',
           transition: 'opacity 0.22s ease, transform 0.22s ease',
         }}
       >

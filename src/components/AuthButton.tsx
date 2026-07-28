@@ -4,32 +4,15 @@ import type { User } from '@supabase/supabase-js'
 import { useLearning } from '../learning/context/LearningContext'
 
 export default function AuthButton() {
-  const { startFlow } = useLearning()
+   
   const [user, setUser] = useState<User | null>(null)
   const [cargando, setCargando] = useState(true)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [errorLogin, setErrorLogin] = useState('')
   const [loadingLogin, setLoadingLogin] = useState(false)
-  const [loginMode, setLoginMode] = useState<'client' | 'admin'>('client')
 
   const [showAdminForm, setShowAdminForm] = useState(false)
-  
-  const [showTourPrompt, setShowTourPrompt] = useState(() => {
-    return !sessionStorage.getItem('login_tour_completed') && !sessionStorage.getItem('welcome_dismissed');
-  });
-
-  const handleStartTour = () => {
-    setShowTourPrompt(false);
-    sessionStorage.setItem('wants_tour', 'true');
-    startFlow('LOGIN_WIZARD');
-  };
-
-  const handleSkipTour = () => {
-    setShowTourPrompt(false);
-    sessionStorage.setItem('login_tour_completed', 'true');
-    sessionStorage.setItem('welcome_dismissed', 'true');
-  };
 
   useEffect(() => {
     const hash = window.location.hash
@@ -81,87 +64,34 @@ export default function AuthButton() {
 
   if (cargando) {
     return (
-      <div className={`flex items-center justify-center min-h-screen ${loginMode === 'admin' ? 'bg-[radial-gradient(120%_120%_at_20%_0%,_#3A28B8_0%,_#1D1266_45%,_#0E0A32_100%)]' : 'bg-slate-50'}`}>
-        <div className={`w-5 h-5 border-2 border-t-transparent rounded-full animate-spin ${loginMode === 'admin' ? 'border-white' : 'border-slate-800'}`} />
+      <div className="flex items-center justify-center min-h-screen bg-[radial-gradient(120%_120%_at_20%_0%,_#3A28B8_0%,_#1D1266_45%,_#0E0A32_100%)]">
+        <div className="w-5 h-5 border-2 border-t-transparent rounded-full animate-spin border-white" />
       </div>
     )
   }
 
   return (
-    <div className={`relative min-h-screen flex items-center justify-center overflow-hidden px-6 py-10 font-['Inter',_sans-serif] ${loginMode === 'admin' ? 'bg-[radial-gradient(120%_120%_at_20%_0%,_#3A28B8_0%,_#1D1266_45%,_#0E0A32_100%)]' : 'bg-slate-50'}`}>
+    <div className="relative min-h-screen flex items-center justify-center overflow-hidden px-6 py-10 font-['Inter',_sans-serif] bg-[radial-gradient(120%_120%_at_20%_0%,_#3A28B8_0%,_#1D1266_45%,_#0E0A32_100%)]">
       <style dangerouslySetInnerHTML={{ __html: "@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Manrope:wght@500;700;800&display=swap');" }} />
 
-      {/* Blobs de fondo, estilo glass (solo en admin) */}
-      {loginMode === 'admin' && (
-        <>
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute -top-[80px] -left-[140px] h-[300px] w-[420px] rounded-[45%_55%_60%_40%/50%_45%_55%_50%] bg-[linear-gradient(135deg,#4CD9E8,#2E6FE0)] opacity-[0.55] blur-[2px] motion-safe:animate-[float_14s_ease-in-out_infinite]"
-          />
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute bottom-[40px] left-[6%] h-[260px] w-[340px] rounded-[45%_55%_60%_40%/50%_45%_55%_50%] bg-[linear-gradient(135deg,#6A5CF2,#3A2A9C)] opacity-[0.4] blur-[2px] motion-safe:animate-[float_14s_ease-in-out_infinite_-4s]"
-          />
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute -bottom-[100px] -right-[100px] h-[300px] w-[380px] rounded-[45%_55%_60%_40%/50%_45%_55%_50%] bg-[linear-gradient(135deg,#7B8CF5,#4A5FD9)] opacity-[0.55] blur-[2px] motion-safe:animate-[float_14s_ease-in-out_infinite_-8s]"
-          />
-        </>
-      )}
+      {/* Blobs de fondo, estilo glass */}
+      <>
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -top-[80px] -left-[140px] h-[300px] w-[420px] rounded-[45%_55%_60%_40%/50%_45%_55%_50%] bg-[linear-gradient(135deg,#4CD9E8,#2E6FE0)] opacity-[0.55] blur-[2px] motion-safe:animate-[float_14s_ease-in-out_infinite]"
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute bottom-[40px] left-[6%] h-[260px] w-[340px] rounded-[45%_55%_60%_40%/50%_45%_55%_50%] bg-[linear-gradient(135deg,#6A5CF2,#3A2A9C)] opacity-[0.4] blur-[2px] motion-safe:animate-[float_14s_ease-in-out_infinite_-4s]"
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -bottom-[100px] -right-[100px] h-[300px] w-[380px] rounded-[45%_55%_60%_40%/50%_45%_55%_50%] bg-[linear-gradient(135deg,#7B8CF5,#4A5FD9)] opacity-[0.55] blur-[2px] motion-safe:animate-[float_14s_ease-in-out_infinite_-8s]"
+        />
+      </>
 
-      {loginMode === 'client' ? (
-        <div className="relative z-10 w-full max-w-[480px] flex flex-col items-center">
-          <h1 className="mb-2 font-['Manrope',_sans-serif] text-[28px] font-extrabold text-slate-800 text-center">
-            Inicia sesión con Google
-          </h1>
-          <p className="mb-8 text-[14px] leading-relaxed text-slate-500 text-center max-w-[380px]">
-            Para utilizar MarketIA necesitas iniciar sesión con tu cuenta de Google.
-          </p>
-
-          <div id="tour-login-client-checklist" className="w-full bg-white border border-slate-200 rounded-2xl p-6 shadow-sm mb-6">
-            <ul className="space-y-4">
-              {[
-                'Haz clic en "Continuar con Google"',
-                'Selecciona tu cuenta de Google',
-                'Si es tu primera vez, crearemos tu perfil automáticamente',
-                'Si ya tienes una cuenta, iniciaremos sesión automáticamente'
-              ].map((text, i) => (
-                <li key={i} className="flex items-start gap-3">
-                  <div className="mt-0.5 w-5 h-5 rounded-full bg-teal-50 border border-teal-200 flex items-center justify-center shrink-0">
-                    <svg className="w-3.5 h-3.5 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                    </svg>
-                  </div>
-                  <span className="text-[14px] text-slate-700 leading-snug">{text}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <button
-            id="tour-login-client-google"
-            onClick={iniciarSesionConGoogle}
-            className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3.5 text-[15px] font-semibold text-slate-800 transition-all duration-150 ease-in-out hover:bg-slate-50 hover:shadow-[0_4px_12px_rgba(0,0,0,0.05)] active:translate-y-px disabled:opacity-60 mb-8"
-          >
-            <svg width="20" height="20" viewBox="0 0 18 18">
-              <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.91c1.7-1.57 2.69-3.88 2.69-6.62z" />
-              <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.91-2.26c-.81.54-1.84.86-3.05.86-2.35 0-4.34-1.58-5.05-3.71H.98v2.33A9 9 0 0 0 9 18z" />
-              <path fill="#FBBC05" d="M3.95 10.71A5.4 5.4 0 0 1 3.67 9c0-.59.1-1.17.28-1.71V4.96H.98A9 9 0 0 0 0 9c0 1.45.35 2.83.98 4.04l2.97-2.33z" />
-              <path fill="#EA4335" d="M9 3.58c1.32 0 2.51.45 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0A9 9 0 0 0 .98 4.96l2.97 2.33C4.66 5.16 6.65 3.58 9 3.58z" />
-            </svg>
-            Continuar con Google
-          </button>
-
-          <button 
-            onClick={() => setLoginMode('admin')}
-            className="text-[13.5px] text-slate-500 hover:text-slate-800 font-medium transition-colors"
-          >
-            ¿Ya tienes cuenta o eres del equipo? Iniciar sesión normal
-          </button>
-        </div>
-      ) : (
-        <div className="relative z-10 w-full max-w-[400px] rounded-[24px] border border-[rgba(255,255,255,0.22)] bg-[rgba(255,255,255,0.09)] px-[36px] pb-[32px] pt-[40px] shadow-[0_20px_60px_rgba(10,6,40,0.45)] backdrop-blur-[22px]">
-          {user ? (
+      <div className="relative z-10 w-full max-w-[400px] rounded-[24px] border border-[rgba(255,255,255,0.22)] bg-[rgba(255,255,255,0.09)] px-[36px] pb-[32px] pt-[40px] shadow-[0_20px_60px_rgba(10,6,40,0.45)] backdrop-blur-[22px]">
+        {user ? (
           <div className="flex flex-col items-center gap-[20px]">
             <img
               src={user.user_metadata?.avatar_url ?? `https://ui-avatars.com/api/?name=${user.email}`}
@@ -283,55 +213,13 @@ export default function AuthButton() {
               </form>
             </div>
 
-            <button
-              onClick={() => setLoginMode('client')}
-              className="mt-[22px] w-full text-center text-[13px] text-[rgba(255,255,255,0.6)] hover:text-white transition-colors"
-            >
-              ← Volver a inicio de clientes
-            </button>
             <p className="mt-[16px] text-center text-[12.5px] text-[rgba(255,255,255,0.45)]">
               MarketIA · Marketing inteligente con IA
             </p>
           </>
         )}
       </div>
-      )}
 
-      {/* Tour Prompt Modal */}
-      {showTourPrompt && !user && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="w-full max-w-sm bg-white rounded-2xl p-6 shadow-2xl relative">
-            <div className="mb-4">
-              <div className="w-12 h-12 rounded-xl bg-violet-100 flex items-center justify-center mb-4 mx-auto">
-                <svg className="w-6 h-6 text-violet-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                </svg>
-              </div>
-              <h2 className="text-xl font-bold text-center text-slate-800 mb-2">
-                ¡Bienvenido a MarketIA!
-              </h2>
-              <p className="text-slate-600 text-center text-sm leading-relaxed">
-                Antes de acceder, ¿te gustaría realizar un breve recorrido para conocer nuestra plataforma?
-              </p>
-            </div>
-            
-            <div className="flex flex-col gap-2 mt-6">
-              <button
-                onClick={handleStartTour}
-                className="w-full py-3 px-4 bg-violet-600 hover:bg-violet-700 text-white rounded-xl font-semibold transition-colors shadow-sm"
-              >
-                Iniciar recorrido
-              </button>
-              <button
-                onClick={handleSkipTour}
-                className="w-full py-3 px-4 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl font-medium transition-colors"
-              >
-                Omitir recorrido
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

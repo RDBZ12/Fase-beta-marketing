@@ -103,7 +103,7 @@ export const ClientPortal: React.FC<ClientPortalProps> = ({ campaigns, onPagarCa
     localStorage.setItem('marketdev_tour_completed', 'true');
     sessionStorage.setItem('welcome_dismissed', 'true');
     setShowWelcome(false);
-    LearningDispatcher.dispatch('START_FLOW', 'GLOBAL_ONBOARDING');
+    LearningDispatcher.dispatch('START_FLOW', 'CREATE_CAMPAIGN');
   };
 
   const handleSkipTour = () => {
@@ -222,9 +222,9 @@ export const ClientPortal: React.FC<ClientPortalProps> = ({ campaigns, onPagarCa
           </div>
           <div className="flex items-center gap-4">
             <button 
-              onClick={() => setShowCenter(true)}
+              onClick={() => LearningDispatcher.dispatch('START_FLOW', 'CREATE_CAMPAIGN')}
               className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200 hover:bg-slate-200 transition-colors"
-              title="Centro de Ayuda"
+              title="Iniciar Recorrido"
             >
               <BookOpen className="w-4 h-4 text-slate-600" />
             </button>
