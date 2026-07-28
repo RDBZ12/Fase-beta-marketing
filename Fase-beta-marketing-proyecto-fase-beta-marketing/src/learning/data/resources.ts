@@ -1,6 +1,6 @@
 // src/learning/data/resources.ts
 export type LearningResourceType = 'tour' | 'guide' | 'faq' | 'video' | 'resource';
-export type ModuleId = 'inicio' | 'perfil' | 'campanas' | 'publicaciones' | 'clientes' | 'leads' | 'ia' | 'whatsapp' | 'facturacion' | 'pagos' | 'reportes' | 'seguridad' | 'soporte';
+export type ModuleId = 'inicio' | 'perfil' | 'campanas' | 'publicaciones' | 'leads' | 'ia' | 'whatsapp' | 'facturacion' | 'pagos' | 'reportes' | 'seguridad' | 'soporte';
 
 export interface LearningResource {
   id: string;
@@ -23,7 +23,6 @@ export const MODULE_NAMES: Record<ModuleId, string> = {
   perfil: 'Mi Perfil',
   campanas: 'Campañas y Anuncios',
   publicaciones: 'Publicaciones',
-  clientes: 'Clientes (CRM)',
   leads: 'Leads y Prospectos',
   ia: 'Inteligencia Artificial',
   whatsapp: 'WhatsApp Marketing',

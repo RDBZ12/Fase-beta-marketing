@@ -940,17 +940,21 @@ El prompt debe ser solo el texto en ingles, descriptivo, visual, sin explicacion
                        <ImageIcon className="w-10 h-10 text-[#2a2a4a]" />
                     )}
                     <div id="tour-pub-actions" className="absolute top-3 left-3 flex gap-2">
-                      {(pub.estado === 'Programada' || pub.estado === 'Borrador') && (
-                        <button 
-                          id="tour-pub-edit-btn"
-                          onClick={() => handleEditClick(pub, camp)}
-                          className="bg-white/90 backdrop-blur-md px-2 py-1.5 rounded-md text-slate-600 hover:text-violet-600 transition-colors shadow-sm flex items-center gap-1 group/edit"
-                          title="Editar publicación"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                          <span className="text-[10px] font-bold uppercase tracking-wider max-w-0 overflow-hidden group-hover/edit:max-w-xs transition-all duration-300 ease-in-out whitespace-nowrap">Editar</span>
-                        </button>
-                      )}
+                      <button 
+                        id="tour-pub-edit-btn"
+                        onClick={() => {
+                          if (pub.estado === 'Programada' || pub.estado === 'Borrador') {
+                            handleEditClick(pub, camp);
+                          }
+                        }}
+                        className={`bg-white/90 backdrop-blur-md px-2 py-1.5 rounded-md text-slate-600 transition-colors shadow-sm flex items-center gap-1 group/edit ${
+                          (pub.estado === 'Programada' || pub.estado === 'Borrador') ? 'hover:text-violet-600' : 'opacity-50 cursor-not-allowed'
+                        }`}
+                        title={(pub.estado === 'Programada' || pub.estado === 'Borrador') ? "Editar publicación" : "Solo se pueden editar publicaciones programadas o borradores"}
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                        <span className="text-[10px] font-bold uppercase tracking-wider max-w-0 overflow-hidden group-hover/edit:max-w-xs transition-all duration-300 ease-in-out whitespace-nowrap">Editar</span>
+                      </button>
                       <button 
                         id="tour-pub-replicate-btn"
                         onClick={() => { setReplicateTargetPub(pub); setSelectedRedId(''); }}

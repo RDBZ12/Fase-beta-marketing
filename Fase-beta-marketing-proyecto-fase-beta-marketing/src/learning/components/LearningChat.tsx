@@ -14,20 +14,24 @@ export default function LearningChat() {
 
   if (!isChatOpen) return null;
 
-  const handleSend = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim()) return;
+  const processMessage = (text: string) => {
+    if (!text.trim()) return;
 
-    setMessages(prev => [...prev, { sender: 'user', text: input }]);
-    const intent = findIntent(input);
+    setMessages(prev => [...prev, { sender: 'user', text }]);
+    const intent = findIntent(text);
     setInput('');
 
     setTimeout(() => {
       if (intent) {
-        setMessages(prev => [...prev, { sender: 'bot', text: intent.explanation }]);
+        // Pick a random response from the explanation array to make it dynamic
+        const randomExplanation = Array.isArray(intent.explanation) 
+          ? intent.explanation[Math.floor(Math.random() * intent.explanation.length)]
+          : intent.explanation;
+          
+        setMessages(prev => [...prev, { sender: 'bot', text: randomExplanation }]);
         if (intent.triggerFlow) {
           setTimeout(() => {
-            const isPdfIntent = ['pdf', 'comprobante', 'qr', 'ncf'].some(kw => input.toLowerCase().includes(kw));
+            const isPdfIntent = ['pdf', 'comprobante', 'qr', 'ncf'].some(kw => text.toLowerCase().includes(kw));
             if (isPdfIntent) {
               sessionStorage.setItem('learning_sub_intent', 'pdf');
             } else {
@@ -37,9 +41,14 @@ export default function LearningChat() {
           }, 1500);
         }
       } else {
-        setMessages(prev => [...prev, { sender: 'bot', text: 'No he entendido esa acción. Intenta decir "crear campaña" o busca en el Centro de Ayuda.' }]);
+        setMessages(prev => [...prev, { sender: 'bot', text: 'Hmm, no estoy completamente seguro de a qué te refieres 🤔. Pero soy experto en ayudarte a crear campañas, revisar tus pagos o ver tus estadísticas. ¿Te gustaría intentar con alguna de esas opciones?' }]);
       }
     }, 600);
+  };
+
+  const handleSend = (e: React.FormEvent) => {
+    e.preventDefault();
+    processMessage(input);
   };
 
   return (
@@ -66,6 +75,21 @@ export default function LearningChat() {
           </div>
         ))}
       </div>
+
+      {/* SUGERENCIAS RÁPIDAS (Solo al inicio) */}
+      {messages.length === 1 && (
+        <div className="px-3 pb-3 bg-slate-50 flex gap-2 overflow-x-auto whitespace-nowrap scrollbar-hide border-t border-slate-100 pt-3">
+          <button onClick={() => processMessage('Quiero crear una campaña')} className="text-xs font-medium bg-white hover:bg-violet-50 text-violet-700 px-3 py-1.5 rounded-full transition-colors border border-violet-200 shadow-sm">
+            🚀 Crear campaña
+          </button>
+          <button onClick={() => processMessage('Ver mis métricas')} className="text-xs font-medium bg-white hover:bg-violet-50 text-violet-700 px-3 py-1.5 rounded-full transition-colors border border-violet-200 shadow-sm">
+            📊 Ver estadísticas
+          </button>
+          <button onClick={() => processMessage('¿Cómo pago mis facturas?')} className="text-xs font-medium bg-white hover:bg-violet-50 text-violet-700 px-3 py-1.5 rounded-full transition-colors border border-violet-200 shadow-sm">
+            💳 Pagar facturas
+          </button>
+        </div>
+      )}
 
       {/* ÁREA DE TEXTO */}
       <form onSubmit={handleSend} className="p-3 border-t border-slate-100 bg-white flex gap-2">
