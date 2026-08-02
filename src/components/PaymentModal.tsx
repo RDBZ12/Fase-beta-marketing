@@ -175,8 +175,9 @@ const generarPDF = async (datos: {
        ALTERAR O ELIMINAR ESTE BLOQUE DE GENERACIÓN DE CÓDIGO QR. 
        ES LA PARTE CRÍTICA DEL COMPROBANTE NCF Y DEBE PERMANECER INTACTO.
        ────────────────────────────────────────────────────────────────────────── */
-    const origin = import.meta.env.VITE_PUBLIC_URL || window.location.origin;
-    const qrData = `${origin}/?verificar_ncf=${encodeURIComponent(datos.ncf)}&total=${encodeURIComponent(totalUSD.toFixed(2))}&fecha=${encodeURIComponent(now)}&receptor=${encodeURIComponent(datos.razonSocial || 'Consumidor Final')}&concepto=${encodeURIComponent(datos.nombreCampana || 'Servicio de Marketing Digital')}&rnc_receptor=${encodeURIComponent(datos.rncCliente || '')}`
+    const qrData = datos.url_dgii
+      ? (datos.url_dgii.startsWith('http') ? datos.url_dgii : `https://${datos.url_dgii}`)
+      : `https://www.dgii.gov.do/app/WebApps/ConsultasWeb2/ConsultasWeb/consultas/ncf.aspx?ncf=${encodeURIComponent(datos.ncf)}`;
     const qrDataUrl = await QRCode.toDataURL(qrData, { 
       width: 120, margin: 1, color: { dark: '#2c3e2e', light: '#ffffff' } 
     })

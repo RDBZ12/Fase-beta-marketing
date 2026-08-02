@@ -234,21 +234,7 @@ export async function ensureSessionReady(sessionNameOverride?: string): Promise<
 
 // 4.1. Obtener grupos de una sesión
 export async function getOpenWAGroups(sessionNameOverride?: string): Promise<OpenWAGroup[]> {
-  const { apiUrl, apiKey, sessionName: defaultSessionName } = getOpenWASettings();
-  const sessionName = sessionNameOverride || defaultSessionName;
-  try {
-    const session = await ensureSessionReady(sessionName);
-
-    const res = await fetch(`${apiUrl}/sessions/${session.id}/groups`, {
-      method: 'GET',
-      headers: getHeaders(apiKey),
-    });
-    if (!res.ok) return [];
-    return await res.json();
-  } catch (error) {
-    console.error('Error fetching OpenWA groups:', error);
-    return [];
-  }
+  return []; // Deshabilitado: Kapso no soporta leer grupos
 }
 
 // 4.2. Obtener contactos de una sesión
@@ -257,33 +243,7 @@ let cachedContacts: OpenWAContact[] | null = null;
 let lastContactsFetch = 0;
 
 export async function getOpenWAContacts(sessionNameOverride?: string): Promise<OpenWAContact[]> {
-  const now = Date.now();
-  if (cachedContacts && (now - lastContactsFetch < 300000)) { // Cache de 5 minutos
-    return cachedContacts;
-  }
-
-  const { apiUrl, apiKey, sessionName: defaultSessionName } = getOpenWASettings();
-  const sessionName = sessionNameOverride || defaultSessionName;
-  try {
-    const list = await getOpenWASessions();
-    const session = list.find(s => s.name === sessionName);
-    if (!session) return [];
-
-    const res = await fetch(`${apiUrl}/sessions/${session.id}/contacts`, {
-      method: 'GET',
-      headers: getHeaders(apiKey),
-    });
-    if (!res.ok) return [];
-
-    const data = await res.json();
-    const filteredData = Array.isArray(data) ? data.filter((c: any) => !(c.id || '').endsWith('@lid')) : [];
-    cachedContacts = filteredData;
-    lastContactsFetch = Date.now();
-    return filteredData;
-  } catch (error) {
-    console.error('Error fetching OpenWA contacts:', error);
-    return [];
-  }
+  return []; // Deshabilitado: Kapso no soporta leer contactos del teléfono
 }
 
 // 4.2b. Obtener un contacto individual por su ID (JID) — resuelve nombre guardado
@@ -345,93 +305,7 @@ let cachedChats: ChatSummary[] | null = null;
 let lastChatsFetch = 0;
 
 export async function getOpenWAChats(sessionNameOverride?: string, messageLimit: number = 50): Promise<ChatSummary[]> {
-  const isFullLoad = messageLimit > 50;
-  const now = Date.now();
-
-  // Usar caché si es una carga completa (búsqueda) y hace menos de 2 minutos se cargó
-  if (isFullLoad && cachedChats && (now - lastChatsFetch < 120000)) {
-    return cachedChats;
-  }
-
-  const { apiUrl, apiKey, sessionName: defaultSessionName } = getOpenWASettings();
-  const sessionName = sessionNameOverride || defaultSessionName;
-  try {
-    const session = await ensureSessionReady(sessionName);
-
-    // 1. Llamar al endpoint /chats para obtener la agenda completa y nombres reales
-    const chatsRes = await fetch(`${apiUrl}/sessions/${session.id}/chats`, {
-      method: 'GET',
-      headers: getHeaders(apiKey),
-    });
-
-    // 2. Llamar al endpoint /messages para obtener la verdadera actividad reciente (workaround para Baileys)
-    const msgsRes = await fetch(`${apiUrl}/sessions/${session.id}/messages?limit=${messageLimit}`, {
-      method: 'GET',
-      headers: getHeaders(apiKey),
-    });
-
-    const chatsData = chatsRes.ok ? await chatsRes.json() : [];
-    const msgsData = msgsRes.ok ? await msgsRes.json() : [];
-    const messages: any[] = Array.isArray(msgsData) ? msgsData : (msgsData.messages ?? []);
-
-    // 3. Crear un mapa base con los chats (grupos y contactos) que tienen su nombre resuelto
-    const chatMap = new Map<string, ChatSummary>();
-    for (const chat of (chatsData || [])) {
-      const originalId = chat.originalJid || chat.id;
-      if (originalId.endsWith('@lid')) continue;
-      // Normalizamos el ID limpiando @c.us o @s.whatsapp.net para poder cruzarlo
-      const cleanId = originalId.split('@')[0].split(':')[0];
-
-      chatMap.set(cleanId, {
-        id: originalId,
-        name: chat.nombre || chat.id,
-        isGroup: chat.tipo === 'grupo',
-        unreadCount: chat.unreadCount || 0,
-        timestamp: chat.timestamp || 0,
-        lastMessage: chat.lastMessage,
-      });
-    }
-
-    // 4. Actualizar los timestamps y lastMessage usando los mensajes recientes
-    for (const msg of messages) {
-      const chatId = msg.chatId;
-      if (!chatId || chatId === 'status@broadcast' || chatId.includes('broadcast') || chatId.endsWith('@lid')) continue;
-
-      const cleanId = chatId.split('@')[0].split(':')[0];
-      const ts = msg.timestamp ?? 0;
-
-      const existing = chatMap.get(cleanId);
-      if (existing) {
-        if (ts > existing.timestamp) {
-          existing.timestamp = ts;
-          existing.lastMessage = msg.body ?? existing.lastMessage;
-        }
-      } else {
-        // Si hay un mensaje de alguien que no estaba en /chats, lo agregamos
-        chatMap.set(cleanId, {
-          id: chatId,
-          name: cleanId, // Fallback al número temporal
-          isGroup: chatId.endsWith('@g.us'),
-          unreadCount: 0,
-          timestamp: ts,
-          lastMessage: msg.body ?? '',
-        });
-      }
-    }
-
-    // 5. Convertir a array y ordenar: los recientes primero
-    const sorted = Array.from(chatMap.values()).sort((a, b) => b.timestamp - a.timestamp);
-
-    if (isFullLoad) {
-      cachedChats = sorted;
-      lastChatsFetch = Date.now();
-    }
-
-    return sorted;
-  } catch (error) {
-    console.error('Error fetching OpenWA chats from messages:', error);
-    return [];
-  }
+  return []; // Deshabilitado: Kapso no soporta leer chats recientes
 }
 
 // Sanitizar y formatear el número de celular para que termine en @c.us o @g.us

@@ -32,8 +32,8 @@ import { MisPublicacionesModule } from './MisPublicacionesModule';
 import { ClientPagosModule, ClientEstadisticasModule, ClientPerfilModule } from './ClientModules';
 import { CentroReportesCliente } from './reportes/CentroReportesCliente';
 import LearningCenter from '../learning/components/LearningCenter';
-import { useLearning } from '../learning/context/LearningContext';
 import { LearningDispatcher } from '../learning/services/LearningDispatcher';
+
 
 interface ClientPortalProps {
   campaigns: Campaign[];
@@ -48,71 +48,6 @@ export const ClientPortal: React.FC<ClientPortalProps> = ({ campaigns, onPagarCa
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isCreatingCampaign, setIsCreatingCampaign] = useState(false);
   const [showCenter, setShowCenter] = useState(false);
-  
-  const { uiState } = useLearning();
-
-  // Sincronizar el tab activo del portal cuando el UIState del tour cambie
-  useEffect(() => {
-    if (uiState.currentScreen) {
-      const screenMap: Record<string, string> = {
-        campaigns: 'Panel',
-        publicaciones: 'mis-publicaciones',
-        pagos: 'pagos',
-        estadisticas: 'estadisticas',
-        reportes: 'reportes',
-        perfil: 'perfil',
-      };
-      const mappedTab = screenMap[uiState.currentScreen];
-      if (mappedTab && mappedTab !== activeTab) {
-        setActiveTab(mappedTab);
-      }
-    }
-  }, [uiState.currentScreen, activeTab]);
-
-  // Actualizar el UIState del Dispatcher al cambiar de pestaña manualmente
-  const handleTabChange = (tabId: string) => {
-    if (tabId === 'ayuda') {
-      setShowCenter(true);
-      return;
-    }
-
-    setActiveTab(tabId);
-    const screenMap: Record<string, string> = {
-      'Panel': 'campaigns',
-      'mis-publicaciones': 'publicaciones',
-      'pagos': 'pagos',
-      'estadisticas': 'estadisticas',
-      'reportes': 'reportes',
-      'perfil': 'perfil',
-    };
-    const screenName = screenMap[tabId] || tabId;
-    LearningDispatcher.dispatch('UPDATE_UI_STATE', { currentScreen: screenName });
-    LearningDispatcher.dispatch('TRIGGER_ACTION', `click_sidebar_${screenName}`);
-  };
-
-  // Show welcome modal if the user hasn't completed the main tour and we haven't dismissed it locally this session
-  const [showWelcome, setShowWelcome] = useState(() => {
-    const isCompleted = localStorage.getItem('marketdev_tour_completed') === 'true';
-    const isDismissed = sessionStorage.getItem('welcome_dismissed') === 'true';
-    return !isCompleted && !isDismissed;
-  });
-
-  const shouldShowWelcome = showWelcome;
-
-  const handleStartTour = () => {
-    localStorage.setItem('marketdev_tour_completed', 'true');
-    sessionStorage.setItem('welcome_dismissed', 'true');
-    setShowWelcome(false);
-    LearningDispatcher.dispatch('START_FLOW', 'CREATE_CAMPAIGN');
-  };
-
-  const handleSkipTour = () => {
-    localStorage.setItem('marketdev_tour_completed', 'true');
-    sessionStorage.setItem('welcome_dismissed', 'true');
-    setShowWelcome(false);
-  };
-
-
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -120,7 +55,7 @@ export const ClientPortal: React.FC<ClientPortalProps> = ({ campaigns, onPagarCa
   };
 
   const navItems = [
-    { id: 'Panel', label: 'Mis Campañas', icon: Megaphone },
+    { id: 'Panel', label: 'Panel', icon: Megaphone },
     { id: 'mis-publicaciones', label: 'Mis Publicaciones', icon: LayoutDashboard },
     { id: 'pagos', label: 'Pagos', icon: CreditCard },
     { id: 'estadisticas', label: 'Estadísticas', icon: BarChart3 },
@@ -135,7 +70,7 @@ export const ClientPortal: React.FC<ClientPortalProps> = ({ campaigns, onPagarCa
       <aside
         className={`${
           isSidebarOpen ? 'w-64' : 'w-20'
-        } transition-all duration-300 ease-in-out border-r border-slate-800 bg-slate-900 flex flex-col relative`}
+        } transition-all duration-300 ease-in-out border-r border-slate-800 bg-slate-900 flex flex-col relative z-20`}
       >
         <div className="h-20 flex items-center px-6 border-b border-slate-800 overflow-hidden whitespace-nowrap">
           <div className="flex items-center">
@@ -157,8 +92,7 @@ export const ClientPortal: React.FC<ClientPortalProps> = ({ campaigns, onPagarCa
             return (
               <button
                 key={item.id}
-                id={`tour-sidebar-${item.id.toLowerCase()}`}
-                onClick={() => handleTabChange(item.id)}
+                onClick={() => item.id === 'ayuda' ? setShowCenter(true) : setActiveTab(item.id)}
                 className={`w-full flex items-center px-3 py-3 rounded-xl transition-all duration-200 group overflow-hidden whitespace-nowrap ${
                   isActive
                     ? 'bg-violet-600 text-white shadow-md shadow-violet-900/20'
@@ -221,13 +155,6 @@ export const ClientPortal: React.FC<ClientPortalProps> = ({ campaigns, onPagarCa
             </h1>
           </div>
           <div className="flex items-center gap-4">
-            <button 
-              onClick={() => LearningDispatcher.dispatch('START_FLOW', 'CREATE_CAMPAIGN')}
-              className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200 hover:bg-slate-200 transition-colors"
-              title="Iniciar Recorrido"
-            >
-              <BookOpen className="w-4 h-4 text-slate-600" />
-            </button>
             <button className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200 hover:bg-slate-200 transition-colors relative">
               <MessageSquare className="w-4 h-4 text-slate-600" />
               <span className="absolute top-2 right-2 w-2 h-2 bg-pink-500 rounded-full border-2 border-white" />
@@ -240,7 +167,7 @@ export const ClientPortal: React.FC<ClientPortalProps> = ({ campaigns, onPagarCa
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-8 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
+        <div className="flex-1 overflow-y-auto p-8 z-10 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
           {activeTab === 'Panel' && <MisCampanasModule campaigns={campaigns} onNew={() => setIsCreatingCampaign(true)} onPagar={onPagarCampaign} refreshCampaigns={refreshCampaigns} />}
           
           
@@ -258,43 +185,13 @@ export const ClientPortal: React.FC<ClientPortalProps> = ({ campaigns, onPagarCa
              <button onClick={() => setIsCreatingCampaign(false)} className="absolute top-3 right-3 z-50 p-2 bg-slate-100/80 backdrop-blur-sm rounded-full text-slate-500 hover:bg-red-500 hover:text-white transition-colors shadow-sm">
                <X className="w-5 h-5" />
              </button>
-             <div className="p-4 max-h-[85vh] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200 rounded-3xl relative">
+             <div className="p-4 max-h-[85vh] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200 rounded-3xl">
                <CampaignWizard onCancel={() => setIsCreatingCampaign(false)} onFinish={() => { refreshCampaigns(); setIsCreatingCampaign(false); }} />
              </div>
            </div>
         </div>
       )}
-
-      {/* Welcome Modal for new users */}
-      {shouldShowWelcome && (
-        <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 text-center animate-blur-in">
-            <div className="w-16 h-16 bg-violet-100 text-violet-600 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Rocket className="w-8 h-8" />
-            </div>
-            <h2 className="text-2xl font-bold text-slate-800 mb-2">¡Bienvenido a MarketIA!</h2>
-            <p className="text-slate-600 mb-8">
-              Estamos felices de tenerte aquí. Hemos preparado un recorrido guiado para mostrarte cómo aprovechar al máximo nuestra plataforma y crear tu primera campaña publicitaria en minutos.
-            </p>
-            <div className="flex flex-col gap-3">
-              <button 
-                onClick={handleStartTour}
-                className="w-full py-3 bg-violet-600 hover:bg-violet-700 text-white rounded-xl font-medium transition-colors shadow-lg shadow-violet-200 flex items-center justify-center gap-2"
-              >
-                <BookOpen className="w-5 h-5" />
-                Comenzar recorrido
-              </button>
-              <button 
-                onClick={handleSkipTour}
-                className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-medium transition-colors"
-              >
-                Omitir por ahora
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
+      
       {showCenter && <LearningCenter onClose={() => setShowCenter(false)} />}
     </div>
   );
@@ -427,7 +324,7 @@ const MisCampanasModule = ({ campaigns, onNew, onPagar, refreshCampaigns }: { ca
           </div>
         </div>
 
-        <div id="tour-client-kpi-reach" className="bg-white border border-slate-200 rounded-2xl p-5 hover:border-violet-300 transition-colors group shadow-sm flex items-center gap-4">
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 hover:border-violet-300 transition-colors group shadow-sm flex items-center gap-4">
           <div className="w-12 h-12 bg-violet-50 text-violet-500 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
             <TrendingUp className="w-6 h-6" />
           </div>
@@ -491,7 +388,7 @@ const MisCampanasModule = ({ campaigns, onNew, onPagar, refreshCampaigns }: { ca
 
 
 // --- Modal para Editar Campaña y sus Publicaciones ---
-const ClientEditCampaignModal = ({ 
+export const ClientEditCampaignModal = ({ 
   campaign, 
   onClose, 
   onSave 
@@ -687,13 +584,13 @@ const MisCampanasView = ({ campaigns, onPagar, refreshCampaigns }: { campaigns: 
           </div>
         )}
         {campaigns.length === 0 ? (
-          <div className="py-20 text-center" id="tour-client-campaigns-table">
+          <div className="py-20 text-center">
             <Megaphone className="w-12 h-12 text-slate-400 mx-auto mb-3" />
             <h3 className="text-lg font-semibold text-slate-700">Aún no tienes campañas</h3>
             <p className="text-slate-500 text-sm mt-1 mb-6">Crea tu primera campaña con IA ahora.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto" id="tour-client-campaigns-table">
+          <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-medium uppercase text-[10px] tracking-wider">
                 <tr>

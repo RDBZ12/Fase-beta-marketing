@@ -122,14 +122,14 @@ export const flowSteps: Record<string, StepDef[]> = {
       target: '#tour-cw-budget',
       placement: 'right',
       title: 'Presupuesto de Campaña 💵',
-      content: 'Ingresa el monto en dólares ($USD) que deseas invertir para los anuncios (mínimo sugerido $350 USD).',
+      content: 'Ingresa el monto en dólares ($USD) que deseas invertir para los anuncios (mínimo sugerido $6 USD, aprox. 350 DOP).',
       helpText: 'Nuestra IA optimizará este presupuesto entre los canales que elijas.',
       expectedState: {
         source: 'campaignWizard',
         stateKey: 'budget',
         operator: 'greaterThan',
-        expectedValue: 349,
-        errorMessage: 'Por favor, introduce un presupuesto mayor o igual a 350.'
+        expectedValue: 5,
+        errorMessage: 'Por favor, introduce un presupuesto mayor o igual a $6 USD.'
       }
     },
     {
@@ -524,3 +524,12 @@ export const flowSteps: Record<string, StepDef[]> = {
     }
   ]
 };
+
+flowSteps.MEGA_TOUR = [
+  ...flowSteps.CREATE_CAMPAIGN,
+  ...flowSteps.MIS_PUBLICACIONES,
+  ...flowSteps.PAGOS,
+  ...flowSteps.ESTADISTICAS,
+  ...flowSteps.PROFILE_TOUR
+];
+

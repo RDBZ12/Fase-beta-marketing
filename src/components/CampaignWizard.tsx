@@ -9,6 +9,7 @@ import { LearningDispatcher } from '../learning/services/LearningDispatcher';
 interface CampaignWizardProps {
   onCancel: () => void;
   onFinish: () => void;
+  campaignToEdit?: any;
 }
 
 const getLocalDateString = () => {
@@ -19,7 +20,7 @@ const getLocalDateString = () => {
   return `${year}-${month}-${day}`;
 };
 
-export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onCancel, onFinish }) => {
+export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onCancel, onFinish, campaignToEdit }) => {
   // Cuando el wizard se monta, registrar el modal activo en el estado de la interfaz
   useEffect(() => {
     LearningDispatcher.dispatch('UPDATE_UI_STATE', { 
@@ -43,6 +44,37 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onCancel, onFini
     scheduledTime: '',
     socialNetwork: 'instagram'
   });
+
+  useEffect(() => {
+    if (campaignToEdit) {
+      const rawDesc = campaignToEdit.descripcion || '';
+      const parts = rawDesc.split(' |||AUDIENCE:');
+      const cleanDesc = parts[0] || 'Campaña de marketing digital';
+      const savedAudience = parts[1] || campaignToEdit.audience || 'profesionales';
+
+      setFormData({
+        businessName: campaignToEdit.brand || campaignToEdit.name?.replace(' - IA', '') || campaignToEdit.nombre_campana?.replace(' - IA', '') || '',
+        budget: campaignToEdit.presupuesto?.toString() || '',
+        description: cleanDesc,
+        audience: savedAudience,
+        objective: campaignToEdit.objetivo || 'awareness',
+        startDate: campaignToEdit.fecha_inicio || campaignToEdit.start_date?.split('T')[0] || getLocalDateString(),
+        endDate: campaignToEdit.fecha_fin?.split('T')[0] || '',
+        scheduledTime: '',
+        socialNetwork: campaignToEdit.channel?.toLowerCase() === 'multi' ? 'instagram' : (campaignToEdit.channel?.toLowerCase() || 'instagram')
+      });
+      
+      // Fetch existing images
+      const fetchImages = async () => {
+        const { data } = await supabase.from('publicaciones').select('imagen_url').eq('id_campana', campaignToEdit.id);
+        if (data && data.length > 0) {
+          const images = data.map(p => p.imagen_url).filter(Boolean);
+          if (images.length > 0) setSelectedImages(images);
+        }
+      };
+      fetchImages();
+    }
+  }, [campaignToEdit]);
 
   // Notificar cambios de inputs del formulario al LearningContext
   const updateWizardFormState = (updates: Partial<typeof formData>) => {
@@ -264,16 +296,15 @@ Genera la estrategia de marketing completa y estructurada como JSON. Asegúrate 
       const { data: userSession } = await supabase.auth.getSession();
       const userId = userSession?.session?.user?.id;
 
-      const dbData = {
+      const dbData: any = {
         nombre_campana: formData.businessName + ' - IA',
         brand: formData.businessName,
-        descripcion: formData.description,
+        descripcion: formData.description + (formData.audience ? ` |||AUDIENCE:${formData.audience}` : ''),
         presupuesto: Number(formData.budget),
         objetivo: formData.objective,
-        channel: 'Multi',
+        channel: formData.socialNetwork === 'instagram' ? 'Multi' : formData.socialNetwork,
         estado: 'Borrador',
         estado_moderacion: 'pendiente',
-        id_usuario: userId,
         leads: 0,
         ctr: 0,
         reach: '0',
@@ -282,8 +313,23 @@ Genera la estrategia de marketing completa y estructurada como JSON. Asegúrate 
         fecha_fin: formData.endDate
       };
 
-      const { data: newCamp, error } = await supabase.from('campaigns').insert([dbData]).select().single();
-      if (error) throw error;
+      if (!campaignToEdit) {
+        dbData.id_usuario = userId;
+      } else {
+        if (campaignToEdit.id_usuario) dbData.id_usuario = campaignToEdit.id_usuario;
+        if (campaignToEdit.id_cliente) dbData.id_cliente = campaignToEdit.id_cliente;
+      }
+
+      let newCamp: any;
+      if (campaignToEdit) {
+        const { data, error } = await supabase.from('campaigns').update(dbData).eq('id', campaignToEdit.id).select().single();
+        if (error) throw error;
+        newCamp = data;
+      } else {
+        const { data, error } = await supabase.from('campaigns').insert([dbData]).select().single();
+        if (error) throw error;
+        newCamp = data;
+      }
 
       // 3. Guardar publicación
       let finalImageUrl = '';
@@ -320,6 +366,12 @@ Genera la estrategia de marketing completa y estructurada como JSON. Asegúrate 
           fecha_publicacion: new Date(pubDateStr).toISOString(),
           imagen_url: finalImageUrl
         };
+        
+        if (campaignToEdit) {
+           // Delete old ones and insert new one, or update first one
+           await supabase.from('publicaciones').delete().eq('id_campana', newCamp.id);
+        }
+        
         const { error: pubError } = await supabase.from('publicaciones').insert([singlePub]);
         if (pubError) {
           console.error("Error al guardar publicación:", pubError);
@@ -712,7 +764,7 @@ Genera la estrategia de marketing completa y estructurada como JSON. Asegúrate 
               }}
               className="w-full py-4 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white rounded-xl font-bold text-lg transition-all shadow-[0_0_20px_rgba(124,58,237,0.4)]"
             >
-              Ir a Mis Campañas
+              {campaignToEdit ? 'Volver a Campañas' : 'Ir a Mis Campañas'}
             </button>
          </div>
       )}

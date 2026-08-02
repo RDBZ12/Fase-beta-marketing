@@ -6,7 +6,7 @@ import QRCode from 'qrcode';
 import {
   CreditCard, Plus, X, Save, Loader2, FileText,
   CheckCircle, Clock, XCircle, Download, Search,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, Eye, RefreshCw
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -477,9 +477,14 @@ export const PagosModule: React.FC = () => {
   const [loadingTable, setLoadingTable] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [page, setPage]             = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const [pageSize, setPageSize]     = useState(10);
+  const [selectedPago, setSelectedPago] = useState<Pago | null>(null);
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [isFlipped, setIsFlipped] = useState(false);
 
   const fetchStatsAndCampaigns = async () => {
     setLoading(true);
@@ -501,6 +506,13 @@ export const PagosModule: React.FC = () => {
 
     if (search) {
       query = query.or(`ncf.ilike.%${search}%,razon_social.ilike.%${search}%`);
+    }
+
+    if (startDate) {
+      query = query.gte('fecha', startDate);
+    }
+    if (endDate) {
+      query = query.lte('fecha', endDate + 'T23:59:59');
     }
 
     const from = pageIdx * currentSize;
@@ -528,7 +540,7 @@ export const PagosModule: React.FC = () => {
 
   useEffect(() => {
     fetchTablePage(page, searchTerm, pageSize);
-  }, [page, searchTerm, pageSize]);
+  }, [page, searchTerm, pageSize, startDate, endDate]);
 
   const handleSearchChange = (val: string) => {
     setSearchTerm(val);
@@ -569,47 +581,86 @@ export const PagosModule: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* KPI 1: Total Ingresos */}
-        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
-          <div>
-            <h3 className="text-sm font-bold text-slate-800 mb-1">Ingresos Totales</h3>
-            <p className="text-xs text-slate-500 mb-4">Total facturado con ITBIS</p>
-            <div className="flex items-end gap-3">
-              <span className="text-4xl font-black text-slate-900 tracking-tight">
-                ${totalIngresos.toLocaleString('en-US', { maximumFractionDigits: 0 })}
-              </span>
-            </div>
-          </div>
-          <div className="mt-6 flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div 
-                className="w-16 h-16 rounded-full flex items-center justify-center hover:scale-105 transition-transform cursor-pointer"
-                style={{
-                  background: `conic-gradient(#2563eb ${
-                    allPagosForStats.length ? Math.round((allPagosForStats.filter(p => p.estado_dgii === 'Aceptado').length / (allPagosForStats.filter(p => p.estado_dgii === 'Aceptado').length + allPagosForStats.filter(p => p.estado_dgii === 'Pendiente').length || 1)) * 100) : 0
-                  }%, #f1f5f9 0)`
-                }}
-                title={`Aceptados: ${allPagosForStats.filter(p => p.estado_dgii === 'Aceptado').length}\nPendientes: ${allPagosForStats.filter(p => p.estado_dgii === 'Pendiente').length}`}
-              >
-                <div className="w-12 h-12 bg-white rounded-full" />
-              </div>
-              <div className="text-xs text-slate-500 cursor-default">
-                <div 
-                  className="flex items-center gap-1.5 mb-1 hover:text-slate-800 transition-colors"
-                  title={`${allPagosForStats.filter(p => p.estado_dgii === 'Aceptado').length} pagos aceptados`}
-                >
-                  <div className="w-2 h-2 rounded-full bg-blue-600" /> Aceptado
+        <div 
+          className="relative w-full h-full [perspective:1000px] cursor-pointer group"
+          onClick={() => setIsFlipped(!isFlipped)}
+          style={{ minHeight: '220px' }}
+        >
+          <div 
+            className="w-full h-full transition-all duration-700 [transform-style:preserve-3d]"
+            style={{ transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)' }}
+          >
+            {/* Front Side (USD) */}
+            <div className="absolute inset-0 w-full h-full [backface-visibility:hidden] bg-white border border-slate-200 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
+              <div>
+                <div className="flex justify-between items-start">
+                  <h3 className="text-sm font-bold text-slate-800 mb-1">Ingresos Totales (USD)</h3>
+                  <RefreshCw className="w-4 h-4 text-slate-300 opacity-50 group-hover:opacity-100 transition-opacity" />
                 </div>
-                <div 
-                  className="flex items-center gap-1.5 hover:text-slate-800 transition-colors"
-                  title={`${allPagosForStats.filter(p => p.estado_dgii === 'Pendiente').length} pagos pendientes`}
-                >
-                  <div className="w-2 h-2 rounded-full bg-slate-200" /> Pendiente
+                <p className="text-xs text-slate-500 mb-4">Total facturado con ITBIS</p>
+                <div className="flex items-end gap-3">
+                  <span className="text-4xl font-black text-slate-900 tracking-tight">
+                    US${(totalIngresos / 59).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
                 </div>
               </div>
+              <div className="mt-6 flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div 
+                    className="w-16 h-16 rounded-full flex items-center justify-center hover:scale-105 transition-transform"
+                    style={{
+                      background: `conic-gradient(#2563eb ${
+                        allPagosForStats.length ? Math.round((allPagosForStats.filter(p => p.estado_dgii === 'Aceptado').length / (allPagosForStats.filter(p => p.estado_dgii === 'Aceptado').length + allPagosForStats.filter(p => p.estado_dgii === 'Pendiente').length || 1)) * 100) : 0
+                      }%, #f1f5f9 0)`
+                    }}
+                    title={`Aceptados: ${allPagosForStats.filter(p => p.estado_dgii === 'Aceptado').length}\nPendientes: ${allPagosForStats.filter(p => p.estado_dgii === 'Pendiente').length}`}
+                  >
+                    <div className="w-12 h-12 bg-white rounded-full" />
+                  </div>
+                  <div className="text-xs text-slate-500 cursor-default">
+                    <div 
+                      className="flex items-center gap-1.5 mb-1 hover:text-slate-800 transition-colors"
+                      title={`${allPagosForStats.filter(p => p.estado_dgii === 'Aceptado').length} pagos aceptados`}
+                    >
+                      <div className="w-2 h-2 rounded-full bg-blue-600" /> Aceptado
+                    </div>
+                    <div 
+                      className="flex items-center gap-1.5 hover:text-slate-800 transition-colors"
+                      title={`${allPagosForStats.filter(p => p.estado_dgii === 'Pendiente').length} pagos pendientes`}
+                    >
+                      <div className="w-2 h-2 rounded-full bg-slate-200" /> Pendiente
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-2xl font-bold text-emerald-500">{allPagosForStats.filter(p => p.estado_dgii === 'Pendiente').length}</p>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase">Pendientes</p>
+                </div>
+              </div>
             </div>
-            <div className="text-right">
-              <p className="text-2xl font-bold text-emerald-500">{allPagosForStats.filter(p => p.estado_dgii === 'Pendiente').length}</p>
-              <p className="text-[10px] text-slate-400 font-bold uppercase">Pendientes</p>
+
+            {/* Back Side (DOP) */}
+            <div 
+              className="absolute inset-0 w-full h-full [backface-visibility:hidden] bg-gradient-to-br from-slate-900 to-blue-900 rounded-3xl p-6 shadow-lg flex flex-col justify-between text-white"
+              style={{ transform: 'rotateY(180deg)' }}
+            >
+              <div>
+                <div className="flex justify-between items-start">
+                  <h3 className="text-sm font-bold text-white mb-1">Ingresos Totales (DOP)</h3>
+                  <RefreshCw className="w-4 h-4 text-slate-400 opacity-50 group-hover:opacity-100 transition-opacity" />
+                </div>
+                <p className="text-xs text-slate-400 mb-4">Total facturado con ITBIS</p>
+                <div className="flex items-end gap-3">
+                  <span className="text-4xl font-black text-white tracking-tight">
+                    RD${totalIngresos.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+              </div>
+              <div className="mt-6 flex items-center justify-between">
+                <div className="text-sm text-slate-400 italic">
+                  * Tasa de cambio base: RD$ 59.00
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -668,15 +719,32 @@ export const PagosModule: React.FC = () => {
       <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
         <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50/50">
           <h3 className="text-lg font-bold text-slate-800">Depósitos recientes</h3>
-          <div className="relative w-full sm:w-auto">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input 
-              type="text" 
-              placeholder="Buscar NCF o empresa..." 
-              value={searchTerm}
-              onChange={e => handleSearchChange(e.target.value)}
-              className="w-full sm:w-64 pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-            />
+          <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+            <div className="relative w-full sm:w-auto">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input 
+                type="text" 
+                placeholder="Buscar NCF o empresa..." 
+                value={searchTerm}
+                onChange={e => handleSearchChange(e.target.value)}
+                className="w-full sm:w-64 pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <input 
+                type="date"
+                value={startDate}
+                onChange={e => { setStartDate(e.target.value); setPage(0); }}
+                className="w-full sm:w-auto px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-slate-600"
+              />
+              <span className="text-slate-400">-</span>
+              <input 
+                type="date"
+                value={endDate}
+                onChange={e => { setEndDate(e.target.value); setPage(0); }}
+                className="w-full sm:w-auto px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-slate-600"
+              />
+            </div>
           </div>
         </div>
         {loadingTable && pagos.length === 0 ? (
@@ -722,30 +790,39 @@ export const PagosModule: React.FC = () => {
                           {p.fecha.includes('T') ? new Date(p.fecha).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : new Date(p.fecha + 'T12:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })}
                         </td>
                         <td className="px-4 py-3 text-left">
-                          <button 
-                            onClick={async () => {
-                              const html = await generateReceiptHTML({
-                                id_campana:   p.id_campana,
-                                monto:        p.monto,
-                                ncf:          p.ncf,
-                                metodo_pago:  p.metodo_pago,
-                                rnc_cedula:   p.rnc_cedula,
-                                razon_social: p.razon_social,
-                                nombre_campana: p.nombre_campana,
-                                fecha:        p.fecha,
-                                url_dgii:     (p as any).url_dgii,
-                              }, p.ncf || '');
-                              const win = window.open('', '_blank');
-                              if (win) { 
-                                win.document.write(html); 
-                                win.document.close(); 
-                              }
-                            }}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold text-violet-600 hover:text-slate-900 bg-violet-50 hover:bg-violet-100 rounded-lg transition-colors border border-violet-200/50"
-                          >
-                            <Download className="w-3 h-3" />
-                            <span>PDF</span>
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button 
+                              onClick={() => { setSelectedPago(p); setIsViewModalOpen(true); }}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold text-blue-600 hover:text-slate-900 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors border border-blue-200/50"
+                              title="Ver Detalle"
+                            >
+                              <Eye className="w-3 h-3" />
+                            </button>
+                            <button 
+                              onClick={async () => {
+                                const html = await generateReceiptHTML({
+                                  id_campana:   p.id_campana,
+                                  monto:        p.monto,
+                                  ncf:          p.ncf,
+                                  metodo_pago:  p.metodo_pago,
+                                  rnc_cedula:   p.rnc_cedula,
+                                  razon_social: p.razon_social,
+                                  nombre_campana: p.nombre_campana,
+                                  fecha:        p.fecha,
+                                  url_dgii:     (p as any).url_dgii,
+                                }, p.ncf || '');
+                                const win = window.open('', '_blank');
+                                if (win) { 
+                                  win.document.write(html); 
+                                  win.document.close(); 
+                                }
+                              }}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold text-violet-600 hover:text-slate-900 bg-violet-50 hover:bg-violet-100 rounded-lg transition-colors border border-violet-200/50"
+                            >
+                              <Download className="w-3 h-3" />
+                              <span>PDF</span>
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -806,6 +883,86 @@ export const PagosModule: React.FC = () => {
       </div>
 
       <PagoModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSaved={fetchAll} campaigns={campaigns} />
+      
+      {/* View Modal */}
+      {isViewModalOpen && selectedPago && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl border border-slate-100 overflow-hidden">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/60">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+                  <FileText className="w-5 h-5 text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-800">Detalle de Depósito</h3>
+                  <p className="text-xs font-semibold text-slate-500">NCF: {selectedPago.ncf || 'N/A'}</p>
+                </div>
+              </div>
+              <button onClick={() => setIsViewModalOpen(false)} className="p-2 rounded-xl text-slate-400 hover:bg-slate-100 transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Campaña</p>
+                  <p className="text-sm font-semibold text-slate-800">{selectedPago.nombre_campana || 'S/N'}</p>
+                </div>
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Método</p>
+                  <p className="text-sm font-semibold text-slate-800">{selectedPago.metodo_pago}</p>
+                </div>
+              </div>
+
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-3">
+                <div className="flex justify-between items-center">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Razón Social</p>
+                  <p className="text-sm font-semibold text-slate-800">{selectedPago.razon_social || 'Consumidor Final'}</p>
+                </div>
+                <div className="flex justify-between items-center">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">RNC/Cédula</p>
+                  <p className="text-sm font-semibold text-slate-800">{selectedPago.rnc_cedula || 'N/A'}</p>
+                </div>
+                <div className="flex justify-between items-center">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Fecha</p>
+                  <p className="text-sm font-semibold text-slate-800">{new Date(selectedPago.fecha).toLocaleString()}</p>
+                </div>
+              </div>
+
+              <div className="bg-blue-50/50 p-5 rounded-2xl border border-blue-100/50 space-y-3">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="font-semibold text-slate-600">Subtotal (DOP)</span>
+                  <span className="font-bold text-slate-800">
+                    RD$ {((selectedPago.total_con_itbis || (selectedPago.monto ? selectedPago.monto * 1.18 : 0)) - (selectedPago.itbis || (selectedPago.monto ? selectedPago.monto * 0.18 : 0))).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="font-semibold text-slate-600">ITBIS (18%)</span>
+                  <span className="font-bold text-slate-800">
+                    RD$ {(selectedPago.itbis || (selectedPago.monto ? selectedPago.monto * 0.18 : 0)).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <div className="pt-3 border-t border-blue-100 flex justify-between items-center">
+                  <span className="font-black text-slate-800">TOTAL (DOP)</span>
+                  <span className="text-xl font-black text-blue-600">
+                    RD$ {(selectedPago.total_con_itbis || (selectedPago.monto ? selectedPago.monto * 1.18 : 0)).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-6 pt-0 flex justify-end">
+              <button 
+                onClick={() => setIsViewModalOpen(false)}
+                className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold rounded-xl transition-colors"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -8,7 +8,8 @@ import {
   Loader2, Calendar, Image, AlignLeft, Send, TrendingUp, RefreshCw,
   MessageSquare
 } from 'lucide-react';
-import { sendWhatsAppTextMessage, sendWhatsAppImageMessage, getOpenWAGroups, getOpenWAContacts } from '../lib/whatsapp';
+import { sendKapsoMessage, sendKapsoImageMessage } from '../lib/whatsappService';
+import { getOpenWAGroups, getOpenWAContacts } from '../lib/whatsapp';
 
 const ESTADO_COLORS: Record<string, string> = {
   Programada: 'bg-blue-100 text-blue-700',
@@ -799,13 +800,16 @@ const ShareWhatsAppModal: React.FC<ShareWhatsAppModalProps> = ({ isOpen, onClose
         ? (localStorage.getItem(`client_whatsapp_session_${profile.id_usuario}`) || undefined)
         : undefined;
 
-      const [groups, contacts, leadsResult] = await Promise.all([
+      const [groups, contacts, leadsResult, clientesResult] = await Promise.all([
         getOpenWAGroups(clientSessionName).catch(() => []),
         getOpenWAContacts(clientSessionName).catch(() => []),
         supabase.from('leads').select('nombre, telefono').not('telefono', 'is', null),
+        supabase.from('clientes').select('nombre, telefono').not('telefono', 'is', null),
       ]);
 
       const leadsList = leadsResult.data || [];
+      const clientesList = clientesResult.data || [];
+      const allCrmContacts = [...leadsList, ...clientesList];
       const normalizePhone = (num: string) => num.replace(/[^0-9]/g, '');
 
       const getContactName = (id: string, currentName?: string) => {
@@ -816,7 +820,7 @@ const ShareWhatsAppModal: React.FC<ShareWhatsAppModalProps> = ({ isOpen, onClose
         }
 
         const chatPhone = id.split('@')[0];
-        const matchingLead = leadsList.find(lead => {
+        const matchingLead = allCrmContacts.find(lead => {
           const leadPhone = normalizePhone(lead.telefono || '');
           return leadPhone && (chatPhone.endsWith(leadPhone) || leadPhone.endsWith(chatPhone));
         });
@@ -847,7 +851,24 @@ const ShareWhatsAppModal: React.FC<ShareWhatsAppModalProps> = ({ isOpen, onClose
           };
         });
 
-      setWaChats([...formattedGroups, ...formattedContacts]);
+      // Inyectar leads y clientes como chats virtuales
+      const existingIds = new Set([...formattedGroups, ...formattedContacts].map(c => c.id));
+      const crmChats: any[] = [];
+      for (const contact of allCrmContacts) {
+        if (!contact.telefono) continue;
+        const phone = normalizePhone(contact.telefono);
+        const contactId = `${phone}@c.us`;
+        if (phone && !existingIds.has(contactId)) {
+          crmChats.push({
+            id: contactId,
+            name: contact.nombre || `+${phone}`,
+            isGroup: false,
+          });
+          existingIds.add(contactId);
+        }
+      }
+
+      setWaChats([...formattedGroups, ...formattedContacts, ...crmChats]);
     } catch (err) {
       console.warn("Could not fetch WA chats:", err);
     } finally {
@@ -900,11 +921,10 @@ const ShareWhatsAppModal: React.FC<ShareWhatsAppModalProps> = ({ isOpen, onClose
           reader.onloadend = async () => {
             try {
               const base64data = reader.result as string;
-              await sendWhatsAppImageMessage(
+              await sendKapsoImageMessage(
                 targetPhone, 
                 base64data, 
-                publication.contenido || undefined,
-                clientSessionName
+                publication.contenido || undefined
               );
               resolve();
             } catch (err) {
@@ -913,8 +933,14 @@ const ShareWhatsAppModal: React.FC<ShareWhatsAppModalProps> = ({ isOpen, onClose
           };
           reader.onerror = (e) => reject(e);
         });
+      } else if (publication.imagen_url) {
+        await sendKapsoImageMessage(
+          targetPhone,
+          publication.imagen_url,
+          publication.contenido || undefined
+        );
       } else {
-        await sendWhatsAppTextMessage(targetPhone, publication.contenido || '', clientSessionName);
+        await sendKapsoMessage(targetPhone, publication.contenido || '');
       }
 
       setSuccess(true);

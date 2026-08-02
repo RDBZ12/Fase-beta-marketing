@@ -257,10 +257,10 @@ export const LearningProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const current = steps[activeStepIndex];
 
     if (current) {
-      // Validaciones eliminadas: el botón Siguiente siempre permite saltar pasos.
+      // Validaciones eliminadas a petición: el botón Siguiente siempre permite avanzar.
+      // El avance automático por acciones sigue funcionando si el usuario interactúa.
     }
-
-
+    
     setValidationError(null);
     setFlowState('RUNNING');
 
@@ -290,6 +290,44 @@ export const LearningProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
     setIsChatOpen(prev => !prev);
   }, [isChatOpen, activeFlow, pausedFlow]);
+
+  // Auto-advance logic
+  useEffect(() => {
+    if (!activeFlow || (flowState !== 'RUNNING' && flowState !== 'WAITING_VALIDATION')) return;
+    
+    const steps = flowSteps[activeFlow] || [];
+    const current = steps[activeStepIndex];
+    if (!current) return;
+
+    let shouldAdvance = false;
+
+    // Si el paso requiere una acción específica (ej. clic en un botón) y se completó
+    if (current.requiresAction && current.actionId && completedActions[current.actionId]) {
+      shouldAdvance = true;
+    } 
+    // Si el paso esperaba un estado y ahora es válido (estando en WAITING_VALIDATION)
+    else if (current.expectedState) {
+      const { valid } = validateStepState(current);
+      if (valid && flowState === 'WAITING_VALIDATION') {
+        shouldAdvance = true;
+      }
+    }
+
+    if (shouldAdvance) {
+      if (current.actionId) {
+        setCompletedActions(prev => ({ ...prev, [current.actionId!]: false }));
+      }
+      setValidationError(null);
+      setFlowState('RUNNING');
+      
+      const nextIdx = activeStepIndex + 1;
+      if (nextIdx >= steps.length) {
+        finishFlow();
+      } else {
+        setActiveStepIndex(nextIdx);
+      }
+    }
+  }, [activeFlow, activeStepIndex, flowState, completedActions, uiState, validateStepState, finishFlow]);
 
   // Event listener global para iniciar tours interactivos desde botones y el centro de aprendizaje
   useEffect(() => {

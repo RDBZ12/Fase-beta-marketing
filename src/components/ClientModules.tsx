@@ -1,14 +1,13 @@
-// src/components/ClientModules.tsx (Parcial: Restauración de Perfil con Tour ID interactivo)
 import { useState, useEffect } from 'react';
-import { CreditCard, Download, ExternalLink, BarChart3, Users, MousePointerClick, User, Loader2, Search, Play, Square, RefreshCw, MessageSquare, AlertCircle, Save as SaveIcon } from 'lucide-react';
+import { CreditCard, Download, ExternalLink, BarChart3, Users, MousePointerClick, User, Loader2, Search, Play, Square, RefreshCw, MessageSquare, AlertCircle, Save as SaveIcon, Heart, MessageCircle, Share2, Calendar } from 'lucide-react';
 import { useUser } from '../context/UserContext';
 import { supabase } from '../supabaseClient';
 import type { Campaign } from '../types';
-import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { generateReceiptHTML } from './PagosModule';
 import { getOpenWASessions, createOpenWASession, startOpenWASession, stopOpenWASession, getOpenWAQRCode } from '../lib/whatsapp';
 import { getRecentMedia, getMediaInsights } from '../utils/instagramAnalytics';
-import { Camera, ChevronLeft, ChevronRight, ArrowLeftRight } from 'lucide-react';
+import { Eye, X, Camera, ChevronLeft, ChevronRight, ArrowLeftRight, DollarSign, FileText } from 'lucide-react';
 import { LearningDispatcher } from '../learning/services/LearningDispatcher';
 
 // ==========================================
@@ -18,9 +17,12 @@ export const ClientPagosModule = ({ campaigns, onPagar }: { campaigns: Campaign[
   const [pagos, setPagos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [page, setPage] = useState(0);
   const [pageSize] = useState(10);
   const [isFlipped, setIsFlipped] = useState(false);
+  const [selectedDetail, setSelectedDetail] = useState<any>(null);
   const { profile } = useUser();
 
   const getStableNCF = (campaignId: string) => {
@@ -81,7 +83,7 @@ export const ClientPagosModule = ({ campaigns, onPagar }: { campaigns: Campaign[
           url_dgii: dbPago?.url_dgii,
           rawCampaign: c
         };
-      });
+      }).sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
       setPagos(formatPagos);
       setLoading(false);
     };
@@ -127,7 +129,13 @@ export const ClientPagosModule = ({ campaigns, onPagar }: { campaigns: Campaign[
     return { name, monto };
   }).filter((_, index) => index <= currentDate.getMonth());
 
-  const filtered = pagos.filter(p => p.concepto.toLowerCase().includes(searchTerm.toLowerCase()) || p.ncf.toLowerCase().includes(searchTerm.toLowerCase()));
+  const filtered = pagos.filter(p => {
+    const matchText = p.concepto.toLowerCase().includes(searchTerm.toLowerCase()) || p.ncf.toLowerCase().includes(searchTerm.toLowerCase());
+    const pFecha = new Date(p.fecha);
+    const matchFrom = dateFrom ? pFecha >= new Date(dateFrom) : true;
+    const matchTo = dateTo ? pFecha <= new Date(dateTo + 'T23:59:59') : true;
+    return matchText && matchFrom && matchTo;
+  });
   const paginatedPagos = filtered.slice(page * pageSize, (page + 1) * pageSize);
 
   return (
@@ -212,34 +220,90 @@ export const ClientPagosModule = ({ campaigns, onPagar }: { campaigns: Campaign[
             </ResponsiveContainer>
           </div>
         </div>
-        <div className="bg-gradient-to-br from-[#1e1b4b] to-[#311042] border border-slate-800 rounded-3xl p-6 text-white flex flex-col justify-between relative overflow-hidden shadow-xl min-h-[200px]">
-          <div className="absolute -right-6 -bottom-6 w-32 h-32 bg-violet-500/20 rounded-full blur-2xl" />
-          <div className="flex justify-between items-start">
+        <div className="relative rounded-3xl p-6 flex flex-col justify-between overflow-hidden min-h-[200px] bg-gradient-to-br from-[#1a1040] via-[#2d1b69] to-[#4c1d95] shadow-xl shadow-violet-900/40">
+          {/* Decorative circles */}
+          <div className="absolute -top-10 -right-10 w-44 h-44 bg-violet-500/20 rounded-full blur-2xl pointer-events-none" />
+          <div className="absolute bottom-0 left-0 w-32 h-32 bg-fuchsia-600/20 rounded-full blur-2xl pointer-events-none" />
+          {/* Chip decorativo */}
+          <div className="absolute top-6 right-6 w-9 h-9 rounded-xl bg-gradient-to-br from-yellow-300/80 to-yellow-500/60 border border-yellow-200/40 shadow-inner flex items-center justify-center">
+            <CreditCard className="w-4 h-4 text-yellow-900/70" />
+          </div>
+
+          {/* Top: titular */}
+          <div className="relative">
+            <p className="text-[9px] font-bold text-violet-300/70 uppercase tracking-widest mb-2">Titular de la cuenta</p>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-white/15 backdrop-blur-sm border border-white/20 flex items-center justify-center shrink-0">
+                <span className="text-lg font-black text-white">
+                  {(profile?.nombre?.charAt(0) || 'C').toUpperCase()}
+                </span>
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-white leading-tight tracking-wide">
+                  {profile?.nombre || 'Cliente'} {profile?.apellido || ''}
+                </h3>
+                <p className="text-[10px] text-violet-300/60 font-medium">{profile?.correo || ''}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Bottom: PayPal linked */}
+          <div className="relative flex items-end justify-between mt-4">
             <div>
-              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Pasarela Oficial</p>
-              <h3 className="text-lg font-black tracking-wide mt-0.5">PayPal Integrado</h3>
+              <p className="text-[9px] text-violet-300/50 font-semibold uppercase tracking-widest mb-1">Método de pago</p>
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 bg-[#003087] rounded-lg flex items-center justify-center shadow-md">
+                  <span className="text-white font-black text-[10px]">P</span>
+                </div>
+                <span className="text-sm font-black text-white">PayPal</span>
+                <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]" />
+              </div>
             </div>
-            <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center backdrop-blur-md">
-              <CreditCard className="w-5 h-5 text-violet-400" />
-            </div>
-          </div>
-          <div className="my-4">
-            <p className="text-[10px] text-slate-400 font-medium mb-1">Método de depósito express</p>
-            <p className="text-xs text-slate-300 leading-relaxed font-semibold">Tus fondos se acreditan de forma inmediata para activar campañas en menos de 10 minutos.</p>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-mono text-slate-400 tracking-widest">SECURE CHECKOUT</span>
-            <span className="text-xs font-bold text-violet-400 bg-violet-400/10 px-2.5 py-1 rounded-lg border border-violet-500/20">Meta Verified</span>
+            <span className="text-[9px] font-mono text-violet-300/40 tracking-widest">SECURE ✦</span>
           </div>
         </div>
       </div>
 
       <div id="tour-pagos-history" className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
-        <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-            <input type="text" placeholder="Buscar por concepto o NCF..." value={searchTerm} onChange={e => { setSearchTerm(e.target.value); setPage(0); }} className="w-full pl-9 pr-4 py-2 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent text-slate-700" />
+        <div className="p-6 border-b border-slate-100 flex flex-col gap-3">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            {/* Buscador texto */}
+            <div className="relative flex-1 min-w-0">
+              <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+              <input type="text" placeholder="Buscar por concepto o NCF..." value={searchTerm} onChange={e => { setSearchTerm(e.target.value); setPage(0); }} className="w-full pl-9 pr-4 py-2 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent text-slate-700" />
+            </div>
+            {/* Filtro de fechas */}
+            <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5">
+              <Calendar className="w-4 h-4 text-violet-500 shrink-0" />
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={e => { setDateFrom(e.target.value); setPage(0); }}
+                className="bg-transparent text-xs font-semibold text-slate-700 outline-none cursor-pointer"
+                title="Desde"
+              />
+              <span className="text-slate-400 text-xs font-bold">—</span>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={e => { setDateTo(e.target.value); setPage(0); }}
+                className="bg-transparent text-xs font-semibold text-slate-700 outline-none cursor-pointer"
+                title="Hasta"
+              />
+              {(dateFrom || dateTo) && (
+                <button
+                  onClick={() => { setDateFrom(''); setDateTo(''); setPage(0); }}
+                  className="ml-1 text-slate-400 hover:text-rose-500 transition-colors text-xs font-black"
+                  title="Limpiar filtro"
+                >✕</button>
+              )}
+            </div>
           </div>
+          {(dateFrom || dateTo) && (
+            <p className="text-[11px] text-violet-600 font-semibold">
+              Mostrando {filtered.length} resultado{filtered.length !== 1 ? 's' : ''}{dateFrom ? ` desde ${new Date(dateFrom).toLocaleDateString()}` : ''}{dateTo ? ` hasta ${new Date(dateTo).toLocaleDateString()}` : ''}
+            </p>
+          )}
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -247,7 +311,9 @@ export const ClientPagosModule = ({ campaigns, onPagar }: { campaigns: Campaign[
               <tr className="border-b border-slate-100 bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                 <th className="p-4">Fecha</th>
                 <th className="p-4">Concepto</th>
-                <th className="p-4 text-right">Monto</th>
+                <th className="p-4 text-right">Monto (USD)</th>
+                <th className="p-4 text-right">Monto (DOP)</th>
+                <th className="p-4 text-right">Con ITBIS 18%</th>
                 <th className="p-4">NCF (e-CF)</th>
                 <th className="p-4">Canal</th>
                 <th className="p-4">Estado</th>
@@ -257,11 +323,11 @@ export const ClientPagosModule = ({ campaigns, onPagar }: { campaigns: Campaign[
             <tbody className="divide-y divide-slate-100 text-xs text-slate-700 font-medium">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="p-8 text-center text-slate-400">Cargando transacciones...</td>
+                  <td colSpan={9} className="p-8 text-center text-slate-400">Cargando transacciones...</td>
                 </tr>
               ) : paginatedPagos.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-8 text-center text-slate-400">No hay pagos registrados.</td>
+                  <td colSpan={9} className="p-8 text-center text-slate-400">No hay pagos registrados.</td>
                 </tr>
               ) : (
                 paginatedPagos.map((p, i) => (
@@ -269,6 +335,14 @@ export const ClientPagosModule = ({ campaigns, onPagar }: { campaigns: Campaign[
                     <td className="p-4 whitespace-nowrap">{new Date(p.fecha).toLocaleDateString()}</td>
                     <td className="p-4">{p.concepto}</td>
                     <td className="p-4 text-right font-bold text-slate-900">${(p.monto * 1.18).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-[10px] text-slate-400 font-semibold">USD</span></td>
+                    <td className="p-4 text-right">
+                      <span className="font-bold text-slate-900">RD${(p.monto * 59).toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      <span className="block text-[10px] text-slate-400 font-semibold">DOP</span>
+                    </td>
+                    <td className="p-4 text-right">
+                      <span className="font-bold text-slate-900">RD${(p.monto * 59 * 1.18).toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      <span className="block text-[10px] text-slate-400 font-semibold">Inc. ITBIS</span>
+                    </td>
                     <td className="p-4 font-mono font-bold text-slate-900">{p.ncf}</td>
                     <td className="p-4 whitespace-nowrap">{p.metodo_pago}</td>
                     <td className="p-4">
@@ -288,9 +362,16 @@ export const ClientPagosModule = ({ campaigns, onPagar }: { campaigns: Campaign[
                           }} className="px-3 py-1 bg-violet-600 hover:bg-violet-700 text-white rounded-lg font-bold text-[10px] uppercase tracking-wider transition-colors shadow-sm">Pagar</button>
                         ) : (
                           <>
+                            <button id="tour-pagos-detail" onClick={() => setSelectedDetail(p)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-slate-100 rounded-lg transition-colors" title="Ver Detalle Completo"><Eye className="w-4 h-4" /></button>
                             <button id="tour-pagos-download" onClick={() => handleDownloadPDF(p)} className="p-1.5 text-slate-400 hover:text-violet-600 hover:bg-slate-100 rounded-lg transition-colors" title="Descargar Factura Electrónica (PDF)"><Download className="w-4 h-4" /></button>
                             {p.url_dgii && (
-                              <a href={p.url_dgii} target="_blank" rel="noreferrer" className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-slate-100 rounded-lg transition-colors" title="Ver en DGII (Comprobante Fiscal)"><ExternalLink className="w-4 h-4" /></a>
+                              <button onClick={(e) => {
+                                e.stopPropagation();
+                                const url = p.url_dgii.startsWith('http') ? p.url_dgii : `https://${p.url_dgii}`;
+                                window.open(url, '_blank', 'noopener,noreferrer');
+                              }} className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-slate-100 rounded-lg transition-colors" title="Ver en DGII (Comprobante Fiscal)">
+                                <ExternalLink className="w-4 h-4" />
+                              </button>
                             )}
                           </>
                         )}
@@ -312,6 +393,105 @@ export const ClientPagosModule = ({ campaigns, onPagar }: { campaigns: Campaign[
           </div>
         )}
       </div>
+
+      {selectedDetail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm bg-slate-900/40 animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-violet-100 text-violet-600 flex items-center justify-center">
+                  <Eye className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-800">Detalle de Publicación</h3>
+                  <p className="text-xs text-slate-500 font-medium">Información completa del pago</p>
+                </div>
+              </div>
+              <button onClick={() => setSelectedDetail(null)} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto space-y-6">
+              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Campaña Asociada</p>
+                <p className="text-sm font-bold text-slate-800">{selectedDetail.nombre_campana}</p>
+                <div className="mt-3 flex items-center gap-2">
+                  <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${
+                    selectedDetail.estado === 'Aprobado' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                  }`}>
+                    {selectedDetail.estado}
+                  </span>
+                  <span className="text-xs font-medium text-slate-500">{new Date(selectedDetail.fecha).toLocaleDateString()}</span>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                  <DollarSign className="w-4 h-4 text-violet-500" />
+                  Desglose de Facturación
+                </h4>
+                
+                <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-500">Monto Base</span>
+                    <span className="font-semibold text-slate-700">${selectedDetail.monto.toLocaleString('en-US', { minimumFractionDigits: 2 })} USD</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-500">ITBIS (18%)</span>
+                    <span className="font-semibold text-slate-700">${(selectedDetail.monto * 0.18).toLocaleString('en-US', { minimumFractionDigits: 2 })} USD</span>
+                  </div>
+                  <div className="h-px bg-slate-100 my-2" />
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-bold text-slate-800">Total a Pagar (USD)</span>
+                    <span className="text-lg font-black text-violet-600">${(selectedDetail.monto * 1.18).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                  <div className="flex justify-between items-center pt-1">
+                    <span className="text-xs font-bold text-slate-400">Total a Pagar (DOP)</span>
+                    <span className="text-sm font-bold text-slate-800">RD$ {((selectedDetail.monto * 1.18) * 59).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                </div>
+              </div>
+
+              {selectedDetail.ncf && selectedDetail.ncf !== 'Pendiente' && (
+                <div className="space-y-3">
+                  <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-emerald-500" />
+                    Comprobante Fiscal
+                  </h4>
+                  <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 flex flex-col gap-2">
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-slate-500">NCF</span>
+                      <span className="font-mono font-bold text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200">{selectedDetail.ncf}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-slate-500">RNC/Cédula</span>
+                      <span className="font-mono font-bold text-slate-800">{selectedDetail.rnc || 'Consumidor Final'}</span>
+                    </div>
+                    {selectedDetail.url_dgii && (
+                      <button 
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          const url = selectedDetail.url_dgii.startsWith('http') ? selectedDetail.url_dgii : `https://${selectedDetail.url_dgii}`;
+                          window.open(url, '_blank', 'noopener,noreferrer');
+                        }}
+                        className="mt-3 w-full text-xs flex items-center justify-center gap-1 font-bold text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 py-2.5 rounded-xl transition-all shadow-sm"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" /> Validar en la DGII
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex justify-end shrink-0">
+              <button onClick={() => setSelectedDetail(null)} className="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-medium transition-colors text-sm">Cerrar Detalle</button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
@@ -319,132 +499,318 @@ export const ClientPagosModule = ({ campaigns, onPagar }: { campaigns: Campaign[
 // ==========================================
 // MÓDULO DE ESTADÍSTICAS DEL CLIENTE
 // ==========================================
-export const ClientEstadisticasModule = ({ campaigns }: { campaigns: Campaign[] }) => {
+export const ClientEstadisticasModule = ({ campaigns }: { campaigns: any[] }) => {
+  const [chartData, setChartData] = useState<any[]>([]);
+  const [realClicks, setRealClicks] = useState<number | null>(null);
   const [instagramPosts, setInstagramPosts] = useState<any[]>([]);
-  const [, setLoadingInsta] = useState(false);
-  const { profile } = useUser();
+  const [loading, setLoading] = useState(true);
+  const [daysRange, setDaysRange] = useState<string>('7'); // '7', '14', '30', 'custom'
+  const [startDate, setStartDate] = useState<string>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 6);
+    return d.toISOString().split('T')[0];
+  });
+  const [endDate, setEndDate] = useState<string>(() => {
+    return new Date().toISOString().split('T')[0];
+  });
 
-  const totalLeads = campaigns.reduce((sum, c) => sum + (c.leads || 0), 0);
-  const avgCtr = campaigns.length > 0 ? campaigns.reduce((sum, c) => sum + (c.ctr || 0), 0) / campaigns.length : 0;
-  const totalReach = campaigns.reduce((sum, c) => sum + Number((c.reach || '0').replace(/[^0-9]/g, '')), 0);
+  const activeCamp = campaigns.filter(c => c.status === 'Activa').length;
+  const totalReach = campaigns.reduce((acc, c) => acc + (parseInt(String(c.reach).replace(/\D/g, '')) || 0), 0);
+  const totalLeads = campaigns.reduce((acc, c) => acc + (c.leads || 0), 0);
+
+  const handleRangePresetChange = (preset: string) => {
+    setDaysRange(preset);
+    if (preset !== 'custom') {
+      const numDays = parseInt(preset, 10);
+      const end = new Date();
+      const start = new Date();
+      start.setDate(end.getDate() - (numDays - 1));
+      setStartDate(start.toISOString().split('T')[0]);
+      setEndDate(end.toISOString().split('T')[0]);
+    }
+  };
 
   useEffect(() => {
-    const fetchInstagram = async () => {
-      if (!profile?.id_usuario) return;
-      setLoadingInsta(true);
-      try {
-        const { data: clientData } = await supabase
-          .from('clientes_portal')
-          .select('instagram_access_token, instagram_account_id')
-          .eq('auth_user_id', profile.id_usuario)
-          .maybeSingle();
-
-        const token = clientData?.instagram_access_token;
-        const accountId = clientData?.instagram_account_id;
-        if (token && accountId) {
-          const media = await getRecentMedia(accountId, token);
-          const detailedMedia = await Promise.all(media.map(async (m: any) => {
-            try {
-              const insights = await getMediaInsights(m.id, token);
-              return { ...m, ...insights };
-            } catch {
-              return m;
-            }
-          }));
-          setInstagramPosts(detailedMedia);
-        }
-      } catch (err) {
-        console.error("Error fetching Instagram feed:", err);
-      } finally {
-        setLoadingInsta(false);
+    const fetchRealData = async () => {
+      setLoading(true);
+      const campIds = campaigns.map(c => c.id);
+      if (campIds.length === 0) {
+        setChartData([]);
+        setLoading(false);
+        return;
       }
-    };
-    fetchInstagram();
-  }, [profile?.id_usuario]);
 
+      // Generate date range list
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      const daysList: { date: string; count: number }[] = [];
+      
+      const curr = new Date(start);
+      let limit = 0;
+      while (curr <= end && limit < 365) {
+        daysList.push({ date: curr.toISOString().split('T')[0], count: 0 });
+        curr.setDate(curr.getDate() + 1);
+        limit++;
+      }
+
+      const { data: pubs } = await supabase
+        .from('publicaciones')
+        .select('id_publicacion, fecha_publicacion')
+        .in('id_campana', campIds);
+
+      if (pubs) {
+        pubs.forEach(pub => {
+          if (pub.fecha_publicacion) {
+            const pubDate = pub.fecha_publicacion.split('T')[0];
+            const dayEntry = daysList.find(d => d.date === pubDate);
+            if (dayEntry) dayEntry.count += 1;
+          }
+        });
+
+        // Fetch real interactions from database
+        let interactionsByDate: Record<string, number> = {};
+        
+        if (pubs.length > 0) {
+          const { data: interaccionesData, error: intError } = await supabase
+            .from('interacciones')
+            .select('fecha, cantidad')
+            .in('id_publicacion', pubs.map(p => p.id_publicacion));
+
+          if (!intError && interaccionesData) {
+            interaccionesData.forEach(int => {
+              if (int.fecha) {
+                const dateStr = int.fecha.split('T')[0];
+                interactionsByDate[dateStr] = (interactionsByDate[dateStr] || 0) + (int.cantidad || 0);
+              }
+            });
+          }
+        }
+
+        // Formatear fechas para el gráfico
+        const formattedData = daysList.map(d => {
+          const parts = d.date.split('-');
+          const label = `${parts[2]}/${parts[1]}`;
+          return {
+            fecha: label,
+            fullDate: d.date,
+            publicaciones: d.count,
+            interacciones: interactionsByDate[d.date] || 0
+          };
+        });
+        
+        setChartData(formattedData);
+      }
+
+      // 2. Fetch Real Link Analytics from Edge Function
+      try {
+        const { data: edgeData, error: edgeErr } = await supabase.functions.invoke('publish_social', {
+          body: { action: 'analytics_links' }
+        });
+        if (!edgeErr && edgeData?.status === 'success' && edgeData.analytics) {
+          const links = edgeData.analytics;
+          const totalLinkClicks = links.reduce((sum: number, link: any) => sum + (link.totalClicks || 0), 0);
+          setRealClicks(totalLinkClicks);
+        }
+      } catch (e) {
+        console.error("Error fetching link analytics", e);
+      }
+
+      // 3. Fetch Real Instagram Analytics (Meta Graph API)
+      try {
+        const token = import.meta.env.VITE_INSTAGRAM_ACCESS_TOKEN;
+        const accountId = import.meta.env.VITE_INSTAGRAM_BUSINESS_ACCOUNT_ID;
+        
+        if (token && accountId) {
+          const recentMedia = await getRecentMedia(accountId, token, 3);
+          
+          const enrichedMedia = await Promise.all(
+            recentMedia.map(async (media: any) => {
+              try {
+                const insights = await getMediaInsights(media.id, token);
+                const sharesMetric = insights.find((m: any) => m.name === 'shares');
+                return {
+                  ...media,
+                  shares_count: sharesMetric?.values[0]?.value || 0
+                };
+              } catch (e) {
+                return { ...media, shares_count: 0 };
+              }
+            })
+          );
+          
+          setInstagramPosts(enrichedMedia);
+        }
+      } catch (e) {
+        console.error("Error fetching Instagram analytics", e);
+      }
+
+      setLoading(false);
+    };
+
+    fetchRealData();
+  }, [campaigns, startDate, endDate]);
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div>
-        <h2 className="text-3xl font-bold tracking-tight mb-2">Métricas e Informes</h2>
-        <p className="text-slate-500">Supervisa el rendimiento integral de tus anuncios y publicaciones sociales.</p>
+        <h2 className="text-3xl font-bold tracking-tight mb-2">Estadísticas y Resultados</h2>
+        <p className="text-slate-500">Métricas en tiempo real basadas en la actividad de tu cuenta.</p>
       </div>
 
       <div id="tour-stats-kpi" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-violet-50 flex items-center justify-center text-violet-600 shrink-0"><MousePointerClick className="w-6 h-6" /></div>
-          <div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">CTR Promedio</p>
-            <p className="text-2xl font-black text-slate-900 tracking-tight mt-0.5">{avgCtr.toFixed(2)}%</p>
+        <div className="bg-white border border-slate-200 rounded-2xl p-6 backdrop-blur-xl relative overflow-hidden group hover:border-violet-500/30 transition-colors">
+          <div className="w-10 h-10 rounded-xl bg-violet-500/20 text-violet-400 flex items-center justify-center mb-4">
+            <Users className="w-5 h-5" />
+          </div>
+          <h3 className="text-sm font-medium text-slate-500">Alcance Estimado</h3>
+          <div className="text-3xl font-bold text-slate-900 mt-1">{totalReach > 0 ? (totalReach / 1000).toFixed(1) + 'K' : '0'}</div>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-2xl p-6 backdrop-blur-xl relative overflow-hidden group hover:border-violet-500/30 transition-colors">
+          <div className="w-10 h-10 rounded-xl bg-pink-500/20 text-pink-400 flex items-center justify-center mb-4">
+            <MousePointerClick className="w-5 h-5" />
+          </div>
+          <h3 className="text-sm font-medium text-slate-500">
+             {realClicks !== null ? "Clics Reales en Enlaces" : "Interacciones Esperadas"}
+          </h3>
+          <div className="text-3xl font-bold text-slate-900 mt-1">
+            {realClicks !== null ? realClicks : (totalReach * 0.05).toFixed(0)}
           </div>
         </div>
-        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0"><Users className="w-6 h-6" /></div>
-          <div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Leads Totales</p>
-            <p className="text-2xl font-black text-slate-900 tracking-tight mt-0.5">{totalLeads.toLocaleString()}</p>
+
+        <div className="bg-white border border-slate-200 rounded-2xl p-6 backdrop-blur-xl relative overflow-hidden group hover:border-violet-500/30 transition-colors">
+          <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center mb-4">
+            <ExternalLink className="w-5 h-5" />
           </div>
+          <h3 className="text-sm font-medium text-slate-500">Conversiones (Leads)</h3>
+          <div className="text-3xl font-bold text-slate-900 mt-1">{totalLeads}</div>
         </div>
-        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600 shrink-0"><BarChart3 className="w-6 h-6" /></div>
-          <div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Alcance Histórico</p>
-            <p className="text-2xl font-black text-slate-900 tracking-tight mt-0.5">{totalReach.toLocaleString()}</p>
+
+        <div className="bg-white border border-slate-200 rounded-2xl p-6 backdrop-blur-xl relative overflow-hidden group hover:border-violet-500/30 transition-colors">
+          <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-500 flex items-center justify-center mb-4">
+            <BarChart3 className="w-5 h-5" />
           </div>
-        </div>
-        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0"><CreditCard className="w-6 h-6" /></div>
-          <div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Campañas Activas</p>
-            <p className="text-2xl font-black text-slate-900 tracking-tight mt-0.5">{campaigns.filter(c => c.status === 'Activa').length}</p>
-          </div>
+          <h3 className="text-sm font-medium text-slate-500">Campañas Activas</h3>
+          <div className="text-3xl font-bold text-slate-900 mt-1">{activeCamp}</div>
+          <p className="text-xs text-slate-400 mt-2 font-medium">De {campaigns.length} totales</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white border border-slate-200 rounded-3xl p-8 shadow-sm">
-          <div className="flex justify-between items-center mb-6">
-            <div>
-              <h3 className="text-base font-bold text-slate-800">Alcance esta semana</h3>
-              <p className="text-xs text-slate-500 font-medium">Personas alcanzadas por día</p>
-            </div>
-            <span className="text-xs text-emerald-500 font-bold bg-emerald-50 px-2.5 py-1.5 rounded-lg border border-emerald-500/20 flex items-center gap-1">↑ +34% esta semana</span>
+      <div className="bg-white border border-slate-200 rounded-3xl p-8 backdrop-blur-xl shadow-lg relative overflow-hidden">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+          <div>
+            <h3 className="text-lg font-bold text-slate-700">
+              Actividad de Publicaciones {daysRange === '7' ? '(Últimos 7 días)' : daysRange === '14' ? '(Últimos 14 días)' : daysRange === '30' ? '(Últimos 30 días)' : ''}
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Filtra la actividad de tus publicaciones por rango de fechas.
+            </p>
           </div>
-          <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <ResponsiveContainer width="100%" height="100%">
-                <ResponsiveContainer width="100%" height="100%">
-                  <div className="h-64 w-full text-slate-400 flex items-center justify-center">Gráfico semanal activo</div>
-                </ResponsiveContainer>
-              </ResponsiveContainer>
-            </ResponsiveContainer>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200">
+              <button
+                type="button"
+                onClick={() => handleRangePresetChange('7')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  daysRange === '7'
+                    ? 'bg-violet-600 text-white shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                }`}
+              >
+                7 días
+              </button>
+              <button
+                type="button"
+                onClick={() => handleRangePresetChange('14')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  daysRange === '14'
+                    ? 'bg-violet-600 text-white shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                }`}
+              >
+                14 días
+              </button>
+              <button
+                type="button"
+                onClick={() => handleRangePresetChange('30')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  daysRange === '30'
+                    ? 'bg-violet-600 text-white shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                }`}
+              >
+                30 días
+              </button>
+              <button
+                type="button"
+                onClick={() => setDaysRange('custom')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  daysRange === 'custom'
+                    ? 'bg-violet-600 text-white shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                }`}
+              >
+                Personalizado
+              </button>
+            </div>
+
+            {daysRange === 'custom' && (
+              <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-200 animate-in fade-in duration-200">
+                <Calendar className="w-4 h-4 text-violet-500 ml-1" />
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-violet-500"
+                />
+                <span className="text-slate-400 text-xs font-medium">a</span>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-violet-500"
+                />
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="bg-[#1e1b4b] border border-slate-800 rounded-3xl p-6 text-white flex flex-col justify-between shadow-xl">
-          <div>
-            <h3 className="text-sm font-bold text-slate-200">Meta Insights API</h3>
-            <p className="text-xs text-slate-400 mt-1 leading-relaxed">Conecta tu cuenta publicitaria de Meta Ads para importar conversiones, costo por lead (CPL) y ROI de forma automática.</p>
-          </div>
-          <div className="my-6 p-4 bg-white/5 rounded-2xl border border-white/10 flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center shrink-0 font-black">f</div>
-            <div>
-              <h4 className="text-xs font-bold">Meta Ads Business</h4>
-              <p className="text-[10px] text-slate-400 mt-0.5">Integración autorizada</p>
-            </div>
-          </div>
-          <button className="w-full py-3 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-xs font-bold transition-all shadow-md">Configurar Meta Ads</button>
-        </div>
+        {loading ? (
+           <div className="flex justify-center items-center h-[300px]">Cargando métricas...</div>
+        ) : chartData.length > 0 && chartData.some(d => d.publicaciones > 0 || d.interacciones > 0) ? (
+           <div className="h-[300px] w-full">
+             <ResponsiveContainer width="100%" height="100%">
+               <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                 <XAxis dataKey="fecha" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} dy={10} />
+                 <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
+                 <Tooltip cursor={{fill: '#f1f5f9'}} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}} />
+                 <Bar dataKey="publicaciones" fill="#8b5cf6" radius={[4, 4, 0, 0]} name="Publicaciones Realizadas" />
+                 <Bar dataKey="interacciones" fill="#ec4899" radius={[4, 4, 0, 0]} name="Interacciones" />
+               </BarChart>
+             </ResponsiveContainer>
+           </div>
+        ) : (
+           <div className="flex flex-col items-center justify-center min-h-[250px] text-center">
+             <BarChart3 className="w-12 h-12 text-slate-300 mb-4" />
+             <p className="text-slate-500">Aún no hay publicaciones en el rango seleccionado.</p>
+           </div>
+        )}
       </div>
 
+      {/* SECCIÓN INSTAGRAM EN TIEMPO REAL */}
       <div id="tour-stats-ig" className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm">
         <div className="flex items-center gap-3 mb-6">
-          <Camera className="text-rose-500 w-6 h-6" />
+          <div className="w-10 h-10 rounded-xl bg-pink-500/10 text-pink-500 flex items-center justify-center">
+            <Camera className="w-5 h-5" />
+          </div>
           <div>
-            <h3 className="text-lg font-bold text-slate-900">Instagram Social Feed</h3>
+            <h3 className="text-lg font-bold text-slate-900">Rendimiento en Instagram</h3>
             <p className="text-xs text-slate-500">Métricas en tiempo real directamente desde Meta API</p>
           </div>
         </div>
+
         {instagramPosts.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {instagramPosts.map((post) => (
@@ -453,6 +819,7 @@ export const ClientEstadisticasModule = ({ campaigns }: { campaigns: Campaign[] 
                   {post.media_type === 'VIDEO' ? (
                     <div className="w-full h-full flex items-center justify-center bg-slate-900 text-white relative">
                        <video src={post.media_url} className="w-full h-full object-cover opacity-80" muted loop playsInline />
+                       <Play className="absolute w-12 h-12 text-white/70" />
                     </div>
                   ) : (
                     <img src={post.media_url} alt={post.caption || 'Publicación de Instagram'} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
@@ -463,15 +830,30 @@ export const ClientEstadisticasModule = ({ campaigns }: { campaigns: Campaign[] 
                 </div>
                 <div className="p-4">
                   <p className="text-xs text-slate-600 line-clamp-2 mb-4 h-8">{post.caption}</p>
+                  
+                  <div className="flex items-center justify-between border-t border-slate-200/60 pt-3">
+                    <div className="flex items-center gap-1.5 text-rose-500">
+                      <Heart className="w-4 h-4 fill-current" />
+                      <span className="text-sm font-bold">{post.like_count || 0}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-blue-500">
+                      <MessageCircle className="w-4 h-4 fill-current" />
+                      <span className="text-sm font-bold">{post.comments_count || 0}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-emerald-500">
+                      <Share2 className="w-4 h-4" />
+                      <span className="text-sm font-bold">{post.shares_count || 0}</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             ))}
           </div>
         ) : (
-          <div className="text-center py-10 bg-slate-50 rounded-2xl border border-dashed border-slate-300">
-            <Camera className="w-8 h-8 text-slate-300 mx-auto mb-3" />
-            <p className="text-sm text-slate-500">No se encontraron publicaciones recientes o el token no está configurado.</p>
-          </div>
+           <div className="text-center py-10 bg-slate-50 rounded-2xl border border-dashed border-slate-300">
+              <Camera className="w-8 h-8 text-slate-300 mx-auto mb-3" />
+              <p className="text-sm text-slate-500">No se encontraron publicaciones recientes o el token no está configurado.</p>
+           </div>
         )}
       </div>
     </div>

@@ -7,7 +7,7 @@ import {
   Search, Loader2, Mail, Phone, Tag, Megaphone,
   MessageSquare, Wand2
 } from 'lucide-react';
-import { sendWhatsAppTextMessage } from '../lib/whatsapp';
+import { sendKapsoMessage } from '../lib/whatsappService';
 
 const ESTADO_STYLES: Record<string, string> = {
   Nuevo:       'bg-blue-100 text-blue-700',
@@ -461,7 +461,7 @@ El tono debe ser amigable y profesional. Mantén el mensaje corto (máximo de 3-
     setSuccess(false);
 
     try {
-      await sendWhatsAppTextMessage(lead.telefono, message);
+      await sendKapsoMessage(lead.telefono, message);
       setSuccess(true);
       
       if (lead.estado === 'Nuevo') {

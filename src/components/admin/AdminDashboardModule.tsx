@@ -28,7 +28,6 @@ export const AdminDashboardModule: React.FC = () => {
             *,
             campaigns(nombre_campana, id_usuario, id_cliente)
           `)
-          .eq('estado_dgii', 'Aceptado')
           .order('fecha', { ascending: false });
         
         let totalIngresosDOP = 0;
@@ -76,22 +75,54 @@ export const AdminDashboardModule: React.FC = () => {
           .select('*', { count: 'exact', head: true })
           .eq('estado', 'Activa');
 
-        // 4. Campañas pendientes de moderación
+        // 4. Campañas pendientes de moderación (count para KPI)
+        const { count: moderacionCount } = await supabase
+          .from('campaigns')
+          .select('*', { count: 'exact', head: true })
+          .or('estado_moderacion.eq.pendiente,estado_moderacion.eq.necesita_revision,estado_moderacion.is.null');
+
+        // 5. Últimas 5 campañas para la lista
         const { data: moderacionData } = await supabase
           .from('campaigns')
           .select('*')
-          .eq('estado_moderacion', 'pendiente')
+          .or('estado_moderacion.eq.pendiente,estado_moderacion.eq.necesita_revision,estado_moderacion.is.null')
+          .order('created_at', { ascending: false })
           .limit(5);
+
+        let pendingMapeadas: any[] = [];
+        if (moderacionData && moderacionData.length > 0) {
+          const modCreatorIds = [...new Set(moderacionData.map(c => c.id_usuario || c.id_cliente).filter(Boolean))];
+          let modUsersMap: Record<string, string> = {};
+
+          if (modCreatorIds.length > 0) {
+            const [{ data: team }, { data: clients }] = await Promise.all([
+              supabase.from('usuarios').select('id_usuario, nombre, apellido').in('id_usuario', modCreatorIds),
+              supabase.from('clientes_portal').select('auth_user_id, nombre, apellido').in('auth_user_id', modCreatorIds)
+            ]);
+
+            if (team) team.forEach((u: any) => modUsersMap[u.id_usuario] = `${u.nombre || ''} ${u.apellido || ''}`.trim());
+            if (clients) clients.forEach((c: any) => modUsersMap[c.auth_user_id] = `${c.nombre || ''} ${c.apellido || ''}`.trim());
+          }
+
+          pendingMapeadas = moderacionData.map(c => {
+            const creatorId = c.id_usuario || c.id_cliente;
+            return {
+              ...c,
+              name: c.nombre_campana || 'Sin Nombre',
+              creatorName: creatorId && modUsersMap[creatorId] ? modUsersMap[creatorId] : 'Desconocido'
+            };
+          });
+        }
 
         setStats({
           ingresos: totalIngresosUSD,
           usuariosActivos: usuariosCount || 0,
           campanasActivas: campanasActivasCount || 0,
-          pendientesModeracion: moderacionData?.length || 0
+          pendientesModeracion: moderacionCount || 0
         });
 
         setRecentPayments(pagosMapeados);
-        if (moderacionData) setPendingCampaigns(moderacionData);
+        setPendingCampaigns(pendingMapeadas);
 
       } catch (error) {
         console.error("Error cargando dashboard admin", error);

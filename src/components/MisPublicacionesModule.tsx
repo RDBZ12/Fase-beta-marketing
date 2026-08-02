@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Image as ImageIcon, Calendar, Sparkles, UploadCloud, AlertCircle, PlusCircle, Edit2, Share2, MessageSquare, Loader2, Search, X, ChevronLeft, ChevronRight } from 'lucide-react';
-import { sendWhatsAppTextMessage, sendWhatsAppImageMessage, getOpenWAChats, getOpenWAContacts, getOpenWASessions, getOpenWASettings } from '../lib/whatsapp';
+import { sendKapsoMessage, sendKapsoImageMessage } from '../lib/whatsappService';
+import { getOpenWAChats, getOpenWAContacts, getOpenWASessions, getOpenWASettings } from '../lib/whatsapp';
 import { supabase } from '../supabaseClient';
 import type { Campaign } from '../types';
 import { useUser } from '../context/UserContext';
@@ -1204,13 +1205,16 @@ const ShareWhatsAppModal: React.FC<ShareWhatsAppModalProps> = ({ isOpen, onClose
     
     try {
       // 1. Obtener chats recientes
-      const [chatsData, contactsData, leadsResult] = await Promise.all([
+      const [chatsData, contactsData, leadsResult, clientesResult] = await Promise.all([
         getOpenWAChats(clientSessionName, isFullLoad ? 500 : 50).catch(() => []),
         isFullLoad ? getOpenWAContacts(clientSessionName).catch(() => []) : Promise.resolve([]),
         supabase.from('leads').select('nombre, telefono').not('telefono', 'is', null),
+        supabase.from('clientes').select('nombre, telefono').not('telefono', 'is', null),
       ]);
 
       const leadsList = leadsResult.data || [];
+      const clientesList = clientesResult.data || [];
+      const allCrmContacts = [...leadsList, ...clientesList];
       const normalizePhone = (num: string) => num.replace(/[^0-9]/g, '');
 
       // 2. Construir mapa de contactos: número → nombre (pushName es el nombre del perfil WA)
@@ -1238,8 +1242,8 @@ const ShareWhatsAppModal: React.FC<ShareWhatsAppModalProps> = ({ isOpen, onClose
           return contactMap.get(chatPhone)!;
         }
 
-        // 3c. Buscar en leads de Supabase por número de teléfono
-        const matchingLead = leadsList.find(lead => {
+        // 3c. Buscar en CRM (Leads + Clientes) por número de teléfono
+        const matchingLead = allCrmContacts.find(lead => {
           const leadPhone = normalizePhone(lead.telefono || '');
           return leadPhone && (chatPhone.endsWith(leadPhone) || leadPhone.endsWith(chatPhone));
         });
@@ -1250,9 +1254,7 @@ const ShareWhatsAppModal: React.FC<ShareWhatsAppModalProps> = ({ isOpen, onClose
       };
 
       // 3. Resolver nombre para todos los chats para que el buscador funcione
-      const statusObj = { id: 'status@broadcast', name: 'Mi Estatus (WhatsApp)', isGroup: false, lastMessage: null, timestamp: Date.now() };
       const resolvedChats = [
-        statusObj,
         ...(chatsData || []).map((chat: any) => ({
           id: chat.id,
           name: resolveDisplayName(chat),
@@ -1261,6 +1263,24 @@ const ShareWhatsAppModal: React.FC<ShareWhatsAppModalProps> = ({ isOpen, onClose
           timestamp: chat.timestamp,
         }))
       ];
+
+      // 3e. Inyectar CRM Contacts (Leads + Clientes) directamente como chats
+      const existingIds = new Set(resolvedChats.map(c => c.id));
+      for (const contact of allCrmContacts) {
+        if (!contact.telefono) continue;
+        const phone = normalizePhone(contact.telefono);
+        const contactId = `${phone}@c.us`;
+        if (phone && !existingIds.has(contactId)) {
+          resolvedChats.push({
+            id: contactId,
+            name: contact.nombre || `+${phone}`,
+            isGroup: false,
+            lastMessage: 'Contacto CRM',
+            timestamp: Date.now(),
+          });
+          existingIds.add(contactId);
+        }
+      }
 
       // 4. Agregar contactos que NO tienen chat reciente para que el buscador los encuentre (solo en Full Load)
       if (isFullLoad) {
@@ -1300,14 +1320,13 @@ const ShareWhatsAppModal: React.FC<ShareWhatsAppModalProps> = ({ isOpen, onClose
     setError('');
     try {
       if (publication.imagen_url) {
-        await sendWhatsAppImageMessage(
+        await sendKapsoImageMessage(
           chatId, 
           publication.imagen_url, 
-          publication.contenido || undefined,
-          clientSessionName
+          publication.contenido || undefined
         );
       } else {
-        await sendWhatsAppTextMessage(chatId, publication.contenido || '', clientSessionName);
+        await sendKapsoMessage(chatId, publication.contenido || '');
       }
 
       setSuccessId(chatId);

@@ -1,5 +1,6 @@
 export const tutorKnowledge = [
-  { intent: 'CREATE_CAMPAIGN', keywords: ['campaña', 'crear', 'anuncio', 'nueva campaña'], triggerFlow: 'CREATE_CAMPAIGN', explanation: '¡Por supuesto! Iniciemos el recorrido para crear una nueva campaña publicitaria.' },
+  { intent: 'MEGA_TOUR', keywords: ['iniciar tour', 'tour completo', 'recorrido completo', 'todo el sitio', 'tour general'], triggerFlow: 'MEGA_TOUR', explanation: '¡Excelente! Iniciemos el recorrido maestro paso a paso por absolutamente toda la aplicación.' },
+  { intent: 'CREATE_CAMPAIGN', keywords: ['campaña', 'crear', 'anuncio', 'nueva campaña'], triggerFlow: 'CREATE_CAMPAIGN', explanation: '¡Por supuesto! Iniciemos el recorrido específicamente para crear una nueva campaña publicitaria.' },
   { intent: 'PAGOS', keywords: ['pagar', 'pago', 'factura', 'saldo', 'paypal'], triggerFlow: 'PAGOS', explanation: '¡Claro! Te enseñaré cómo revisar tu presupuesto y realizar pagos.' },
   { intent: 'VERIFICAR_NCF', keywords: ['pdf de pago', 'descargar pdf', 'escanear qr', 'comprobante', 'ncf', 'verificar ncf'], triggerFlow: 'PAGOS', explanation: '¡Entendido! Te mostraré cómo descargar tu factura PDF y validar su e-NCF con la DGII usando el código QR.' },
   { intent: 'PROFILE_TOUR', keywords: ['perfil', 'configurar', 'fiscal', 'rnc', 'whatsapp', 'vincular', 'whatsap', 'watsap', 'wasap', 'wasa', 'whatpa', 'conectar whatsapp', 'vincular whatsapp', 'configurar whatsapp'], triggerFlow: 'PROFILE_TOUR', explanation: 'Entendido. Vamos a configurar tus datos fiscales y vincular tu cuenta de WhatsApp Web.' },
