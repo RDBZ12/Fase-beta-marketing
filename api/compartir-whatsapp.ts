@@ -28,7 +28,10 @@ export default async function handler(req: any, res: any) {
       if (!imageResponse.ok) {
         return res.status(400).json({ error: "No se pudo descargar la imagen desde la URL proporcionada" });
       }
-      const imageBlob = await imageResponse.blob();
+      
+      // Forzar el MIME type a image/jpeg para evitar que Meta rechace octet-streams de Supabase
+      const imageBuffer = await imageResponse.arrayBuffer();
+      const imageBlob = new Blob([imageBuffer], { type: "image/jpeg" });
       
       let fileName = imageUrl.split('/').pop()?.split('?')[0] || 'imagen.jpg';
       if (!fileName.includes('.')) {
