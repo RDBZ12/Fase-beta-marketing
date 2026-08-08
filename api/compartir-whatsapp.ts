@@ -23,50 +23,23 @@ export default async function handler(req: any, res: any) {
     });
 
     if (imageUrl) {
-      // 1. Descargamos la imagen de la URL que mandó el frontend
-      const imageResponse = await fetch(imageUrl);
+      // Usar un proxy gratuito (Images.weserv.nl) para convertir CUALQUIER imagen (webp, png, etc) a JPEG en tiempo real.
+      // Esto soluciona de raíz el problema de Meta Cloud API rechazando imágenes WebP.
+      const convertedImageUrl = `https://wsrv.nl/?url=${encodeURIComponent(imageUrl)}&output=jpg`;
+      
+      const imageResponse = await fetch(convertedImageUrl);
       if (!imageResponse.ok) {
-        return res.status(400).json({ error: "No se pudo descargar la imagen desde la URL proporcionada" });
-      }
-      
-      const contentType = imageResponse.headers.get('content-type');
-      
-      // Meta solo permite jpeg y png para imágenes (WebP es solo para stickers)
-      if (!contentType || !["image/jpeg", "image/png"].includes(contentType)) {
-        return res.status(400).json({ 
-          error: `Formato de imagen no soportado por WhatsApp: ${contentType}. Sube una imagen JPG o PNG.`,
-          details: "WhatsApp requiere estrictamente image/jpeg o image/png."
-        });
+        return res.status(400).json({ error: "No se pudo procesar y descargar la imagen desde la URL proporcionada" });
       }
 
       const imageBuffer = await imageResponse.arrayBuffer();
-      const bufferView = new Uint8Array(imageBuffer);
-      const isWebP = bufferView.length > 12 && 
-                     bufferView[0] === 0x52 && bufferView[1] === 0x49 && bufferView[2] === 0x46 && bufferView[3] === 0x46 && // RIFF
-                     bufferView[8] === 0x57 && bufferView[9] === 0x45 && bufferView[10] === 0x42 && bufferView[11] === 0x50; // WEBP
-                     
-      if (isWebP) {
-        return res.status(400).json({ 
-          error: "La imagen guardada es realmente formato WEBP (aunque tenga otra extensión). Meta no permite WEBP. Edita la publicación y sube un JPG real.",
-          details: "Magic bytes detectados como WEBP."
-        });
-      }
-
-      // Meta solo permite jpeg y png para imágenes
-      if (!contentType || (!["image/jpeg", "image/png"].includes(contentType) && !contentType.includes('image/'))) {
-        return res.status(400).json({ 
-          error: `Formato de imagen no soportado por WhatsApp: ${contentType}. Sube una imagen JPG o PNG.`,
-          details: "WhatsApp requiere estrictamente image/jpeg o image/png."
-        });
-      }
-
-      const imageBlob = new Blob([imageBuffer], { type: contentType.includes('png') ? 'image/png' : 'image/jpeg' });
+      const imageBlob = new Blob([imageBuffer], { type: 'image/jpeg' });
       
-      let extension = contentType === 'image/png' ? '.png' : '.jpg';
-      let fileName = imageUrl.split('/').pop()?.split('?')[0] || `imagen${extension}`;
-      if (!fileName.includes('.')) {
-        fileName += extension;
+      let fileName = imageUrl.split('/').pop()?.split('?')[0] || 'imagen';
+      if (fileName.includes('.')) {
+        fileName = fileName.substring(0, fileName.lastIndexOf('.'));
       }
+      fileName += '.jpg';
 
       // 2. Subimos el Blob a Kapso como media temporal
       const uploaded = await whatsapp.media.upload({
