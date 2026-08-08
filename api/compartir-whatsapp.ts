@@ -29,13 +29,19 @@ export default async function handler(req: any, res: any) {
         return res.status(400).json({ error: "No se pudo descargar la imagen desde la URL proporcionada" });
       }
       
-      // Forzar el MIME type a image/jpeg para evitar que Meta rechace octet-streams de Supabase
+      const contentType = imageResponse.headers.get('content-type') || 'image/jpeg';
       const imageBuffer = await imageResponse.arrayBuffer();
-      const imageBlob = new Blob([imageBuffer], { type: "image/jpeg" });
+      const imageBlob = new Blob([imageBuffer], { type: contentType });
       
-      let fileName = imageUrl.split('/').pop()?.split('?')[0] || 'imagen.jpg';
+      // Asegurar que la extensión coincida con el Content-Type real
+      let extension = '.jpg';
+      if (contentType.includes('png')) extension = '.png';
+      if (contentType.includes('webp')) extension = '.webp';
+      if (contentType.includes('gif')) extension = '.gif'; // (Aunque a veces Meta lo rechaza, es mejor enviar el real)
+
+      let fileName = imageUrl.split('/').pop()?.split('?')[0] || `imagen${extension}`;
       if (!fileName.includes('.')) {
-        fileName += '.jpg'; // Meta requiere una extensión válida
+        fileName += extension;
       }
 
       // 2. Subimos el Blob a Kapso como media temporal
