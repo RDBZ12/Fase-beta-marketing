@@ -29,16 +29,20 @@ export default async function handler(req: any, res: any) {
         return res.status(400).json({ error: "No se pudo descargar la imagen desde la URL proporcionada" });
       }
       
-      const contentType = imageResponse.headers.get('content-type') || 'image/jpeg';
+      const contentType = imageResponse.headers.get('content-type');
+      
+      // Meta solo permite jpeg y png para imágenes (WebP es solo para stickers)
+      if (!contentType || !["image/jpeg", "image/png"].includes(contentType)) {
+        return res.status(400).json({ 
+          error: `Formato de imagen no soportado por WhatsApp: ${contentType}. Sube una imagen JPG o PNG.`,
+          details: "WhatsApp requiere estrictamente image/jpeg o image/png."
+        });
+      }
+
       const imageBuffer = await imageResponse.arrayBuffer();
       const imageBlob = new Blob([imageBuffer], { type: contentType });
       
-      // Asegurar que la extensión coincida con el Content-Type real
-      let extension = '.jpg';
-      if (contentType.includes('png')) extension = '.png';
-      if (contentType.includes('webp')) extension = '.webp';
-      if (contentType.includes('gif')) extension = '.gif'; // (Aunque a veces Meta lo rechaza, es mejor enviar el real)
-
+      let extension = contentType === 'image/png' ? '.png' : '.jpg';
       let fileName = imageUrl.split('/').pop()?.split('?')[0] || `imagen${extension}`;
       if (!fileName.includes('.')) {
         fileName += extension;
