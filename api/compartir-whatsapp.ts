@@ -29,7 +29,11 @@ export default async function handler(req: any, res: any) {
         return res.status(400).json({ error: "No se pudo descargar la imagen desde la URL proporcionada" });
       }
       const imageBlob = await imageResponse.blob();
-      const fileName = imageUrl.split('/').pop()?.split('?')[0] || 'imagen.jpg';
+      
+      let fileName = imageUrl.split('/').pop()?.split('?')[0] || 'imagen.jpg';
+      if (!fileName.includes('.')) {
+        fileName += '.jpg'; // Meta requiere una extensión válida
+      }
 
       // 2. Subimos el Blob a Kapso como media temporal
       const uploaded = await whatsapp.media.upload({
