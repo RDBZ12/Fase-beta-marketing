@@ -1,3 +1,5 @@
+import { logSystemEvent } from './logger';
+
 export interface KapsoMessagePayload {
   messaging_product: 'whatsapp';
   recipient_type: 'individual';
@@ -36,6 +38,7 @@ export async function sendKapsoMessage(to: string, message: string) {
     return await response.json();
   } catch (error: any) {
     console.error('Error enviando mensaje de texto vía backend:', error);
+    logSystemEvent('ERROR', 'WhatsApp API (Texto)', error.message, { to });
     throw error;
   }
 }
@@ -75,6 +78,7 @@ export async function sendKapsoImageMessage(to: string, imageUrl: string, captio
     return await response.json();
   } catch (error: any) {
     console.error('Error enviando imagen vía backend:', error);
+    logSystemEvent('ERROR', 'WhatsApp API (Imagen)', error.message, { to, imageUrl });
     throw error;
   }
 }

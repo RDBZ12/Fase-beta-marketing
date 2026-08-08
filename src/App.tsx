@@ -29,6 +29,7 @@ import { AdminDashboardModule } from './components/admin/AdminDashboardModule';
 import { ClientesModule } from './components/admin/ClientesModule';
 import AdminAuditLogs from './components/admin/AdminAuditLogs';
 import { SystemLogsModule } from './components/admin/SystemLogsModule';
+import { logSystemEvent } from './lib/logger';
 
 import { UserProvider } from './context/UserContext';
 import type { Campaign, Metric } from './types';
@@ -67,6 +68,7 @@ const GlobalErrorPopup = () => {
     const handleOpenWAError = (e: any) => {
       setErrorMsg(e.detail);
       setIsHiding(false);
+      logSystemEvent('ERROR', 'Legacy API', String(e.detail));
       
       setTimeout(() => {
         setIsHiding(true);
@@ -77,8 +79,27 @@ const GlobalErrorPopup = () => {
       }, 8000);
     };
 
+    const handleWindowError = (event: ErrorEvent) => {
+      logSystemEvent('ERROR', 'Frontend (Client)', event.message, {
+        filename: event.filename,
+        lineno: event.lineno,
+        colno: event.colno
+      });
+    };
+
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      logSystemEvent('ERROR', 'Frontend Promise (Client)', String(event.reason));
+    };
+
     window.addEventListener('openwa-error', handleOpenWAError);
-    return () => window.removeEventListener('openwa-error', handleOpenWAError);
+    window.addEventListener('error', handleWindowError);
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+    
+    return () => {
+      window.removeEventListener('openwa-error', handleOpenWAError);
+      window.removeEventListener('error', handleWindowError);
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+    };
   }, []);
 
   if (!errorMsg) return null;
