@@ -40,7 +40,27 @@ export default async function handler(req: any, res: any) {
       }
 
       const imageBuffer = await imageResponse.arrayBuffer();
-      const imageBlob = new Blob([imageBuffer], { type: contentType });
+      const bufferView = new Uint8Array(imageBuffer);
+      const isWebP = bufferView.length > 12 && 
+                     bufferView[0] === 0x52 && bufferView[1] === 0x49 && bufferView[2] === 0x46 && bufferView[3] === 0x46 && // RIFF
+                     bufferView[8] === 0x57 && bufferView[9] === 0x45 && bufferView[10] === 0x42 && bufferView[11] === 0x50; // WEBP
+                     
+      if (isWebP) {
+        return res.status(400).json({ 
+          error: "La imagen guardada es realmente formato WEBP (aunque tenga otra extensión). Meta no permite WEBP. Edita la publicación y sube un JPG real.",
+          details: "Magic bytes detectados como WEBP."
+        });
+      }
+
+      // Meta solo permite jpeg y png para imágenes
+      if (!contentType || (!["image/jpeg", "image/png"].includes(contentType) && !contentType.includes('image/'))) {
+        return res.status(400).json({ 
+          error: `Formato de imagen no soportado por WhatsApp: ${contentType}. Sube una imagen JPG o PNG.`,
+          details: "WhatsApp requiere estrictamente image/jpeg o image/png."
+        });
+      }
+
+      const imageBlob = new Blob([imageBuffer], { type: contentType.includes('png') ? 'image/png' : 'image/jpeg' });
       
       let extension = contentType === 'image/png' ? '.png' : '.jpg';
       let fileName = imageUrl.split('/').pop()?.split('?')[0] || `imagen${extension}`;
