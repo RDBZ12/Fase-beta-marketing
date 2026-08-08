@@ -108,15 +108,15 @@ export const SystemLogsModule: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex-1 overflow-auto p-0 bg-slate-900 custom-scrollbar">
+        <div className="flex-1 overflow-auto p-0 bg-white custom-scrollbar">
           {filteredLogs.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center space-y-3 opacity-60">
-              <AlertCircle className="w-12 h-12 text-slate-500" />
-              <p className="text-sm font-bold text-slate-400">No hay logs registrados o encontrados.</p>
+              <AlertCircle className="w-12 h-12 text-slate-400" />
+              <p className="text-sm font-bold text-slate-500">No hay logs registrados o encontrados.</p>
             </div>
           ) : (
             <table className="w-full text-left font-mono text-xs">
-              <thead className="sticky top-0 bg-slate-900 border-b border-slate-700 text-slate-400">
+              <thead className="sticky top-0 bg-slate-50/50 border-b border-slate-100 text-slate-500">
                 <tr>
                   <th className="px-6 py-3 font-semibold uppercase tracking-wider">Fecha / Hora</th>
                   <th className="px-6 py-3 font-semibold uppercase tracking-wider">Nivel</th>
@@ -124,27 +124,27 @@ export const SystemLogsModule: React.FC = () => {
                   <th className="px-6 py-3 font-semibold uppercase tracking-wider">Mensaje / Detalles</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800">
+              <tbody className="divide-y divide-slate-50">
                 {filteredLogs.map((log, index) => (
-                  <tr key={log.id || index} className="hover:bg-slate-800/50 transition-colors group">
-                    <td className="px-6 py-3 text-slate-400 whitespace-nowrap">
+                  <tr key={log.id || index} className="hover:bg-slate-50/50 transition-colors group">
+                    <td className="px-6 py-4 text-slate-500 whitespace-nowrap">
                       {new Date(log.created_at).toLocaleString('es-ES', { 
                         year: 'numeric', month: '2-digit', day: '2-digit',
                         hour: '2-digit', minute: '2-digit', second: '2-digit'
                       })}
                     </td>
-                    <td className="px-6 py-3 whitespace-nowrap">
+                    <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`px-2 py-1 rounded-md text-[10px] font-bold border ${getLevelColor(log.level)}`}>
                         {log.level || 'INFO'}
                       </span>
                     </td>
-                    <td className="px-6 py-3 text-emerald-400 whitespace-nowrap">
+                    <td className="px-6 py-4 text-slate-700 whitespace-nowrap font-medium">
                       {log.source || 'Sistema'}
                     </td>
-                    <td className="px-6 py-3 text-slate-300">
-                      <span className="font-semibold text-white">{log.message}</span>
+                    <td className="px-6 py-4 text-slate-600">
+                      <span className="font-semibold text-slate-800">{log.message}</span>
                       {log.metadata && Object.keys(log.metadata).length > 0 && (
-                        <pre className="mt-2 p-2 bg-black/30 rounded-lg text-[10px] text-slate-400 overflow-x-auto border border-slate-700/50">
+                        <pre className="mt-2 p-2.5 bg-slate-50 rounded-xl text-[10px] text-slate-500 overflow-x-auto border border-slate-100">
                           {JSON.stringify(log.metadata, null, 2)}
                         </pre>
                       )}
