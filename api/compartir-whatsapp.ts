@@ -65,9 +65,7 @@ export default async function handler(req: any, res: any) {
       const result = await whatsapp.messages.sendText({
         phoneNumberId: phoneNumberId,
         to: cleanTo,
-        text: {
-          body: text || ''
-        }
+        body: text || ''
       });
       
       return res.status(200).json(result);
