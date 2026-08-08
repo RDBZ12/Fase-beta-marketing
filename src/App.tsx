@@ -28,6 +28,7 @@ import { AdminCampanasModule } from './components/admin/AdminCampanasModule';
 import { AdminDashboardModule } from './components/admin/AdminDashboardModule';
 import { ClientesModule } from './components/admin/ClientesModule';
 import AdminAuditLogs from './components/admin/AdminAuditLogs';
+import { SystemLogsModule } from './components/admin/SystemLogsModule';
 
 import { UserProvider } from './context/UserContext';
 import type { Campaign, Metric } from './types';
@@ -244,6 +245,7 @@ function AppLayout({
         {activeTab === 'reportes'        && <CentroReportes />}
         {activeTab === 'admin_campanas'  && <AdminCampanasModule campaigns={campaigns} fetchCampaigns={fetchCampaigns} />}
         {activeTab === 'auditoria'       && <AdminAuditLogs />}
+        {activeTab === 'system_logs'     && <SystemLogsModule />}
 
         {activeTab === 'campanas' && (
           <CampanasModule

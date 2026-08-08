@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   LayoutDashboard, Megaphone, Inbox, Settings, Zap,
-  UserCog, FileText, CreditCard, Compass, Briefcase, ShieldAlert, Database
+  UserCog, FileText, CreditCard, Compass, Briefcase, ShieldAlert, Database, Terminal
 } from 'lucide-react';
 import { useUser } from '../context/UserContext';
 
@@ -49,6 +49,12 @@ const menuGroups: MenuGroup[] = [
     ],
   },
   {
+    title: 'Monitoreo',
+    items: [
+      { id: 'system_logs', label: 'Logs del Sistema', icon: Terminal },
+    ],
+  },
+  {
     title: 'Sistema',
     items: [
       { id: 'ajustes', label: 'Ajustes', icon: Settings },
@@ -59,7 +65,7 @@ const menuGroups: MenuGroup[] = [
 const permisosRol: Record<number, string[]> = {
   1: [
     'dashboard', 'campanas', 'leads', 'clientes', 'usuarios', 
-    'pagos', 'consultas', 'reportes', 'admin_campanas', 'ajustes', 'auditoria'
+    'pagos', 'consultas', 'reportes', 'admin_campanas', 'ajustes', 'auditoria', 'system_logs'
   ],
   2: ['dashboard', 'campanas'],
   3: ['dashboard', 'campanas', 'leads'],
