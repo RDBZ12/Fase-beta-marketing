@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Image as ImageIcon, Calendar, Sparkles, UploadCloud, AlertCircle, PlusCircle, Edit2, Share2, MessageSquare, Loader2, Search, X, ChevronLeft, ChevronRight, Mail, Check } from 'lucide-react';
+import { Image as ImageIcon, Calendar, Sparkles, UploadCloud, AlertCircle, PlusCircle, Edit2, Share2, MessageSquare, Loader2, Search, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { sendKapsoMessage, sendKapsoImageMessage } from '../lib/whatsappService';
 import { getOpenWAChats, getOpenWAContacts, getOpenWASessions, getOpenWASettings } from '../lib/whatsapp';
 import { supabase } from '../supabaseClient';
@@ -23,7 +23,6 @@ export const MisPublicacionesModule: React.FC<MisPublicacionesModuleProps> = ({ 
   const [publicaciones, setPublicaciones] = useState<any[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   const [sharingWhatsAppPub, setSharingWhatsAppPub] = useState<any | null>(null);
-  const [sharingEmailPub, setSharingEmailPub] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Form State with local timezone date and time default
@@ -962,14 +961,6 @@ El prompt debe ser solo el texto en ingles, descriptivo, visual, sin explicacion
                         <Share2 className="w-3.5 h-3.5" />
                         <span className="text-[10px] font-bold uppercase tracking-wider max-w-0 overflow-hidden group-hover/replicate:max-w-xs transition-all duration-300 ease-in-out whitespace-nowrap">Subir a otra red</span>
                       </button>
-                      <button 
-                        onClick={() => setSharingEmailPub(pub)}
-                        className="bg-white/90 backdrop-blur-md px-2 py-1.5 rounded-md text-slate-600 hover:text-red-500 transition-colors shadow-sm flex items-center gap-1 group/email"
-                        title="Compartir por Email"
-                      >
-                        <Mail className="w-3.5 h-3.5" />
-                        <span className="text-[10px] font-bold uppercase tracking-wider max-w-0 overflow-hidden group-hover/email:max-w-xs transition-all duration-300 ease-in-out whitespace-nowrap">Email</span>
-                      </button>
                     </div>
                     <div className="absolute top-3 right-3 bg-slate-900/80 backdrop-blur-md px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 shadow-lg border border-white/10">
                       <Calendar className="w-3.5 h-3.5 text-violet-300" />
@@ -1162,7 +1153,6 @@ interface ShareWhatsAppModalProps {
   onClose: () => void;
   publication: any;
 }
-
 
 const ShareWhatsAppModal: React.FC<ShareWhatsAppModalProps> = ({ isOpen, onClose, publication }) => {
   const { profile } = useUser();
@@ -1480,89 +1470,3 @@ const ShareWhatsAppModal: React.FC<ShareWhatsAppModalProps> = ({ isOpen, onClose
   );
 };
 
-// ─── ShareEmailModal Component ──────────────────────────────────────────────
-interface ShareEmailModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  publication: any;
-}
-
-const ShareEmailModal: React.FC<ShareEmailModalProps> = ({ isOpen, onClose, publication }) => {
-  const [email, setEmail] = useState('');
-  
-  if (!isOpen || !publication) return null;
-
-  const handleSendEmail = () => {
-    if (!email || !email.includes('@')) {
-      alert("Por favor ingresa un correo electrónico válido.");
-      return;
-    }
-    
-    const subject = encodeURIComponent(`Publicación: ${publication.titulo}`);
-    let body = `Hola,\n\nTe comparto esta publicación:\n\n${publication.titulo}\n\n${publication.contenido}\n\n`;
-    
-    if (publication.imagen_url) {
-      body += `Mira la imagen aquí: ${publication.imagen_url}\n`;
-    }
-    
-    const encodedBody = encodeURIComponent(body);
-    const mailtoUrl = `mailto:${email}?subject=${subject}&body=${encodedBody}`;
-    
-    // Abrir el cliente de correo del usuario (Gmail, Outlook, Mail app...)
-    window.location.href = mailtoUrl;
-    onClose();
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-300">
-      <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-2xl max-w-sm w-full animate-in zoom-in-95 duration-300">
-        <div className="flex justify-between items-center mb-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-red-50 text-red-600 rounded-xl">
-              <Mail className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-slate-800">Enviar por Email</h3>
-              <p className="text-xs text-slate-500 line-clamp-1">{publication.titulo}</p>
-            </div>
-          </div>
-          <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <div className="mb-6">
-          <label className="block text-sm font-semibold text-slate-700 mb-2">
-            Correo del destinatario (Gmail u otro)
-          </label>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="cliente@gmail.com"
-            className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-xl focus:ring-red-500 focus:border-red-500 block p-3 transition-all"
-            autoFocus
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleSendEmail();
-            }}
-          />
-        </div>
-
-        <div className="flex justify-end gap-3">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={handleSendEmail}
-            className="px-4 py-2 text-sm font-bold bg-red-600 hover:bg-red-700 text-white rounded-xl transition-colors shadow-lg shadow-red-600/20"
-          >
-            Preparar Email
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
