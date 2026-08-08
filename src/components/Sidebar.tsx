@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   LayoutDashboard, Megaphone, Inbox, Settings, Zap,
-  UserCog, FileText, CreditCard, Compass, Briefcase, ShieldAlert
+  UserCog, FileText, CreditCard, Compass, Briefcase, ShieldAlert, Database
 } from 'lucide-react';
 import { useUser } from '../context/UserContext';
 
@@ -45,6 +45,7 @@ const menuGroups: MenuGroup[] = [
       { id: 'consultas', label: 'Explorador de Datos', icon: Compass },
       { id: 'reportes', label: 'Reportes', icon: FileText },
       { id: 'admin_campanas', label: 'Auditoría de Campañas', icon: ShieldAlert },
+      { id: 'auditoria', label: 'Auditoría Global', icon: Database },
     ],
   },
   {
@@ -58,7 +59,7 @@ const menuGroups: MenuGroup[] = [
 const permisosRol: Record<number, string[]> = {
   1: [
     'dashboard', 'campanas', 'leads', 'clientes', 'usuarios', 
-    'pagos', 'consultas', 'reportes', 'admin_campanas', 'ajustes'
+    'pagos', 'consultas', 'reportes', 'admin_campanas', 'ajustes', 'auditoria'
   ],
   2: ['dashboard', 'campanas'],
   3: ['dashboard', 'campanas', 'leads'],

@@ -27,6 +27,7 @@ import { CentroReportes } from './components/reportes/CentroReportes';
 import { AdminCampanasModule } from './components/admin/AdminCampanasModule';
 import { AdminDashboardModule } from './components/admin/AdminDashboardModule';
 import { ClientesModule } from './components/admin/ClientesModule';
+import AdminAuditLogs from './components/admin/AdminAuditLogs';
 
 import { UserProvider } from './context/UserContext';
 import type { Campaign, Metric } from './types';
@@ -242,6 +243,7 @@ function AppLayout({
         {activeTab === 'consultas'       && <DataExplorerModule />}
         {activeTab === 'reportes'        && <CentroReportes />}
         {activeTab === 'admin_campanas'  && <AdminCampanasModule campaigns={campaigns} fetchCampaigns={fetchCampaigns} />}
+        {activeTab === 'auditoria'       && <AdminAuditLogs />}
 
         {activeTab === 'campanas' && (
           <CampanasModule
@@ -318,21 +320,57 @@ export default function App() {
   };
 
   useEffect(() => {
+    let lastUserId: string | null = null;
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setLoadingAuth(false);
       if (session?.user) {
+        lastUserId = session.user.id;
         detectarTipoUsuario(session.user.id);
       }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       setSession(session);
-      if (session?.user) {
-        detectarTipoUsuario(session.user.id);
-      } else {
+      
+      if (event === 'SIGNED_IN' && session?.user) {
+        if (lastUserId !== session.user.id) {
+          lastUserId = session.user.id;
+          detectarTipoUsuario(session.user.id);
+          
+          // Registrar login
+          try {
+            await supabase.from('audit_logs').insert({
+              table_name: 'autenticacion',
+              action: 'LOGIN',
+              user_id: session.user.id,
+              new_data: { evento: 'Inicio de sesión', plataforma: 'Web App' }
+            });
+          } catch (e) { /* ignore */ }
+        }
+      } 
+      else if (event === 'SIGNED_OUT') {
+        if (lastUserId) {
+          // Registrar logout
+          try {
+            await supabase.from('audit_logs').insert({
+              table_name: 'autenticacion',
+              action: 'LOGOUT',
+              user_id: lastUserId,
+              new_data: { evento: 'Cierre de sesión', plataforma: 'Web App' }
+            });
+          } catch (e) { /* ignore */ }
+        }
+        
+        lastUserId = null;
         setTipoUsuario(null);
         setRolUsuario(null);
+      } 
+      else if (session?.user) {
+        // TOKEN_REFRESH or other events
+        lastUserId = session.user.id;
+        detectarTipoUsuario(session.user.id);
       }
     });
 

@@ -20,7 +20,8 @@ import {
   Search,
   FileText,
   Menu,
-  BookOpen
+  BookOpen,
+  Clock
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import React, { useState, useEffect } from 'react';
@@ -33,7 +34,7 @@ import { ClientPagosModule, ClientEstadisticasModule, ClientPerfilModule } from 
 import { CentroReportesCliente } from './reportes/CentroReportesCliente';
 import LearningCenter from '../learning/components/LearningCenter';
 import { LearningDispatcher } from '../learning/services/LearningDispatcher';
-
+import ClientAuditLogs from './ClientAuditLogs';
 
 interface ClientPortalProps {
   campaigns: Campaign[];
@@ -60,6 +61,7 @@ export const ClientPortal: React.FC<ClientPortalProps> = ({ campaigns, onPagarCa
     { id: 'pagos', label: 'Pagos', icon: CreditCard },
     { id: 'estadisticas', label: 'Estadísticas', icon: BarChart3 },
     { id: 'reportes', label: 'Reportes', icon: FileText },
+    { id: 'auditoria', label: 'Historial / Auditoría', icon: Clock },
     { id: 'ayuda', label: 'Centro de Ayuda', icon: BookOpen },
     { id: 'perfil', label: 'Mi Perfil', icon: Settings },
   ];
@@ -174,6 +176,7 @@ export const ClientPortal: React.FC<ClientPortalProps> = ({ campaigns, onPagarCa
           {activeTab === 'mis-publicaciones' && <MisPublicacionesModule campaigns={campaigns} />}
           {activeTab === 'estadisticas' && <ClientEstadisticasModule campaigns={campaigns} />}
           {activeTab === 'reportes' && <CentroReportesCliente />}
+          {activeTab === 'auditoria' && <ClientAuditLogs />}
           {activeTab === 'pagos' && <ClientPagosModule campaigns={campaigns} onPagar={onPagarCampaign} />}
           {activeTab === 'perfil' && <ClientPerfilModule />}
         </div>
@@ -845,9 +848,9 @@ const MisCampanasView = ({ campaigns, onPagar, refreshCampaigns }: { campaigns: 
                         ) : (
                            <ImageIcon className="w-12 h-12 text-slate-300" />
                         )}
-                        <div className="absolute top-3 right-3 bg-black/60 backdrop-blur-md px-2 py-1 rounded-md flex items-center gap-1">
-                          <Calendar className="w-3 h-3 text-violet-400" />
-                          <span className="text-[10px] font-bold text-white">
+                        <div className="absolute top-3 right-3 bg-slate-900/80 backdrop-blur-md px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 shadow-lg border border-white/10">
+                          <Calendar className="w-3.5 h-3.5 text-violet-300" />
+                          <span className="text-[11px] font-bold text-white tracking-wide">
                             {new Date(pub.fecha_publicacion).toLocaleDateString()}
                           </span>
                         </div>

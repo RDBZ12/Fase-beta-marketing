@@ -11,8 +11,9 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@kapso/whatsapp-cloud-api": "^0.3.0",
     "@paypal/react-paypal-js": "^10.0.0",
-    "@supabase/supabase-js": "^2.108.2",
+    "@supabase/supabase-js": "^2.109.0",
     "@types/qrcode": "^1.5.6",
     "clsx": "^2.1.1",
     "jspdf": "^4.2.1",

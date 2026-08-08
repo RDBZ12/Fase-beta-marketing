@@ -962,9 +962,9 @@ El prompt debe ser solo el texto en ingles, descriptivo, visual, sin explicacion
                         <span className="text-[10px] font-bold uppercase tracking-wider max-w-0 overflow-hidden group-hover/replicate:max-w-xs transition-all duration-300 ease-in-out whitespace-nowrap">Subir a otra red</span>
                       </button>
                     </div>
-                    <div className="absolute top-3 right-3 bg-black/60 backdrop-blur-md px-2 py-1 rounded-md flex items-center gap-1">
-                      <Calendar className="w-3 h-3 text-violet-400" />
-                      <span className="text-[10px] font-bold text-slate-900">
+                    <div className="absolute top-3 right-3 bg-slate-900/80 backdrop-blur-md px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 shadow-lg border border-white/10">
+                      <Calendar className="w-3.5 h-3.5 text-violet-300" />
+                      <span className="text-[11px] font-bold text-white tracking-wide">
                         {new Date(pub.fecha_publicacion).toLocaleDateString()}
                       </span>
                     </div>
@@ -1192,80 +1192,49 @@ const ShareWhatsAppModal: React.FC<ShareWhatsAppModalProps> = ({ isOpen, onClose
     setReconnecting(false);
     setError('');
     
-    // Verificar estado de sesión primero para mostrar mensaje de reconexión
     try {
-      const settings = getOpenWASettings();
-      const sessionName = clientSessionName || settings.sessionName;
-      const sessions = await getOpenWASessions().catch(() => []);
-      const currentSession = sessions.find((s: any) => s.name === sessionName);
-      if (currentSession && currentSession.status !== 'ready') {
-        setReconnecting(true);
-      }
-    } catch { /* ignore */ }
-    
-    try {
-      // 1. Obtener chats recientes
-      const [chatsData, contactsData, leadsResult, clientesResult] = await Promise.all([
-        getOpenWAChats(clientSessionName, isFullLoad ? 500 : 50).catch(() => []),
-        isFullLoad ? getOpenWAContacts(clientSessionName).catch(() => []) : Promise.resolve([]),
+      // 1. Obtener contactos de Kapso y CRM
+      const [kapsoRes, leadsResult, clientesResult] = await Promise.all([
+        fetch('/api/whatsapp-contacts').catch(() => null),
         supabase.from('leads').select('nombre, telefono').not('telefono', 'is', null),
         supabase.from('clientes').select('nombre, telefono').not('telefono', 'is', null),
       ]);
+
+      let kapsoContacts: any[] = [];
+      if (kapsoRes && kapsoRes.ok) {
+        try {
+          kapsoContacts = await kapsoRes.json();
+        } catch (jsonErr) {
+          console.warn("Kapso API returned non-JSON response. Possibly 404 HTML fallback.", jsonErr);
+        }
+      }
 
       const leadsList = leadsResult.data || [];
       const clientesList = clientesResult.data || [];
       const allCrmContacts = [...leadsList, ...clientesList];
       const normalizePhone = (num: string) => num.replace(/[^0-9]/g, '');
 
-      // 2. Construir mapa de contactos: número → nombre (pushName es el nombre del perfil WA)
-      const contactMap = new Map<string, string>();
-      for (const c of (contactsData || [])) {
-        const phone = (c.id || '').split('@')[0].split(':')[0];
-        const displayName = (c.name || c.pushName || '').trim();
-        if (phone && displayName && !/^[0-9+()\-\s]+$/.test(displayName)) {
-          contactMap.set(phone, displayName);
+      const resolvedChats: any[] = [];
+      const existingIds = new Set<string>();
+
+      // 2. Inyectar contactos de Kapso
+      for (const contact of kapsoContacts) {
+        if (!contact.phone) continue;
+        const phone = normalizePhone(contact.phone);
+        const contactId = `${phone}@c.us`;
+        if (phone && !existingIds.has(contactId)) {
+          resolvedChats.push({
+            id: contactId,
+            name: contact.name || `+${phone}`,
+            isGroup: false,
+            lastMessage: 'Contacto Reciente (Kapso)',
+            timestamp: Date.now(),
+          });
+          existingIds.add(contactId);
         }
       }
 
-      const resolveDisplayName = (chat: any): string => {
-        const chatPhone = chat.id.split('@')[0].split(':')[0];
-
-        // 3a. Si el nombre del chat ya es real (grupos lo tienen), usarlo
-        const rawName = (chat.name || '').trim();
-        const isNumericName = rawName && /^[0-9+()\-\s]+$/.test(rawName);
-        if (rawName && !isNumericName) {
-          return rawName;
-        }
-
-        // 3b. Buscar en el mapa de contactos por número exacto
-        if (contactMap.has(chatPhone)) {
-          return contactMap.get(chatPhone)!;
-        }
-
-        // 3c. Buscar en CRM (Leads + Clientes) por número de teléfono
-        const matchingLead = allCrmContacts.find(lead => {
-          const leadPhone = normalizePhone(lead.telefono || '');
-          return leadPhone && (chatPhone.endsWith(leadPhone) || leadPhone.endsWith(chatPhone));
-        });
-        if (matchingLead) return matchingLead.nombre;
-
-        // 3d. Fallback: número de teléfono
-        return chatPhone;
-      };
-
-      // 3. Resolver nombre para todos los chats para que el buscador funcione
-      const resolvedChats = [
-        ...(chatsData || []).map((chat: any) => ({
-          id: chat.id,
-          name: resolveDisplayName(chat),
-          isGroup: chat.isGroup,
-          lastMessage: chat.lastMessage,
-          timestamp: chat.timestamp,
-        }))
-      ];
-
-      // 3e. Inyectar CRM Contacts (Leads + Clientes) directamente como chats
-      const existingIds = new Set(resolvedChats.map(c => c.id));
+      // 3. Inyectar CRM Contacts (Leads + Clientes) que no estén en Kapso
       for (const contact of allCrmContacts) {
         if (!contact.telefono) continue;
         const phone = normalizePhone(contact.telefono);
@@ -1276,42 +1245,23 @@ const ShareWhatsAppModal: React.FC<ShareWhatsAppModalProps> = ({ isOpen, onClose
             name: contact.nombre || `+${phone}`,
             isGroup: false,
             lastMessage: 'Contacto CRM',
-            timestamp: Date.now(),
+            timestamp: Date.now() - 1000, // Slightly older to prioritize Kapso
           });
           existingIds.add(contactId);
         }
       }
 
-      // 4. Agregar contactos que NO tienen chat reciente para que el buscador los encuentre (solo en Full Load)
+      setChats(resolvedChats);
+      setRecentChats(resolvedChats.slice(0, 10));
       if (isFullLoad) {
-        const chatIds = new Set(resolvedChats.map((c: any) => c.id));
-        for (const c of (contactsData || [])) {
-          if (c.id && !chatIds.has(c.id)) {
-            resolvedChats.push({
-              id: c.id,
-              name: resolveDisplayName({ id: c.id, name: c.name || c.pushName }),
-              isGroup: false,
-              lastMessage: null,
-              timestamp: 0,
-            });
-            chatIds.add(c.id);
-          }
-        }
-        setChats(resolvedChats);
         setFullDataLoaded(true);
-      } else {
-        // Guardar solo los 10 más recientes para la vista por defecto
-        const recent = resolvedChats.filter(c => c.timestamp > 0).slice(0, 10);
-        setRecentChats(recent);
-        setChats(recent); // Temporary fallback
       }
     } catch (err) {
-      console.warn("Could not fetch WA chats/contacts:", err);
-      setError("No se pudieron cargar los chats de WhatsApp. Verifica la conexión.");
+      console.warn("Error fetching contacts:", err);
+      setError("No se pudieron cargar los contactos. Verifica tu conexión.");
     } finally {
       setLoadingChats(false);
       if (isFullLoad) setIsSearching(false);
-      setReconnecting(false);
     }
   };
 
@@ -1381,7 +1331,7 @@ const ShareWhatsAppModal: React.FC<ShareWhatsAppModalProps> = ({ isOpen, onClose
               <MessageSquare className="w-4 h-4 text-emerald-600" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-slate-800">Compartir por WhatsApp (OpenWA)</h3>
+              <h3 className="text-sm font-bold text-slate-800">Compartir por WhatsApp</h3>
               <p className="text-[10px] text-slate-400 font-medium">Publicación: {publication.titulo}</p>
             </div>
           </div>
