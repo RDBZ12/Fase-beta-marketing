@@ -167,6 +167,13 @@ function AppLayout({
     { label: 'Interacciones Redes',  value: totalInteractions.toLocaleString('es-ES'),          change: '+24.5%', isPositive: true,  subtext: 'en todas las publicaciones' },
   ];
 
+  // Registrar cada vez que el usuario cambia de pestaña/módulo
+  useEffect(() => {
+    if (activeTab) {
+      logSystemEvent('INFO', 'Navegación', `Usuario accedió al módulo: ${activeTab.toUpperCase()}`);
+    }
+  }, [activeTab]);
+
   const handleSaveCampaign = async (campaign: Campaign) => {
     try {
       const dbData = {
