@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
+import { logSystemEvent } from '../lib/logger';
 import type { UserProfile, RolId, RolNombre } from '../types';
 
 interface UserContextType {
@@ -85,6 +86,15 @@ export const UserProvider: React.FC<Props> = ({ children, userId }) => {
           whatsapp_phone: data.whatsapp_phone || '',
           codigo_vinculacion_telegram: data.codigo_vinculacion_telegram || '',
         });
+        
+        // Loggear inicio de sesión exitoso (solo una vez al cargar el perfil por primera vez)
+        if (!profile) {
+          logSystemEvent('INFO', 'Auth', `Inicio de sesión exitoso: ${data.nombre} ${data.apellido || ''}`.trim(), {
+            userId: data.id_usuario,
+            rol: rolesData?.nombre_rol ?? 'Cliente',
+            correo: data.correo
+          });
+        }
       }
     } catch {
       // En caso de fallo total de red, asegurar que tengan perfil básico para no bloquear la app
