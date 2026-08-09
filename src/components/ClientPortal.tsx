@@ -26,7 +26,7 @@ import {
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
-import { Save, X } from 'lucide-react';
+import { Save, X, RefreshCw } from 'lucide-react';
 import type { Campaign } from '../types';
 import { CampaignWizard } from './CampaignWizard';
 import { MisPublicacionesModule } from './MisPublicacionesModule';
