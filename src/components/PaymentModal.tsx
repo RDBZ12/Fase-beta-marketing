@@ -318,18 +318,40 @@ export function PaymentModal({ isOpen, onClose, campaign, session, onPagado }: P
   useEffect(() => {
     if (campaign) {
       const userId = session?.user?.id || '';
-      const fallbackRnc = localStorage.getItem(`client_rnc_${userId}`) || '';
-      const fallbackEmpresa = localStorage.getItem(`client_empresa_${userId}`) || '';
+      
+      const fetchClientData = async () => {
+        let fallbackRnc = localStorage.getItem(`client_rnc_${userId}`) || '';
+        let fallbackEmpresa = localStorage.getItem(`client_empresa_${userId}`) || '';
+
+        if (userId) {
+          try {
+            const { data, error } = await supabase
+              .from('clientes_portal')
+              .select('rnc, empresa')
+              .eq('auth_user_id', userId)
+              .maybeSingle();
+            if (data && !error) {
+              if (data.rnc) fallbackRnc = data.rnc;
+              if (data.empresa) fallbackEmpresa = data.empresa;
+            }
+          } catch (err) {
+            console.warn('Error fetching profile in PaymentModal:', err);
+          }
+        }
+
+        setRncCliente(fallbackRnc)
+        setRazonSocial(fallbackEmpresa)
+      };
+
+      fetchClientData();
 
       setMonto(campaign.presupuesto ?? 0)
-      setRncCliente(fallbackRnc)
-      setRazonSocial(fallbackEmpresa)
       setEstado('idle')
       setMensaje('')
       setNcfFinal('')
       setOrderId('')
     }
-  }, [campaign])
+  }, [campaign, session])
 
   if (!isOpen || !campaign) return null
 
