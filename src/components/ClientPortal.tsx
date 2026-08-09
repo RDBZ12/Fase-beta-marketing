@@ -538,6 +538,16 @@ const MisCampanasView = ({ campaigns, onPagar, refreshCampaigns }: { campaigns: 
   const [loadingPubs, setLoadingPubs] = useState(false);
   const [editingCampaignModal, setEditingCampaignModal] = useState<Campaign | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  const getLocalDateString = () => {
+    const d = new Date();
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().split('T')[0];
+  };
+
+  const [dateFrom, setDateFrom] = useState(getLocalDateString());
+  const [dateTo, setDateTo] = useState(getLocalDateString());
+  
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(10);
 
@@ -585,6 +595,48 @@ const MisCampanasView = ({ campaigns, onPagar, refreshCampaigns }: { campaigns: 
                   className="w-full pl-9 pr-4 py-2 text-xs font-semibold bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent text-slate-700 transition-all"
                 />
               </div>
+              
+              <div className="flex items-center gap-3 bg-white border border-slate-200 rounded-xl px-4 py-2 shadow-sm flex-wrap sm:flex-nowrap">
+                <Calendar className="w-4 h-4 text-violet-500 shrink-0 hidden sm:block" />
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Desde</span>
+                  <input
+                    type="date"
+                    value={dateFrom}
+                    onChange={e => { setDateFrom(e.target.value); setPage(0); }}
+                    className="bg-transparent text-sm font-semibold text-slate-700 outline-none cursor-pointer w-[110px] sm:w-[120px]"
+                  />
+                </div>
+                <span className="text-slate-300 text-sm font-bold mx-1 hidden sm:block">—</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Hasta</span>
+                  <input
+                    type="date"
+                    value={dateTo}
+                    onChange={e => { setDateTo(e.target.value); setPage(0); }}
+                    className="bg-transparent text-sm font-semibold text-slate-700 outline-none cursor-pointer w-[110px] sm:w-[120px]"
+                  />
+                </div>
+                {(dateFrom !== getLocalDateString() || dateTo !== getLocalDateString()) && (
+                  <button 
+                    onClick={() => { setDateFrom(getLocalDateString()); setDateTo(getLocalDateString()); setPage(0); }}
+                    className="p-1 hover:bg-rose-50 text-rose-400 rounded-md transition-colors ml-1"
+                    title="Limpiar fechas"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+                <div className="w-px h-6 bg-slate-200 mx-1 hidden sm:block" />
+                <button 
+                  onClick={() => {
+                    refreshCampaigns();
+                  }}
+                  className="p-1.5 hover:bg-slate-100 text-slate-500 rounded-lg transition-colors flex items-center justify-center shrink-0"
+                  title="Refrescar datos"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -609,10 +661,22 @@ const MisCampanasView = ({ campaigns, onPagar, refreshCampaigns }: { campaigns: 
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {(() => {
-                  const filtered = campaigns.filter(c => 
-                    c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                    (c.brand || c.channel || '').toLowerCase().includes(searchTerm.toLowerCase())
-                  );
+                  const filtered = campaigns.filter(c => {
+                    const matchSearch = c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                      (c.brand || c.channel || '').toLowerCase().includes(searchTerm.toLowerCase());
+                    
+                    if (!matchSearch) return false;
+
+                    // Filtrar por startDate si existe (asumiendo formato YYYY-MM-DD o ISO string)
+                    if (dateFrom || dateTo) {
+                      const cDate = c.startDate ? c.startDate.split('T')[0] : (c as any).created_at ? (c as any).created_at.split('T')[0] : null;
+                      if (cDate) {
+                        if (dateFrom && cDate < dateFrom) return false;
+                        if (dateTo && cDate > dateTo) return false;
+                      }
+                    }
+                    return true;
+                  });
                   const paginatedCampaigns = filtered.slice(page * pageSize, (page + 1) * pageSize);
                   
                   if (filtered.length === 0) {
@@ -712,10 +776,21 @@ const MisCampanasView = ({ campaigns, onPagar, refreshCampaigns }: { campaigns: 
         
         {/* Pagination Controls */}
         {(() => {
-          const filtered = campaigns.filter(c => 
-            c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-            (c.brand || c.channel || '').toLowerCase().includes(searchTerm.toLowerCase())
-          );
+          const filtered = campaigns.filter(c => {
+            const matchSearch = c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+              (c.brand || c.channel || '').toLowerCase().includes(searchTerm.toLowerCase());
+            
+            if (!matchSearch) return false;
+
+            if (dateFrom || dateTo) {
+              const cDate = c.startDate ? c.startDate.split('T')[0] : (c as any).created_at ? (c as any).created_at.split('T')[0] : null;
+              if (cDate) {
+                if (dateFrom && cDate < dateFrom) return false;
+                if (dateTo && cDate > dateTo) return false;
+              }
+            }
+            return true;
+          });
           if (filtered.length === 0) return null;
           return (
             <div className="px-6 py-4 border-t border-slate-200 bg-slate-50/50 flex flex-col sm:flex-row justify-between items-center gap-4">
