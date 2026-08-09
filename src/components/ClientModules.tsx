@@ -17,8 +17,8 @@ export const ClientPagosModule = ({ campaigns, onPagar }: { campaigns: Campaign[
   const [pagos, setPagos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [dateFrom, setDateFrom] = useState(() => new Date().toISOString().split('T')[0]);
-  const [dateTo, setDateTo] = useState(() => new Date().toISOString().split('T')[0]);
+  const [dateFrom, setDateFrom] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
+  const [dateTo, setDateTo] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
   const [page, setPage] = useState(0);
   const [pageSize] = useState(10);
   const [isFlipped, setIsFlipped] = useState(false);
