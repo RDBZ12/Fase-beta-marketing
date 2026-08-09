@@ -1,5 +1,6 @@
 export default async function handler(req: any, res: any) {
-  const { action, ayrsharePostId } = req.query || req.body;
+  const action = req.body?.action || req.query?.action;
+  const ayrsharePostId = req.body?.ayrsharePostId || req.query?.ayrsharePostId;
   const AYRSHARE_API_KEY = process.env.AYRSHARE_API_KEY || process.env.VITE_AYRSHARE_API_KEY;
   const BASE_URL = 'https://api.ayrshare.com/api';
 

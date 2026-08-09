@@ -1,5 +1,7 @@
 export default async function handler(req: any, res: any) {
-  const { action, mediaId } = req.query || req.body;
+  const action = req.body?.action || req.query?.action;
+  const mediaId = req.body?.mediaId || req.query?.mediaId;
+  const limit = req.body?.limit || req.query?.limit || 10;
   const IG_TOKEN = process.env.INSTAGRAM_ACCESS_TOKEN || process.env.VITE_INSTAGRAM_ACCESS_TOKEN;
   const IG_ACCT_ID = process.env.INSTAGRAM_ACCOUNT_ID || process.env.VITE_INSTAGRAM_ACCOUNT_ID || '17841480091400531';
   const GRAPH_BASE = 'https://graph.facebook.com/v19.0';
@@ -17,7 +19,7 @@ export default async function handler(req: any, res: any) {
       return res.status(r.status).json(data);
     } else if (action === 'media') {
       const fields = 'id,caption,timestamp,permalink,media_type,like_count,comments_count';
-      const url = `${GRAPH_BASE}/${IG_ACCT_ID}/media?fields=${fields}&access_token=${IG_TOKEN}`;
+      const url = `${GRAPH_BASE}/${IG_ACCT_ID}/media?fields=${fields}&access_token=${IG_TOKEN}&limit=${limit}`;
       const r = await fetch(url);
       const data = await r.json();
       return res.status(r.status).json(data);
