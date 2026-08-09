@@ -569,20 +569,22 @@ const MisCampanasView = ({ campaigns, onPagar, refreshCampaigns }: { campaigns: 
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
         {campaigns.length > 0 && (
-          <div className="p-6 border-b border-slate-200 flex flex-col sm:flex-row justify-start items-start sm:items-center gap-6 bg-slate-50/50">
+          <div className="p-6 border-b border-slate-200 flex flex-col gap-3 bg-slate-50/50">
             <h3 className="text-lg font-bold text-slate-800">Tus campañas</h3>
-            <div className="relative w-full sm:w-auto">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input 
-                type="text" 
-                placeholder="Buscar por nombre o red..." 
-                value={searchTerm}
-                onChange={e => {
-                  setSearchTerm(e.target.value);
-                  setPage(0);
-                }}
-                className="w-full sm:w-64 pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all"
-              />
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+              <div className="relative flex-1 min-w-0">
+                <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                <input 
+                  type="text" 
+                  placeholder="Buscar por nombre o red..." 
+                  value={searchTerm}
+                  onChange={e => {
+                    setSearchTerm(e.target.value);
+                    setPage(0);
+                  }}
+                  className="w-full pl-9 pr-4 py-2 text-xs font-semibold bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent text-slate-700 transition-all"
+                />
+              </div>
             </div>
           </div>
         )}
