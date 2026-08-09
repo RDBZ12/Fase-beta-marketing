@@ -11,6 +11,12 @@ export async function getRecentMedia(limit: number = 10) {
       body: JSON.stringify({ action: 'media', limit })
     });
     const data = await res.json();
+    if (!res.ok) {
+      console.error('[IG Media] HTTP Error:', res.status, data);
+    }
+    if (data.error) {
+      console.error('[IG Media] Meta API Error:', data.error);
+    }
     return data.data || [];
   } catch (error) {
     console.error('Error obteniendo publicaciones recientes:', error);
