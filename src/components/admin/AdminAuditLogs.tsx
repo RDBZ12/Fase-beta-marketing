@@ -33,8 +33,8 @@ export default function AdminAuditLogs() {
   // Filters
   const [filterTable, setFilterTable] = useState('');
   const [filterAction, setFilterAction] = useState('');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  const [dateFrom, setDateFrom] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
+  const [dateTo, setDateTo] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
   
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -63,10 +63,12 @@ export default function AdminAuditLogs() {
         query = query.eq('action', filterAction);
       }
       if (dateFrom) {
-        query = query.gte('changed_at', `${dateFrom}T00:00:00.000Z`);
+        const localStart = new Date(dateFrom + 'T00:00:00').toISOString();
+        query = query.gte('changed_at', localStart);
       }
       if (dateTo) {
-        query = query.lte('changed_at', `${dateTo}T23:59:59.999Z`);
+        const localEnd = new Date(dateTo + 'T23:59:59').toISOString();
+        query = query.lte('changed_at', localEnd);
       }
 
       const from = (currentPage - 1) * itemsPerPage;

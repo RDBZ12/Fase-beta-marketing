@@ -25,8 +25,8 @@ export default function ClientAuditLogs() {
   const [now, setNow] = useState(new Date());
 
   const [filterText, setFilterText] = useState('');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  const [dateFrom, setDateFrom] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
+  const [dateTo, setDateTo] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
