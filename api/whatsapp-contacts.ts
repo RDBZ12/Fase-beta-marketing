@@ -21,7 +21,7 @@ export default async function handler(req: any, res: any) {
     const contacts = await whatsapp.contacts.list({
       phoneNumberId: phoneNumberId,
       limit: 100,
-      fields: ["contact_name"]
+      fields: "contact_name" as any
     });
 
     const formattedContacts = (contacts.data || []).map((contact: any) => ({
