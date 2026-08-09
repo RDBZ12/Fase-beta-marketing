@@ -202,6 +202,25 @@ export default function ClientAuditLogs() {
               />
             </div>
           </div>
+          
+          <div className="flex items-center gap-1 border-l border-gray-200 pl-3 ml-1">
+            <button 
+              onClick={() => { setLoading(true); fetchLogs(); }}
+              className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+              title="Refrescar historial"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-indigo-500' : ''}`} />
+            </button>
+            {(dateFrom || dateTo) && (
+              <button 
+                onClick={() => { setDateFrom(''); setDateTo(''); setCurrentPage(1); }}
+                className="p-2 text-gray-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
+                title="Limpiar fechas"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
       

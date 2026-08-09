@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../supabaseClient';
-import { Search, Eye, ChevronLeft, ChevronRight, FileJson, X, Database, Clock, ShieldAlert } from 'lucide-react';
+import { Search, Eye, ChevronLeft, ChevronRight, FileJson, X, Database, Clock, ShieldAlert, RefreshCw } from 'lucide-react';
 
 interface AuditLog {
   id: string;
@@ -184,6 +184,24 @@ export default function AdminAuditLogs() {
               value={dateTo}
               onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1); }}
             />
+            <div className="flex items-center gap-1 border-l border-gray-200 pl-2 ml-1">
+              <button 
+                onClick={() => { setLoading(true); fetchLogs(); }}
+                className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                title="Refrescar historial"
+              >
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-indigo-500' : ''}`} />
+              </button>
+              {(dateFrom || dateTo) && (
+                <button 
+                  onClick={() => { setDateFrom(''); setDateTo(''); setCurrentPage(1); }}
+                  className="p-1.5 text-gray-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
+                  title="Limpiar fechas"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
