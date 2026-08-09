@@ -569,7 +569,7 @@ const MisCampanasView = ({ campaigns, onPagar, refreshCampaigns }: { campaigns: 
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
         {campaigns.length > 0 && (
-          <div className="p-6 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50/50">
+          <div className="p-6 border-b border-slate-200 flex flex-col sm:flex-row justify-start items-start sm:items-center gap-6 bg-slate-50/50">
             <h3 className="text-lg font-bold text-slate-800">Tus campañas</h3>
             <div className="relative w-full sm:w-auto">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
