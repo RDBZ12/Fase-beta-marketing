@@ -513,9 +513,10 @@ export const ClientEstadisticasModule = ({ campaigns }: { campaigns: any[] }) =>
   const [igDateFrom, setIgDateFrom] = useState<string>(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
   const [igDateTo, setIgDateTo] = useState<string>(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
 
-  const [daysRange, setDaysRange] = useState<string>('custom'); // '7', '14', '30', 'custom'
+  const [daysRange, setDaysRange] = useState<string>('7'); // '7', '14', '30', 'custom'
   const [startDate, setStartDate] = useState<string>(() => {
     const d = new Date();
+    d.setDate(d.getDate() - 6);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   });
   const [endDate, setEndDate] = useState<string>(() => {
