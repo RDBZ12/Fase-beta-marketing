@@ -185,13 +185,6 @@ export default function AdminAuditLogs() {
               onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1); }}
             />
             <div className="flex items-center gap-1 border-l border-gray-200 pl-2 ml-1">
-              <button 
-                onClick={() => { setLoading(true); fetchLogs(); }}
-                className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                title="Refrescar historial"
-              >
-                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-indigo-500' : ''}`} />
-              </button>
               {(dateFrom || dateTo) && (
                 <button 
                   onClick={() => { setDateFrom(''); setDateTo(''); setCurrentPage(1); }}
@@ -201,6 +194,13 @@ export default function AdminAuditLogs() {
                   <X className="w-4 h-4" />
                 </button>
               )}
+              <button 
+                onClick={() => { setLoading(true); fetchLogs(); }}
+                className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                title="Refrescar historial"
+              >
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-indigo-500' : ''}`} />
+              </button>
             </div>
           </div>
         </div>
