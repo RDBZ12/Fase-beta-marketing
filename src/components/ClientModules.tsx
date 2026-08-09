@@ -510,17 +510,17 @@ export const ClientEstadisticasModule = ({ campaigns }: { campaigns: any[] }) =>
   const [loading, setLoading] = useState(true);
   
   // Instagram specific filters
-  const [igDateFrom, setIgDateFrom] = useState<string>('');
-  const [igDateTo, setIgDateTo] = useState<string>('');
+  const [igDateFrom, setIgDateFrom] = useState<string>(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
+  const [igDateTo, setIgDateTo] = useState<string>(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
 
-  const [daysRange, setDaysRange] = useState<string>('7'); // '7', '14', '30', 'custom'
+  const [daysRange, setDaysRange] = useState<string>('custom'); // '7', '14', '30', 'custom'
   const [startDate, setStartDate] = useState<string>(() => {
     const d = new Date();
-    d.setDate(d.getDate() - 6);
-    return d.toISOString().split('T')[0];
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   });
   const [endDate, setEndDate] = useState<string>(() => {
-    return new Date().toISOString().split('T')[0];
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   });
 
   const activeCamp = campaigns.filter(c => c.status === 'Activa').length;
@@ -777,6 +777,38 @@ export const ClientEstadisticasModule = ({ campaigns }: { campaigns: any[] }) =>
                   onChange={(e) => setEndDate(e.target.value)}
                   className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-violet-500"
                 />
+                <div className="flex items-center gap-1 border-l border-slate-300 pl-2 ml-1">
+                  {(startDate || endDate) && (
+                    <button 
+                      onClick={() => {
+                        const d = new Date();
+                        const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                        setStartDate(today);
+                        setEndDate(today);
+                      }}
+                      className="p-1 text-slate-400 hover:text-rose-500 hover:bg-rose-100 rounded transition-colors"
+                      title="Restablecer a hoy"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  <button 
+                    onClick={() => {
+                      const tempStart = startDate;
+                      const tempEnd = endDate;
+                      setStartDate('');
+                      setEndDate('');
+                      setTimeout(() => {
+                        setStartDate(tempStart);
+                        setEndDate(tempEnd);
+                      }, 50);
+                    }}
+                    className="p-1 text-slate-400 hover:text-violet-600 hover:bg-violet-100 rounded transition-colors"
+                    title="Refrescar métricas"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-violet-500' : ''}`} />
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -833,15 +865,29 @@ export const ClientEstadisticasModule = ({ campaigns }: { campaigns: any[] }) =>
               value={igDateTo}
               onChange={(e) => setIgDateTo(e.target.value)}
             />
-            {(igDateFrom || igDateTo) && (
+            <div className="flex items-center gap-1 border-l border-gray-300 pl-2 ml-1">
+              {(igDateFrom || igDateTo) && (
+                <button 
+                  onClick={() => { setIgDateFrom(''); setIgDateTo(''); }}
+                  className="p-1.5 text-gray-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
+                  title="Limpiar fechas"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
               <button 
-                onClick={() => { setIgDateFrom(''); setIgDateTo(''); }}
-                className="p-1 text-gray-400 hover:text-rose-500 hover:bg-rose-50 rounded transition-colors ml-1"
-                title="Limpiar fechas"
+                onClick={() => {
+                  // Quick toggle to force re-render
+                  const temp = igDateFrom;
+                  setIgDateFrom('');
+                  setTimeout(() => setIgDateFrom(temp), 50);
+                }}
+                className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                title="Refrescar publicaciones"
               >
-                <X className="w-4 h-4" />
+                <RefreshCw className="w-4 h-4" />
               </button>
-            )}
+            </div>
           </div>
         </div>
 
