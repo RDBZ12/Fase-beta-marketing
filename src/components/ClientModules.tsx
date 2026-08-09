@@ -508,6 +508,11 @@ export const ClientEstadisticasModule = ({ campaigns }: { campaigns: any[] }) =>
   const [realClicks, setRealClicks] = useState<number | null>(null);
   const [instagramPosts, setInstagramPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Instagram specific filters
+  const [igDateFrom, setIgDateFrom] = useState<string>('');
+  const [igDateTo, setIgDateTo] = useState<string>('');
+
   const [daysRange, setDaysRange] = useState<string>('7'); // '7', '14', '30', 'custom'
   const [startDate, setStartDate] = useState<string>(() => {
     const d = new Date();
@@ -621,7 +626,7 @@ export const ClientEstadisticasModule = ({ campaigns }: { campaigns: any[] }) =>
 
       // 3. Fetch Real Instagram Analytics (Meta Graph API)
       try {
-        const recentMedia = await getRecentMedia(3);
+        const recentMedia = await getRecentMedia(30);
         
         if (recentMedia && Array.isArray(recentMedia)) {
           const enrichedMedia = await Promise.all(
@@ -802,19 +807,64 @@ export const ClientEstadisticasModule = ({ campaigns }: { campaigns: any[] }) =>
 
       {/* SECCIÓN INSTAGRAM EN TIEMPO REAL */}
       <div id="tour-stats-ig" className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 rounded-xl bg-pink-500/10 text-pink-500 flex items-center justify-center">
-            <Camera className="w-5 h-5" />
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-pink-500/10 text-pink-500 flex items-center justify-center">
+              <Camera className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-slate-900">Rendimiento en Instagram</h3>
+              <p className="text-xs text-slate-500">Métricas en tiempo real directamente desde Meta API</p>
+            </div>
           </div>
-          <div>
-            <h3 className="text-lg font-bold text-slate-900">Rendimiento en Instagram</h3>
-            <p className="text-xs text-slate-500">Métricas en tiempo real directamente desde Meta API</p>
+          
+          <div className="flex items-center gap-2 bg-gray-50 p-1.5 rounded-xl border border-gray-200 w-full sm:w-auto">
+            <span className="text-[10px] font-bold text-slate-400 uppercase ml-2">Desde</span>
+            <input 
+              type="date" 
+              className="text-sm border-none bg-transparent outline-none px-1 text-gray-700 w-32"
+              value={igDateFrom}
+              onChange={(e) => setIgDateFrom(e.target.value)}
+            />
+            <span className="text-[10px] font-bold text-slate-400 uppercase ml-1">Hasta</span>
+            <input 
+              type="date" 
+              className="text-sm border-none bg-transparent outline-none px-1 text-gray-700 w-32"
+              value={igDateTo}
+              onChange={(e) => setIgDateTo(e.target.value)}
+            />
+            {(igDateFrom || igDateTo) && (
+              <button 
+                onClick={() => { setIgDateFrom(''); setIgDateTo(''); }}
+                className="p-1 text-gray-400 hover:text-rose-500 hover:bg-rose-50 rounded transition-colors ml-1"
+                title="Limpiar fechas"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
 
-        {instagramPosts.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {instagramPosts.map((post) => (
+        {(() => {
+          const filteredIgPosts = instagramPosts.filter(post => {
+            const postDate = new Date(post.timestamp);
+            const matchFrom = igDateFrom ? postDate >= new Date(igDateFrom + 'T00:00:00') : true;
+            const matchTo = igDateTo ? postDate <= new Date(igDateTo + 'T23:59:59') : true;
+            return matchFrom && matchTo;
+          });
+
+          if (filteredIgPosts.length === 0) {
+             return (
+               <div className="flex flex-col items-center justify-center min-h-[250px] text-center bg-slate-50 rounded-2xl border border-slate-100">
+                 <Camera className="w-12 h-12 text-slate-300 mb-4" />
+                 <p className="text-slate-500 font-medium">No se encontraron publicaciones de Instagram en este rango de fechas.</p>
+               </div>
+             );
+          }
+
+          return (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {filteredIgPosts.map((post) => (
               <div key={post.id} className="bg-slate-50 rounded-2xl overflow-hidden border border-slate-200 group hover:shadow-md transition-all">
                 <div className="aspect-square bg-slate-200 relative overflow-hidden">
                   {post.media_type === 'VIDEO' ? (
@@ -850,12 +900,8 @@ export const ClientEstadisticasModule = ({ campaigns }: { campaigns: any[] }) =>
               </div>
             ))}
           </div>
-        ) : (
-           <div className="text-center py-10 bg-slate-50 rounded-2xl border border-dashed border-slate-300">
-              <Camera className="w-8 h-8 text-slate-300 mx-auto mb-3" />
-              <p className="text-sm text-slate-500">No se encontraron publicaciones recientes o el token no está configurado.</p>
-           </div>
-        )}
+          );
+        })()}
       </div>
     </div>
   );
