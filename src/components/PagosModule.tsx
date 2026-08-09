@@ -509,10 +509,12 @@ export const PagosModule: React.FC = () => {
     }
 
     if (startDate) {
-      query = query.gte('fecha', startDate);
+      const localStart = new Date(startDate + 'T00:00:00').toISOString();
+      query = query.gte('fecha', localStart);
     }
     if (endDate) {
-      query = query.lte('fecha', endDate + 'T23:59:59');
+      const localEnd = new Date(endDate + 'T23:59:59').toISOString();
+      query = query.lte('fecha', localEnd);
     }
 
     const from = pageIdx * currentSize;

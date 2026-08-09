@@ -132,7 +132,7 @@ export const ClientPagosModule = ({ campaigns, onPagar }: { campaigns: Campaign[
   const filtered = pagos.filter(p => {
     const matchText = p.concepto.toLowerCase().includes(searchTerm.toLowerCase()) || p.ncf.toLowerCase().includes(searchTerm.toLowerCase());
     const pFecha = new Date(p.fecha);
-    const matchFrom = dateFrom ? pFecha >= new Date(dateFrom) : true;
+    const matchFrom = dateFrom ? pFecha >= new Date(dateFrom + 'T00:00:00') : true;
     const matchTo = dateTo ? pFecha <= new Date(dateTo + 'T23:59:59') : true;
     return matchText && matchFrom && matchTo;
   });
@@ -305,7 +305,7 @@ export const ClientPagosModule = ({ campaigns, onPagar }: { campaigns: Campaign[
           </div>
           {(dateFrom || dateTo) && (
             <p className="text-[11px] text-violet-600 font-semibold">
-              Mostrando {filtered.length} resultado{filtered.length !== 1 ? 's' : ''}{dateFrom ? ` desde ${new Date(dateFrom).toLocaleDateString()}` : ''}{dateTo ? ` hasta ${new Date(dateTo).toLocaleDateString()}` : ''}
+              Mostrando {filtered.length} resultado{filtered.length !== 1 ? 's' : ''}{dateFrom ? ` desde ${new Date(dateFrom + 'T00:00:00').toLocaleDateString()}` : ''}{dateTo ? ` hasta ${new Date(dateTo + 'T00:00:00').toLocaleDateString()}` : ''}
             </p>
           )}
         </div>
