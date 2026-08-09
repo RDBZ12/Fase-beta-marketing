@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../supabaseClient';
-import { Search, Eye, ChevronLeft, ChevronRight, FileJson, X, Database, Clock, ShieldAlert, RefreshCw } from 'lucide-react';
+import { Search, Eye, ChevronLeft, ChevronRight, FileJson, X, Database, Clock, ShieldAlert, RefreshCw, Calendar } from 'lucide-react';
 
 interface AuditLog {
   id: string;
@@ -136,55 +136,68 @@ export default function AdminAuditLogs() {
   return (
     <div className="space-y-6">
       {/* Header and Filters */}
-      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <ShieldAlert className="w-6 h-6 text-indigo-600" />
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow duration-300">
+        <div className="p-6 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
+          <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+            <ShieldAlert className="w-5 h-5 text-indigo-600" />
             Auditoría Global
           </h2>
           <p className="text-sm text-gray-500 mt-1">Inspección de registros de la base de datos (Admin)</p>
         </div>
         
-        <div className="flex flex-wrap gap-3 items-center w-full xl:w-auto">
-          <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-xl border border-gray-200 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-200 transition-all">
-            <Search className="w-4 h-4 text-gray-400" />
+        <div className="p-4 sm:p-5 border-b border-gray-100 bg-gray-50/50 flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
+          <div className="relative w-full lg:max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input 
               type="text" 
-              placeholder="Tabla (ej: leads)..." 
-              className="bg-transparent border-none outline-none text-sm w-32 md:w-48 placeholder-gray-400"
+              placeholder="Buscar tabla (ej: leads)..." 
               value={filterTable}
               onChange={(e) => { setFilterTable(e.target.value); setCurrentPage(1); }}
+              className="w-full pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all shadow-sm"
             />
           </div>
           
-          <select 
-            className="text-sm border-gray-200 rounded-xl px-3 py-2 bg-gray-50 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all text-gray-700 font-medium"
-            value={filterAction}
-            onChange={(e) => { setFilterAction(e.target.value); setCurrentPage(1); }}
-          >
-            <option value="">Todas las acciones</option>
-            <option value="INSERT">INSERT (Crear)</option>
-            <option value="UPDATE">UPDATE (Actualizar)</option>
-            <option value="DELETE">DELETE (Eliminar)</option>
-            <option value="LOGIN">LOGIN (Inicio Sesión)</option>
-            <option value="LOGOUT">LOGOUT (Cierre Sesión)</option>
-          </select>
-          
-          <div className="flex items-center gap-2 bg-gray-50 p-1 rounded-xl border border-gray-200">
-            <input 
-              type="date" 
-              className="text-sm border-none bg-transparent outline-none px-2 py-1 text-gray-700"
-              value={dateFrom}
-              onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1); }}
-            />
-            <span className="text-gray-400">-</span>
-            <input 
-              type="date" 
-              className="text-sm border-none bg-transparent outline-none px-2 py-1 text-gray-700"
-              value={dateTo}
-              onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1); }}
-            />
-            <div className="flex items-center gap-1 border-l border-gray-200 pl-2 ml-1">
+          <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto mt-4 lg:mt-0">
+            <select 
+              className="w-full sm:w-auto text-sm border-gray-200 rounded-xl px-3 py-2 bg-white outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all text-gray-700 font-medium shadow-sm border"
+              value={filterAction}
+              onChange={(e) => { setFilterAction(e.target.value); setCurrentPage(1); }}
+            >
+              <option value="">Todas las acciones</option>
+              <option value="INSERT">INSERT (Crear)</option>
+              <option value="UPDATE">UPDATE (Actualizar)</option>
+              <option value="DELETE">DELETE (Eliminar)</option>
+              <option value="LOGIN">LOGIN (Inicio Sesión)</option>
+              <option value="LOGOUT">LOGOUT (Cierre Sesión)</option>
+            </select>
+            
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <span className="text-sm font-medium text-gray-500 whitespace-nowrap">Desde:</span>
+              <div className="relative w-full sm:w-auto flex-1">
+                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input 
+                  type="date" 
+                  value={dateFrom}
+                  onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1); }}
+                  className="w-full pl-9 pr-2 py-2 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all shadow-sm"
+                />
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <span className="text-sm font-medium text-gray-500 whitespace-nowrap">Hasta:</span>
+              <div className="relative w-full sm:w-auto flex-1">
+                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input 
+                  type="date" 
+                  value={dateTo}
+                  onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1); }}
+                  className="w-full pl-9 pr-2 py-2 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all shadow-sm"
+                />
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-1 border-l border-gray-200 pl-3 ml-1">
               {(dateFrom || dateTo) && (
                 <button 
                   onClick={() => { setDateFrom(''); setDateTo(''); setCurrentPage(1); }}
