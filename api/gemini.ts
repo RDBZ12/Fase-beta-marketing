@@ -4,7 +4,11 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const { contents, generationConfig, systemInstruction, model } = req.body;
+    let body = req.body;
+    if (typeof body === 'string') {
+      try { body = JSON.parse(body); } catch (e) {}
+    }
+    const { contents, generationConfig, systemInstruction, model } = body || {};
 
     // Acepta diferentes modelos según lo solicite el frontend, o usa uno por defecto
     const targetModel = model || 'gemini-2.5-flash';

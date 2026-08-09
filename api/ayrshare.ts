@@ -1,6 +1,10 @@
 export default async function handler(req: any, res: any) {
-  const action = req.body?.action || req.query?.action;
-  const ayrsharePostId = req.body?.ayrsharePostId || req.query?.ayrsharePostId;
+  let body = req.body;
+  if (typeof body === 'string') {
+    try { body = JSON.parse(body); } catch (e) {}
+  }
+  const action = body?.action || req.query?.action;
+  const ayrsharePostId = body?.ayrsharePostId || req.query?.ayrsharePostId;
   const AYRSHARE_API_KEY = process.env.AYRSHARE_API_KEY || process.env.VITE_AYRSHARE_API_KEY;
   const BASE_URL = 'https://api.ayrshare.com/api';
 
@@ -29,7 +33,7 @@ export default async function handler(req: any, res: any) {
     } else if (action === 'check') {
       return res.status(200).json({ status: 'ok' });
     }
-    return res.status(400).json({ error: 'Invalid action' });
+    return res.status(400).json({ error: 'Invalid action', actionReceived: action });
   } catch (error: any) {
     return res.status(500).json({ error: error.message });
   }

@@ -1,7 +1,11 @@
 export default async function handler(req: any, res: any) {
-  const action = req.body?.action || req.query?.action;
-  const mediaId = req.body?.mediaId || req.query?.mediaId;
-  const limit = req.body?.limit || req.query?.limit || 10;
+  let body = req.body;
+  if (typeof body === 'string') {
+    try { body = JSON.parse(body); } catch (e) {}
+  }
+  const action = body?.action || req.query?.action;
+  const mediaId = body?.mediaId || req.query?.mediaId;
+  const limit = body?.limit || req.query?.limit || 10;
   const IG_TOKEN = process.env.INSTAGRAM_ACCESS_TOKEN || process.env.VITE_INSTAGRAM_ACCESS_TOKEN;
   const IG_ACCT_ID = process.env.INSTAGRAM_ACCOUNT_ID || process.env.VITE_INSTAGRAM_ACCOUNT_ID || '17841480091400531';
   const GRAPH_BASE = 'https://graph.facebook.com/v19.0';
@@ -26,7 +30,7 @@ export default async function handler(req: any, res: any) {
     } else if (action === 'check') {
       return res.status(200).json({ status: 'ok' });
     }
-    return res.status(400).json({ error: 'Invalid action' });
+    return res.status(400).json({ error: 'Invalid action', actionReceived: action, bodyType: typeof req.body });
   } catch (error: any) {
     return res.status(500).json({ error: error.message });
   }
