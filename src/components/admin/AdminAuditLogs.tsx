@@ -145,7 +145,7 @@ export default function AdminAuditLogs() {
           <p className="text-sm text-gray-500 mt-1">Inspección de registros de la base de datos (Admin)</p>
         </div>
         
-        <div className="p-4 sm:p-5 border-b border-gray-100 bg-gray-50/50 flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
+        <div className="p-4 sm:p-5 border-b border-gray-100 bg-gray-50/50 flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-end">
           <div className="relative w-full lg:max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input 
