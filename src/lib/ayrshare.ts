@@ -5,16 +5,7 @@
 // y sus URLs en Instagram, pero NO las métricas de engagement.
 // Ver: https://docs.ayrshare.com
 
-const AYRSHARE_API_KEY = import.meta.env.VITE_AYRSHARE_API_KEY as string;
-const BASE_URL = 'https://api.ayrshare.com/api';
-
-const buildHeaders = () => ({
-  'Content-Type': 'application/json',
-  'Authorization': `Bearer ${AYRSHARE_API_KEY}`,
-});
-
-export const hasAyrshareKey = () =>
-  Boolean(AYRSHARE_API_KEY && AYRSHARE_API_KEY !== 'FEC64958-E887449B-B80BB8CC-96537107');
+export const hasAyrshareKey = () => true;
 
 // ─── Historial de posts publicados via Ayrshare ────────────────────────────────
 // Disponible en plan Free. Devuelve los posts publicados con sus IDs de plataforma.
@@ -34,11 +25,10 @@ export interface AyrsharePost {
 }
 
 export async function getPostHistory(): Promise<AyrsharePost[]> {
-  if (!hasAyrshareKey()) return [];
-
-  const res = await fetch(`${BASE_URL}/history?offset=0&limit=100`, {
-    method: 'GET',
-    headers: buildHeaders(),
+  const res = await fetch('/api/ayrshare', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'history' })
   });
 
   if (!res.ok) {
@@ -77,16 +67,12 @@ export async function getPostAnalytics(ayrsharePostId: string): Promise<{
   alcance: number;
   source: 'real' | 'simulated';
 }> {
-  if (!hasAyrshareKey()) {
-    return simulateMetrics('no-key');
-  }
-
   try {
     // Intentar endpoint de analíticas (requiere plan Premium)
-    const res = await fetch(`${BASE_URL}/analytics/post`, {
+    const res = await fetch('/api/ayrshare', {
       method: 'POST',
-      headers: buildHeaders(),
-      body: JSON.stringify({ id: ayrsharePostId }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'analytics', ayrsharePostId }),
     });
 
     const data = await res.json();

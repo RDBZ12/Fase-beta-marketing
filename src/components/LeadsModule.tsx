@@ -410,12 +410,6 @@ const WhatsAppModal: React.FC<WhatsAppModalProps> = ({ isOpen, onClose, lead, on
   };
 
   const handleGenerateAI = async () => {
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-    if (!apiKey) {
-      setError('⚠️ No se encontró la API Key de Gemini en tu archivo .env. Asegúrate de tener VITE_GEMINI_API_KEY configurado.');
-      return;
-    }
-
     setGenerating(true);
     setError('');
     
@@ -428,17 +422,15 @@ Su interés registrado es: "${lead.interes || 'Servicio de Marketing Digital'}".
 El tono debe ser amigable y profesional. Mantén el mensaje corto (máximo de 3-4 oraciones) e incluye un llamado a la acción claro y amigable. No uses texto de marcador de posición ni corchetes.`;
 
     try {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ role: 'user', parts: [{ text: systemPrompt + '\n\n' + userPrompt }] }],
-            generationConfig: { temperature: 0.7, maxOutputTokens: 500 },
-          }),
-        }
-      );
+      const response = await fetch('/api/gemini', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'gemini-2.5-flash',
+          contents: [{ role: 'user', parts: [{ text: systemPrompt + '\n\n' + userPrompt }] }],
+          generationConfig: { temperature: 0.7, maxOutputTokens: 500 },
+        }),
+      });
 
       if (!response.ok) throw new Error(`Error de Gemini API: ${response.status}`);
       const data = await response.json();

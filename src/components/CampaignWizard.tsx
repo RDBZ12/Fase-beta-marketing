@@ -122,10 +122,9 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onCancel, onFini
     setIsGeneratingImage(true);
     
     try {
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
       let promptToUse = '';
       
-      if (apiKey) {
+      try {
         const geminiPrompt = `Actúa como un experto en prompts de IA (Midjourney/Flux). Escribe un único prompt en INGLÉS para generar una fotografía profesional del siguiente negocio/producto.
 Negocio: ${formData.businessName}
 Descripción: ${formData.description}
@@ -135,10 +134,11 @@ Reglas:
 2. Hazlo muy descriptivo, enfocado en mostrar visualmente el producto/servicio.
 3. Asegúrate de que el sujeto principal (ej. libros, ropa, comida) esté claro en las primeras 5 palabras.`;
 
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+        const response = await fetch('/api/gemini', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            model: 'gemini-1.5-flash',
             contents: [{ parts: [{ text: geminiPrompt }] }],
             generationConfig: { temperature: 0.7, maxOutputTokens: 100 }
           })
@@ -149,6 +149,8 @@ Reglas:
         if (generatedEnglishPrompt) {
           promptToUse = generatedEnglishPrompt;
         }
+      } catch (err) {
+        console.warn('Gemini prompt generation failed:', err);
       }
 
       // Si falló Gemini o no hay API key, caemos en el utilitario local
@@ -190,9 +192,6 @@ Reglas:
     LearningDispatcher.dispatch('TRIGGER_ACTION', 'click_ai_generate');
     
     try {
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-      if (!apiKey) throw new Error('No se encontró la VITE_GEMINI_API_KEY');
-
       const systemContext = `Actúa como un experto en e-marketing y copywriting persuasivo. Necesito que redactes una publicación estratégica para redes sociales con el objetivo de lograr los resultados deseados (ventas, captar leads, educar, promocionar).
 Genera una estrategia de campaña. Devuelve la respuesta en formato JSON estricto con esta estructura:
 {
@@ -233,17 +232,15 @@ Genera la estrategia de marketing completa y estructurada como JSON. Asegúrate 
       let response;
       let retries = 3;
       while (retries > 0) {
-        response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${apiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ role: 'user', parts: [{ text: systemContext + '\n\n' + userPrompt }] }],
-              generationConfig: { temperature: 0.7, maxOutputTokens: 4096, responseMimeType: 'application/json' },
-            }),
-          }
-        );
+        response = await fetch('/api/gemini', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'gemini-flash-lite-latest',
+            contents: [{ role: 'user', parts: [{ text: systemContext + '\n\n' + userPrompt }] }],
+            generationConfig: { temperature: 0.7, maxOutputTokens: 4096, responseMimeType: 'application/json' },
+          }),
+        });
         if (response.ok) break;
         if (response.status === 503 || response.status === 429) {
           retries--;

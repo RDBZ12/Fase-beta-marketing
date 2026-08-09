@@ -35,7 +35,7 @@ export function getOpenWASettings() {
 
   return {
     apiUrl,
-    apiKey: localKey || import.meta.env.VITE_OPENWA_API_KEY || 'owa_k1_98f0a84c3b21bd0ec89b7b8d78a2182a90dc355b4d0ef5aab13b9ad3a1c931a3',
+    apiKey: localKey || '',
     sessionName: localSession,
   };
 }

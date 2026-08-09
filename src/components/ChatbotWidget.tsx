@@ -35,8 +35,7 @@ export const ChatbotWidget: React.FC = () => {
     setMessages(prev => [...prev, { role: 'user', text: q }]);
     setLoading(true);
     try {
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-      if (!apiKey) throw new Error('VITE_GEMINI_API_KEY_MISSING');
+
 
       // Fetch active campaigns for context directly from frontend
       const { data: campaigns } = await supabase
@@ -64,14 +63,11 @@ Si no sabes algo, ofrece derivar al equipo de marketing.`;
         { role: 'user', parts: [{ text: q }] },
       ];
 
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents, generationConfig: { temperature: 0.7, maxOutputTokens: 500 } }),
-        }
-      );
+      const response = await fetch('/api/gemini', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'gemini-2.5-flash', contents, generationConfig: { temperature: 0.7, maxOutputTokens: 500 } }),
+      });
 
       if (!response.ok) throw new Error(`Gemini error ${response.status}`);
       const data = await response.json();

@@ -25,8 +25,7 @@ export const AIModal: React.FC<AIModalProps> = ({ isOpen, onClose }) => {
     setIsGenerating(true); setGeneratedText(''); setError(''); setCopied(false); setSaved(false);
 
     try {
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-      if (!apiKey) throw new Error('VITE_GEMINI_API_KEY_MISSING');
+
 
       const systemContext = `Eres un experto en marketing digital para el sector tabaquero dominicano.
 Genera contenido publicitario profesional, atractivo y adaptado al canal especificado.
@@ -40,17 +39,15 @@ Incluye:
 - Hashtags relevantes (si es para redes sociales)
 Tono: profesional y persuasivo.`;
 
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ role: 'user', parts: [{ text: systemContext + '\n\n' + userPrompt }] }],
-            generationConfig: { temperature: 0.8, maxOutputTokens: 800 },
-          }),
-        }
-      );
+      const response = await fetch('/api/gemini', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'gemini-2.5-flash',
+          contents: [{ role: 'user', parts: [{ text: systemContext + '\n\n' + userPrompt }] }],
+          generationConfig: { temperature: 0.8, maxOutputTokens: 800 },
+        }),
+      });
 
       if (!response.ok) {
         const errorText = await response.text();

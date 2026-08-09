@@ -42,7 +42,7 @@ export interface Rol {
   nombre_rol: RolNombre;
   descripcion: string;
 }
-
+//clients
 export interface Usuario {
   id_usuario: string;
   nombre: string;
@@ -78,7 +78,7 @@ export interface RedSocial {
   estado: 'activo' | 'inactivo';
   icono?: string;
 }
-
+//contenido con ia 
 export interface TipoContenido {
   id_tipo_contenido: number;
   nombre_tipo: string;

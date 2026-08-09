@@ -204,7 +204,6 @@ export const MisPublicacionesModule: React.FC<MisPublicacionesModuleProps> = ({ 
     setIsGeneratingAI(true);
     
     try {
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
       const prompt = `Escribe un ÚNICO texto persuasivo, directo y listo para publicar en Instagram sobre: "${formData.titulo}". 
 Añade emojis.
 REGLAS ESTRICTAS: 
@@ -212,10 +211,11 @@ REGLAS ESTRICTAS:
 2. NO incluyas encabezados como "Opción 1" o "Tips".
 3. Incluye MÁXIMO 5 hashtags al final.`;
       
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${apiKey}`, {
+      const response = await fetch('/api/gemini', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          model: 'gemini-flash-lite-latest',
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
           generationConfig: { temperature: 0.7, maxOutputTokens: 500 }
         })
@@ -255,17 +255,17 @@ REGLAS ESTRICTAS:
     setIsGeneratingImageAI(true);
     
     try {
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
       const prompt = `Eres el mejor estratega de contenido y tendencia en marketing en cualquier red social de meta para traer personas.
 Crea un prompt en INGLES muy detallado para generar una imagen impactante que acompañe este texto.
 Título: "${formData.titulo}".
 Contenido: "${formData.contenido}".
 El prompt debe ser solo el texto en ingles, descriptivo, visual, sin explicaciones ni introducciones.`;
       
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${apiKey}`, {
+      const response = await fetch('/api/gemini', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          model: 'gemini-flash-lite-latest',
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
           generationConfig: { temperature: 0.7, maxOutputTokens: 200 }
         })

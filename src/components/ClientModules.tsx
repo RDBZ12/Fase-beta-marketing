@@ -617,16 +617,13 @@ export const ClientEstadisticasModule = ({ campaigns }: { campaigns: any[] }) =>
 
       // 3. Fetch Real Instagram Analytics (Meta Graph API)
       try {
-        const token = import.meta.env.VITE_INSTAGRAM_ACCESS_TOKEN;
-        const accountId = import.meta.env.VITE_INSTAGRAM_BUSINESS_ACCOUNT_ID;
+        const recentMedia = await getRecentMedia(3);
         
-        if (token && accountId) {
-          const recentMedia = await getRecentMedia(accountId, token, 3);
-          
+        if (recentMedia && Array.isArray(recentMedia)) {
           const enrichedMedia = await Promise.all(
             recentMedia.map(async (media: any) => {
               try {
-                const insights = await getMediaInsights(media.id, token);
+                const insights = await getMediaInsights(media.id);
                 const sharesMetric = insights.find((m: any) => m.name === 'shares');
                 return {
                   ...media,

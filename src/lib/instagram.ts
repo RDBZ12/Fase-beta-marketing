@@ -5,12 +5,7 @@
 // Obtener el token en: https://developers.facebook.com/tools/explorer
 // Permisos necesarios: instagram_basic, instagram_manage_insights, pages_read_engagement
 
-const IG_TOKEN    = import.meta.env.VITE_INSTAGRAM_ACCESS_TOKEN as string;
-const IG_ACCT_ID  = import.meta.env.VITE_INSTAGRAM_ACCOUNT_ID  as string ?? '17841480091400531';
-const GRAPH_BASE  = 'https://graph.facebook.com/v19.0';
-
-export const hasInstagramToken = () =>
-  Boolean(IG_TOKEN && IG_TOKEN !== 'PEGA_AQUI_TU_INSTAGRAM_ACCESS_TOKEN');
+export const hasInstagramToken = () => true;
 
 // ─── Analíticas reales de un post de Instagram ────────────────────────────────
 // mediaId: el Instagram media ID (ej: 17892959541538893) del postIds del historial
@@ -23,14 +18,12 @@ export async function getInstagramPostInsights(mediaId: string): Promise<{
   guardados: number;
   source: 'instagram_real';
 } | null> {
-  if (!hasInstagramToken()) return null;
-
   try {
-    // Métricas disponibles para posts de tipo FEED
-    const metrics = 'impressions,reach,likes,comments,shares,saved,total_interactions';
-    const url = `${GRAPH_BASE}/${mediaId}/insights?metric=${metrics}&access_token=${IG_TOKEN}`;
-
-    const res = await fetch(url);
+    const res = await fetch('/api/instagram', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'insights', mediaId })
+    });
     const data = await res.json();
 
     if (!res.ok || data.error) {
@@ -69,12 +62,11 @@ export async function getInstagramMediaList(): Promise<Array<{
   like_count: number;
   comments_count: number;
 }>> {
-  if (!hasInstagramToken()) return [];
-
-  const fields = 'id,caption,timestamp,permalink,media_type,like_count,comments_count';
-  const url = `${GRAPH_BASE}/${IG_ACCT_ID}/media?fields=${fields}&access_token=${IG_TOKEN}`;
-
-  const res = await fetch(url);
+  const res = await fetch('/api/instagram', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'media' })
+  });
   const data = await res.json();
 
   if (!res.ok || data.error) {
