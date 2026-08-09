@@ -17,8 +17,8 @@ export const ClientPagosModule = ({ campaigns, onPagar }: { campaigns: Campaign[
   const [pagos, setPagos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  const [dateFrom, setDateFrom] = useState(() => new Date().toISOString().split('T')[0]);
+  const [dateTo, setDateTo] = useState(() => new Date().toISOString().split('T')[0]);
   const [page, setPage] = useState(0);
   const [pageSize] = useState(10);
   const [isFlipped, setIsFlipped] = useState(false);
@@ -273,30 +273,34 @@ export const ClientPagosModule = ({ campaigns, onPagar }: { campaigns: Campaign[
               <input type="text" placeholder="Buscar por concepto o NCF..." value={searchTerm} onChange={e => { setSearchTerm(e.target.value); setPage(0); }} className="w-full pl-9 pr-4 py-2 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent text-slate-700" />
             </div>
             {/* Filtro de fechas */}
-            <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5">
-              <Calendar className="w-4 h-4 text-violet-500 shrink-0" />
-              <input
-                type="date"
-                value={dateFrom}
-                onChange={e => { setDateFrom(e.target.value); setPage(0); }}
-                className="bg-transparent text-xs font-semibold text-slate-700 outline-none cursor-pointer"
-                title="Desde"
-              />
-              <span className="text-slate-400 text-xs font-bold">—</span>
-              <input
-                type="date"
-                value={dateTo}
-                onChange={e => { setDateTo(e.target.value); setPage(0); }}
-                className="bg-transparent text-xs font-semibold text-slate-700 outline-none cursor-pointer"
-                title="Hasta"
-              />
-              {(dateFrom || dateTo) && (
-                <button
-                  onClick={() => { setDateFrom(''); setDateTo(''); setPage(0); }}
-                  className="ml-1 text-slate-400 hover:text-rose-500 transition-colors text-xs font-black"
-                  title="Limpiar filtro"
-                >✕</button>
-              )}
+            <div className="flex items-center gap-3 bg-white border border-slate-200 rounded-xl px-4 py-2 shadow-sm flex-wrap sm:flex-nowrap">
+              <Calendar className="w-4 h-4 text-violet-500 shrink-0 hidden sm:block" />
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Inicio</span>
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={e => { setDateFrom(e.target.value); setPage(0); }}
+                  className="bg-transparent text-sm font-semibold text-slate-700 outline-none cursor-pointer w-[110px] sm:w-[120px]"
+                />
+              </div>
+              <span className="text-slate-300 text-sm font-bold mx-1 hidden sm:block">—</span>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Hasta</span>
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={e => { setDateTo(e.target.value); setPage(0); }}
+                  className="bg-transparent text-sm font-semibold text-slate-700 outline-none cursor-pointer w-[110px] sm:w-[120px]"
+                />
+              </div>
+              <button
+                onClick={() => { setDateFrom(''); setDateTo(''); setPage(0); }}
+                className="ml-2 text-slate-400 hover:text-rose-500 transition-colors p-1.5 hover:bg-slate-100 rounded-full"
+                title="Limpiar filtro"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
           </div>
           {(dateFrom || dateTo) && (

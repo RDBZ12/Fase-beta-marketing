@@ -477,8 +477,8 @@ export const PagosModule: React.FC = () => {
   const [loadingTable, setLoadingTable] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [startDate, setStartDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [page, setPage]             = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const [pageSize, setPageSize]     = useState(10);
@@ -730,19 +730,21 @@ export const PagosModule: React.FC = () => {
                 className="w-full sm:w-64 pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
               />
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3 bg-white border border-slate-200 rounded-xl px-4 py-2 shadow-sm w-full sm:w-auto">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Inicio</span>
               <input 
                 type="date"
                 value={startDate}
                 onChange={e => { setStartDate(e.target.value); setPage(0); }}
-                className="w-full sm:w-auto px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-slate-600"
+                className="bg-transparent text-sm font-semibold text-slate-700 outline-none cursor-pointer w-[110px] sm:w-[120px]"
               />
-              <span className="text-slate-400">-</span>
+              <span className="text-slate-300 text-sm font-bold mx-1">—</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Hasta</span>
               <input 
                 type="date"
                 value={endDate}
                 onChange={e => { setEndDate(e.target.value); setPage(0); }}
-                className="w-full sm:w-auto px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-slate-600"
+                className="bg-transparent text-sm font-semibold text-slate-700 outline-none cursor-pointer w-[110px] sm:w-[120px]"
               />
             </div>
           </div>
