@@ -31,7 +31,7 @@ import AdminAuditLogs from './components/admin/AdminAuditLogs';
 import { SystemLogsModule } from './components/admin/SystemLogsModule';
 import { logSystemEvent } from './lib/logger';
 
-import { UserProvider } from './context/UserContext';
+import { UserProvider, useUser } from './context/UserContext';
 import type { Campaign, Metric } from './types';
 import { ShieldCheck } from 'lucide-react';
 import './App.css';
@@ -167,12 +167,17 @@ function AppLayout({
     { label: 'Interacciones Redes',  value: totalInteractions.toLocaleString('es-ES'),          change: '+24.5%', isPositive: true,  subtext: 'en todas las publicaciones' },
   ];
 
+  const { profile } = useUser();
+
   // Registrar cada vez que el usuario cambia de pestaña/módulo
   useEffect(() => {
     if (activeTab) {
-      logSystemEvent('INFO', 'Navegación', `Usuario accedió al módulo: ${activeTab.toUpperCase()}`);
+      const nombreUsuario = profile && profile.nombre !== 'Cliente' && profile.nombre !== 'Invitado' 
+        ? `${profile.nombre} ${profile.apellido || ''}`.trim() 
+        : 'Usuario';
+      logSystemEvent('INFO', 'Navegación', `${nombreUsuario} accedió al módulo: ${activeTab.toUpperCase()}`);
     }
-  }, [activeTab]);
+  }, [activeTab, profile?.nombre, profile?.apellido]);
 
   const handleSaveCampaign = async (campaign: Campaign) => {
     try {
