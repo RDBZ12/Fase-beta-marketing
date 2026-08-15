@@ -3,8 +3,10 @@ import { supabase } from '../supabaseClient';
 import { useUser } from '../context/UserContext';
 import { 
   Settings, User, Shield, Globe, KeyRound, Save, Loader2, CheckCircle,
-  MessageSquare, AlertCircle, RefreshCw, Play, Square, ExternalLink
+  MessageSquare, AlertCircle, RefreshCw, Play, Square, ExternalLink,
+  Database, Download, Upload, CheckCircle2, AlertTriangle
 } from 'lucide-react';
+import { logSystemEvent } from '../lib/logger';
 import {
   getOpenWASettings,
   saveOpenWASettings,
@@ -177,6 +179,8 @@ export const AjustesModule: React.FC = () => {
                 className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors">
                 <Shield className="w-3.5 h-3.5" /> Enviar correo de restablecimiento
               </button>
+
+              <DatabaseBackupRestore />
               <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 space-y-2">
                 <p className="text-xs font-bold text-slate-700">Niveles de acceso del sistema</p>
                 {[
@@ -648,6 +652,449 @@ const TelegramGatewayConfig: React.FC = () => {
           </ul>
         )}
       </div>
+    </div>
+  );
+};
+
+// ─── Helpers para respaldo y parseo de SQL PostgreSQL ─────────────────────
+export const formatSqlValue = (val: any): string => {
+  if (val === null || val === undefined) return 'NULL';
+  if (typeof val === 'number') return String(val);
+  if (typeof val === 'boolean') return val ? 'TRUE' : 'FALSE';
+  if (typeof val === 'object') {
+    if (val instanceof Date) return `'${val.toISOString()}'`;
+    const jsonStr = JSON.stringify(val).replace(/'/g, "''");
+    return `'${jsonStr}'::jsonb`;
+  }
+  const escaped = String(val).replace(/'/g, "''");
+  return `'${escaped}'`;
+};
+
+export const generatePostgresSqlDump = (
+  tablesData: Record<string, any[]>,
+  profileEmail: string
+): string => {
+  const lines: string[] = [];
+  const now = new Date().toISOString();
+
+  lines.push(`-- =============================================================================`);
+  lines.push(`-- RESPALDO COMPLETO DE BASE DE DATOS POSTGRESQL (MARKETIA)`);
+  lines.push(`-- Fecha: ${now}`);
+  lines.push(`-- Generado por: ${profileEmail || 'Administrador'}`);
+  lines.push(`-- Motor: PostgreSQL / Supabase DB`);
+  lines.push(`-- =============================================================================\n`);
+
+  lines.push(`BEGIN;\n`);
+
+  let totalInserts = 0;
+
+  for (const [tableName, rows] of Object.entries(tablesData)) {
+    lines.push(`-- -----------------------------------------------------------------------------`);
+    lines.push(`-- Tabla: public."${tableName}" (${rows.length} registros)`);
+    lines.push(`-- -----------------------------------------------------------------------------\n`);
+
+    if (!rows || rows.length === 0) {
+      lines.push(`-- (Sin datos en la tabla public."${tableName}")\n`);
+      continue;
+    }
+
+    const columnsSet = new Set<string>();
+    rows.forEach(r => Object.keys(r).forEach(k => columnsSet.add(k)));
+    const columns = Array.from(columnsSet);
+
+    const colsStr = columns.map(c => `"${c}"`).join(', ');
+
+    for (const row of rows) {
+      const valuesStr = columns.map(c => formatSqlValue(row[c])).join(', ');
+      lines.push(`INSERT INTO public."${tableName}" (${colsStr}) VALUES (${valuesStr}) ON CONFLICT DO NOTHING;`);
+      totalInserts++;
+    }
+
+    lines.push(``);
+  }
+
+  lines.push(`COMMIT;`);
+  lines.push(`\n-- Fin del respaldo SQL PostgreSQL (${totalInserts} registros exportados).`);
+
+  return lines.join('\n');
+};
+
+export const parseSqlValueToken = (rawToken: string): any => {
+  if (rawToken.toUpperCase() === 'NULL') return null;
+  if (rawToken.toUpperCase() === 'TRUE') return true;
+  if (rawToken.toUpperCase() === 'FALSE') return false;
+  
+  let clean = rawToken.replace(/::[a-zA-Z0-9_]+/g, '').trim();
+
+  if (clean.startsWith("'") && clean.endsWith("'")) {
+    const unquoted = clean.slice(1, -1).replace(/''/g, "'");
+    if ((unquoted.startsWith('{') && unquoted.endsWith('}')) || (unquoted.startsWith('[') && unquoted.endsWith(']'))) {
+      try {
+        return JSON.parse(unquoted);
+      } catch {
+        return unquoted;
+      }
+    }
+    return unquoted;
+  }
+
+  if (!isNaN(Number(clean))) {
+    return Number(clean);
+  }
+
+  return clean;
+};
+
+export const parsePostgresSqlDump = (sqlContent: string): { tables: Record<string, any[]>; totalRecords: number } => {
+  const tables: Record<string, any[]> = {};
+  let totalRecords = 0;
+
+  const lines = sqlContent.split('\n');
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed.toUpperCase().startsWith('INSERT INTO')) continue;
+
+    const match = trimmed.match(/INSERT INTO public\."?([a-zA-Z0-9_]+)"?\s*\(([^)]+)\)\s*VALUES\s*\((.+)\)(?:\s+ON CONFLICT.*)?;?/i);
+    if (!match) continue;
+
+    const tableName = match[1];
+    const rawCols = match[2];
+    const rawVals = match[3];
+
+    const cols = rawCols.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+    
+    const values: any[] = [];
+    let currentVal = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < rawVals.length; i++) {
+      const char = rawVals[i];
+      if (char === "'" && rawVals[i - 1] !== '\\') {
+        inQuotes = !inQuotes;
+        currentVal += char;
+      } else if (char === ',' && !inQuotes) {
+        values.push(parseSqlValueToken(currentVal.trim()));
+        currentVal = '';
+      } else {
+        currentVal += char;
+      }
+    }
+    if (currentVal.trim().length > 0) {
+      values.push(parseSqlValueToken(currentVal.trim()));
+    }
+
+    if (cols.length === values.length) {
+      const rowObj: Record<string, any> = {};
+      cols.forEach((col, idx) => {
+        rowObj[col] = values[idx];
+      });
+
+      if (!tables[tableName]) tables[tableName] = [];
+      tables[tableName].push(rowObj);
+      totalRecords++;
+    }
+  }
+
+  return { tables, totalRecords };
+};
+
+// ─── Componente de Backup y Restauración de Base de Datos PostgreSQL ───────
+const DatabaseBackupRestore: React.FC = () => {
+  const { profile, isAdmin } = useUser();
+  const [backupLoading, setBackupLoading] = useState(false);
+  const [restoreLoading, setRestoreLoading] = useState(false);
+  const [backupStatus, setBackupStatus] = useState<string | null>(null);
+  const [restoreStatus, setRestoreStatus] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  
+  const [pendingRestoreData, setPendingRestoreData] = useState<any | null>(null);
+  const [pendingFileName, setPendingFileName] = useState<string>('');
+
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const TABLES_TO_BACKUP = [
+    'roles',
+    'usuarios',
+    'clientes',
+    'campaigns',
+    'redes_sociales',
+    'tipos_contenido',
+    'publicaciones',
+    'interacciones',
+    'segmentos',
+    'leads',
+    'presupuestos',
+    'prompts_ia',
+    'contenido_ia',
+    'chatbot_historial',
+    'analisis_sentimientos',
+    'pagos',
+    'telegram_destinos',
+    'clientes_portal',
+    'system_logs'
+  ];
+
+  const handleExportBackup = async () => {
+    setBackupLoading(true);
+    setBackupStatus('Extrayendo esquema y datos de PostgreSQL...');
+    setErrorMsg(null);
+    setRestoreStatus(null);
+
+    try {
+      const backupTablesData: Record<string, any[]> = {};
+      const recordCounts: Record<string, number> = {};
+      let totalRecords = 0;
+
+      for (const table of TABLES_TO_BACKUP) {
+        try {
+          const { data, error } = await supabase.from(table).select('*');
+          if (!error && data) {
+            backupTablesData[table] = data;
+            recordCounts[table] = data.length;
+            totalRecords += data.length;
+          } else {
+            backupTablesData[table] = [];
+            recordCounts[table] = 0;
+          }
+        } catch {
+          backupTablesData[table] = [];
+          recordCounts[table] = 0;
+        }
+      }
+
+      const sqlContent = generatePostgresSqlDump(backupTablesData, profile?.correo || '');
+
+      const blob = new Blob([sqlContent], { type: 'application/sql;charset=utf-8' });
+      const downloadAnchor = document.createElement('a');
+      const dateStr = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      downloadAnchor.href = URL.createObjectURL(blob);
+      downloadAnchor.download = `backup_marketia_postgres_${dateStr}.sql`;
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+
+      setBackupStatus(`Backup SQL PostgreSQL completado (${totalRecords} registros exportados en .sql).`);
+      logSystemEvent('INFO', 'Database', 'Copia de seguridad SQL PostgreSQL exportada', {
+        totalRecords,
+        tables: recordCounts,
+        admin: profile?.correo
+      });
+    } catch (err: any) {
+      console.error('Error durante el backup:', err);
+      setErrorMsg(err.message || 'Error al generar el archivo SQL de respaldo.');
+    } finally {
+      setBackupLoading(false);
+    }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setErrorMsg(null);
+    setRestoreStatus(null);
+    setBackupStatus(null);
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const content = event.target?.result as string;
+        let parsedTables: Record<string, any[]> = {};
+        let totalRecords = 0;
+
+        if (file.name.endsWith('.sql') || content.includes('INSERT INTO')) {
+          const res = parsePostgresSqlDump(content);
+          parsedTables = res.tables;
+          totalRecords = res.totalRecords;
+        } else {
+          const parsed = JSON.parse(content);
+          if (!parsed || typeof parsed !== 'object' || !parsed.tables) {
+            throw new Error('El archivo no tiene un formato de respaldo SQL o JSON válido.');
+          }
+          parsedTables = parsed.tables;
+          totalRecords = parsed.total_records || 0;
+        }
+
+        if (Object.keys(parsedTables).length === 0) {
+          throw new Error('No se encontraron registros ni sentencias SQL válidas en el archivo.');
+        }
+
+        setPendingFileName(file.name);
+        setPendingRestoreData({
+          tables: parsedTables,
+          total_records: totalRecords,
+          isSql: file.name.endsWith('.sql') || content.includes('INSERT INTO')
+        });
+      } catch (err: any) {
+        setErrorMsg(err.message || 'Error al leer el archivo de respaldo SQL.');
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const executeRestore = async () => {
+    if (!pendingRestoreData) return;
+
+    setRestoreLoading(true);
+    setRestoreStatus('Iniciando restauración de datos PostgreSQL...');
+    setErrorMsg(null);
+
+    try {
+      const tables = pendingRestoreData.tables;
+      let restoredTablesCount = 0;
+      let totalRestoredRecords = 0;
+
+      for (const tableName of Object.keys(tables)) {
+        const records = tables[tableName];
+        if (Array.isArray(records) && records.length > 0) {
+          setRestoreStatus(`Restaurando tabla '${tableName}' (${records.length} registros)...`);
+          const { error } = await supabase.from(tableName).upsert(records);
+          if (error) {
+            console.warn(`Advertencia al restaurar tabla ${tableName}:`, error.message);
+          } else {
+            restoredTablesCount++;
+            totalRestoredRecords += records.length;
+          }
+        }
+      }
+
+      setRestoreStatus(`Restauración completada: ${totalRestoredRecords} registros restaurados en ${restoredTablesCount} tablas.`);
+      logSystemEvent('WARNING', 'Database', 'Restauración de base de datos ejecutada por administrador', {
+        restoredRecords: totalRestoredRecords,
+        file: pendingFileName,
+        admin: profile?.correo
+      });
+
+      setPendingRestoreData(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    } catch (err: any) {
+      console.error('Error al restaurar:', err);
+      setErrorMsg(err.message || 'Error durante la restauración de PostgreSQL.');
+    } finally {
+      setRestoreLoading(false);
+    }
+  };
+
+  if (!isAdmin) return null;
+
+  return (
+    <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+            <Database className="w-3.5 h-3.5 text-slate-500" />
+            Copia de seguridad y restauración (PostgreSQL SQL)
+          </p>
+          <p className="text-[11px] text-slate-500 mt-0.5">
+            Genera un script de respaldo completo PostgreSQL (.sql) del sistema o restaura la base de datos desde un archivo SQL o JSON.
+          </p>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 pt-1">
+        {/* Backup Button */}
+        <button
+          onClick={handleExportBackup}
+          disabled={backupLoading || restoreLoading}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl transition-colors shadow-sm disabled:opacity-50"
+        >
+          {backupLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-600" /> : <Download className="w-3.5 h-3.5 text-slate-600" />}
+          <span>{backupLoading ? 'Generando SQL...' : 'Hacer Backup SQL (PostgreSQL)'}</span>
+        </button>
+
+        {/* Restore Button */}
+        <div>
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileSelect}
+            accept=".sql,.json"
+            className="hidden"
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={backupLoading || restoreLoading}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl transition-colors shadow-sm disabled:opacity-50"
+          >
+            {restoreLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-600" /> : <Upload className="w-3.5 h-3.5 text-slate-600" />}
+            <span>Restaurar Base de Datos (.sql)</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Backup status banner */}
+      {backupStatus && (
+        <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 flex items-center gap-2 text-[11px] font-semibold text-emerald-700">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span>{backupStatus}</span>
+        </div>
+      )}
+
+      {/* Restore status banner */}
+      {restoreStatus && (
+        <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 flex items-center gap-2 text-[11px] font-semibold text-emerald-700">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span>{restoreStatus}</span>
+        </div>
+      )}
+
+      {/* Error banner */}
+      {errorMsg && (
+        <div className="bg-rose-50 border border-rose-100 rounded-xl p-3 flex items-center gap-2 text-[11px] font-semibold text-rose-700">
+          <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+          <span>{errorMsg}</span>
+        </div>
+      )}
+
+      {/* Pending Restore Confirmation Card */}
+      {pendingRestoreData && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 space-y-2.5 text-xs">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold text-amber-900">Confirmación de Restauración SQL</p>
+              <p className="text-[11px] text-amber-800 mt-0.5">
+                Archivo: <span className="font-mono font-bold text-amber-950">{pendingFileName}</span> {pendingRestoreData.isSql ? '(Formato SQL Script)' : '(Formato JSON)'}
+              </p>
+              <p className="text-[10px] text-amber-700 mt-0.5">
+                Total de registros detectados: {pendingRestoreData.total_records || 'Varios'}
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-white/80 p-2 rounded-lg border border-amber-200/60 text-[10px] text-slate-700">
+            <span className="font-bold text-slate-800">Tablas a restaurar: </span>
+            {Object.keys(pendingRestoreData.tables || {}).map((tbl, i, arr) => (
+              <span key={tbl} className="font-mono text-slate-600">
+                {tbl} ({Array.isArray(pendingRestoreData.tables[tbl]) ? pendingRestoreData.tables[tbl].length : 0}){i < arr.length - 1 ? ', ' : ''}
+              </span>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-2 pt-1">
+            <button
+              onClick={executeRestore}
+              disabled={restoreLoading}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl transition-colors shadow-sm disabled:opacity-50"
+            >
+              {restoreLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Database className="w-3.5 h-3.5" />}
+              Confirmar Restauración SQL
+            </button>
+
+            <button
+              onClick={() => {
+                setPendingRestoreData(null);
+                if (fileInputRef.current) fileInputRef.current.value = '';
+              }}
+              disabled={restoreLoading}
+              className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold rounded-xl border border-slate-200 transition-colors"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

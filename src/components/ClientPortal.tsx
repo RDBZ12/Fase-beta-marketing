@@ -26,9 +26,10 @@ import {
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
-import { Save, X, RefreshCw } from 'lucide-react';
+import { Save, X, RefreshCw, Cloud, Download, Upload } from 'lucide-react';
 import type { Campaign } from '../types';
 import { CampaignWizard } from './CampaignWizard';
+import { generatePostgresSqlDump, parsePostgresSqlDump } from './AjustesModule';
 import { MisPublicacionesModule } from './MisPublicacionesModule';
 import { ClientPagosModule, ClientEstadisticasModule, ClientPerfilModule } from './ClientModules';
 import { CentroReportesCliente } from './reportes/CentroReportesCliente';
@@ -49,6 +50,99 @@ export const ClientPortal: React.FC<ClientPortalProps> = ({ campaigns, onPagarCa
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isCreatingCampaign, setIsCreatingCampaign] = useState(false);
   const [showCenter, setShowCenter] = useState(false);
+  const [showBackupMenu, setShowBackupMenu] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleBackup = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Usuario no autenticado");
+      const userId = user.id;
+      
+      const { data: campaignsData } = await supabase.from('campaigns').select('*').or(`id_cliente.eq.${userId},id_usuario.eq.${userId}`);
+      
+      let publicacionesData = [];
+      let leadsData = [];
+      let pagosData = [];
+      
+      if (campaignsData && campaignsData.length > 0) {
+        const campIds = campaignsData.map(c => c.id);
+        const [{ data: pubs }, { data: leads }, { data: pagos }] = await Promise.all([
+          supabase.from('publicaciones').select('*').in('id_campana', campIds),
+          supabase.from('leads').select('*').in('id_campana', campIds),
+          supabase.from('pagos').select('*').in('id_campana', campIds)
+        ]);
+        publicacionesData = pubs || [];
+        leadsData = leads || [];
+        pagosData = pagos || [];
+      }
+      
+      const tablesData = {
+        campaigns: campaignsData || [],
+        publicaciones: publicacionesData || [],
+        leads: leadsData || [],
+        pagos: pagosData || []
+      };
+      
+      const sqlContent = generatePostgresSqlDump(tablesData, user.email || 'cliente');
+      
+      const blob = new Blob([sqlContent], { type: 'application/sql' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `backup_cliente_${new Date().getTime()}.sql`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setShowBackupMenu(false);
+    } catch (error) {
+      console.error(error);
+      alert('Error al generar el backup.');
+    }
+  };
+
+  const handleRestore = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const content = e.target?.result as string;
+        
+        // Parse the SQL using our helper
+        const { tables, totalRecords } = parsePostgresSqlDump(content);
+        
+        if (totalRecords === 0) {
+          alert('No se encontraron registros válidos en el archivo SQL.');
+          return;
+        }
+        
+        if (tables.campaigns && tables.campaigns.length > 0) {
+          await supabase.from('campaigns').upsert(tables.campaigns);
+        }
+        if (tables.publicaciones && tables.publicaciones.length > 0) {
+          await supabase.from('publicaciones').upsert(tables.publicaciones);
+        }
+        if (tables.leads && tables.leads.length > 0) {
+          await supabase.from('leads').upsert(tables.leads);
+        }
+        if (tables.pagos && tables.pagos.length > 0) {
+          await supabase.from('pagos').upsert(tables.pagos);
+        }
+        
+        alert(`Restauración completada exitosamente (${totalRecords} registros).`);
+        window.location.reload();
+      } catch (error) {
+        console.error(error);
+        alert('Error al restaurar el backup SQL.');
+      }
+    };
+    reader.readAsText(file);
+    setShowBackupMenu(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -144,7 +238,7 @@ export const ClientPortal: React.FC<ClientPortalProps> = ({ campaigns, onPagarCa
         <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] rounded-full bg-violet-600/10 blur-[120px] pointer-events-none" />
         <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] rounded-full bg-indigo-600/10 blur-[120px] pointer-events-none" />
 
-        <header className="h-20 border-b border-slate-200 bg-white backdrop-blur-md flex items-center justify-between px-8 z-10">
+        <header className="h-20 border-b border-slate-200 bg-white backdrop-blur-md flex items-center justify-between px-8 z-40 relative">
           <div className="flex items-center gap-4">
             <button 
               onClick={() => setIsSidebarOpen(!isSidebarOpen)} 
@@ -157,6 +251,42 @@ export const ClientPortal: React.FC<ClientPortalProps> = ({ campaigns, onPagarCa
             </h1>
           </div>
           <div className="flex items-center gap-4">
+            <div className="relative">
+              <button 
+                onClick={() => setShowBackupMenu(!showBackupMenu)}
+                className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200 hover:bg-slate-200 transition-colors relative"
+                title="Backup / Restore"
+              >
+                <Cloud className="w-4 h-4 text-slate-600" />
+              </button>
+              {showBackupMenu && (
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-slate-100 overflow-hidden z-50">
+                  <button 
+                    onClick={handleBackup}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                  >
+                    <Download className="w-4 h-4 text-violet-500" />
+                    Backup
+                  </button>
+                  <button 
+                    onClick={() => {
+                      if (fileInputRef.current) fileInputRef.current.click();
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 transition-colors border-t border-slate-50"
+                  >
+                    <Upload className="w-4 h-4 text-emerald-500" />
+                    Restore
+                  </button>
+                  <input 
+                    type="file" 
+                    accept=".sql" 
+                    className="hidden" 
+                    ref={fileInputRef} 
+                    onChange={handleRestore}
+                  />
+                </div>
+              )}
+            </div>
             <button className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200 hover:bg-slate-200 transition-colors relative">
               <MessageSquare className="w-4 h-4 text-slate-600" />
               <span className="absolute top-2 right-2 w-2 h-2 bg-pink-500 rounded-full border-2 border-white" />
